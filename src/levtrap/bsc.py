@@ -33,11 +33,34 @@ from .translate import translate_z, wigner_rotation_matrix
 from .vswf import em_field
 from .special import rtpv2xyzv  # noqa: E402
 
-__all__ = ["Bsc", "BscPlane", "BscPmGauss", "make_beam_vector", "k_medium_from"]
+__all__ = ["Bsc", "BscPlane", "BscPmGauss", "make_beam_vector", "k_medium_from", "clear_caches"]
 
 
 def _ntot(nmax: int) -> int:
     return nmax * nmax + 2 * nmax
+
+
+# Small caches for translation and rotation matrices: force maps and line
+# cuts reuse the same distances/rotations many times.
+_CACHE_MAX = 512
+_TZ_CACHE: dict = {}
+_WIGNER_CACHE: dict = {}
+
+
+def _cached(cache: dict, key, fn):
+    val = cache.get(key)
+    if val is None:
+        if len(cache) >= _CACHE_MAX:
+            cache.clear()
+        val = fn()
+        cache[key] = val
+    return val
+
+
+def clear_caches() -> None:
+    """Drop cached translation/rotation matrices."""
+    _TZ_CACHE.clear()
+    _WIGNER_CACHE.clear()
 
 
 def _dense(x):
@@ -266,7 +289,8 @@ class Bsc:
         """Translation matrices (A, B) for distance ``z`` [same units as 1/k]."""
         Nmax = self.Nmax if Nmax is None else Nmax
         zl = z * self.k_medium / 2 / np.pi
-        return translate_z([Nmax, self.Nmax], zl, self._translation_type())
+        key = (round(float(zl), 12), int(Nmax), self.Nmax, self._translation_type())
+        return _cached(_TZ_CACHE, key, lambda: translate_z([Nmax, self.Nmax], zl, self._translation_type()))
 
     def translate_z(self, z, Nmax: int | None = None) -> "Bsc":
         """Translate along z by ``z`` (scalar or array).
@@ -331,7 +355,9 @@ class Bsc:
         R = np.asarray(R, dtype=float)
         if np.sum((np.eye(3) - R) ** 2) < 1e-6:
             return self._like(self.a, self.b), sparse.eye(_ntot(Nmax), format="csr")
-        D = wigner_rotation_matrix(max(self.Nmax, Nmax), R)
+        nm = max(self.Nmax, Nmax)
+        key = (nm, np.round(R, 12).tobytes())
+        D = _cached(_WIGNER_CACHE, key, lambda: wigner_rotation_matrix(nm, R))
         return self.rotate_wigner(D), D
 
     def rotate_x(self, angle: float, Nmax=None):

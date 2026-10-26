@@ -23,7 +23,7 @@ from .special import ka2nmax
 
 __all__ = [
     "C", "KB", "mie_efficiencies", "multipole_decomposition", "sphere_mass",
-    "force_si", "stiffness_si", "trap_frequency", "recoil_ratio", "power_balance",
+    "force_si", "stiffness_si", "trap_frequency", "recoil_rate", "recoil_ratio", "power_balance",
     "intensity_si",
 ]
 
@@ -102,15 +102,24 @@ def trap_frequency(k_si: float, mass: float) -> float:
     return float(np.sqrt(k_si / mass)) if k_si > 0 else float("nan")
 
 
-def recoil_ratio(P_sca: float, wavelength0: float, mass: float, Omega: float) -> float:
-    """Photon-recoil heating rate over trap frequency.
+def recoil_rate(P_sca: float, wavelength0: float, mass: float, Omega: float) -> float:
+    """Photon-recoil heating rate in phonons per second.
 
-    Gamma / Omega_0 = omega P_sca / (5 m c^2 Omega_0),  omega = 2 pi c / lambda0
-    (as defined in the project plan and arXiv:2607.09896, after Jain et al.,
-    PRL 116, 243601 (2016)).
+    Gamma = omega P_sca / (5 m c^2 Omega),  omega = 2 pi c / lambda0
+    (Jain et al., PRL 116, 243601 (2016); arXiv:2607.09896).
     """
     omega = 2 * np.pi * C / wavelength0
     return float(omega * P_sca / (5 * mass * C**2 * Omega))
+
+
+def recoil_ratio(P_sca: float, wavelength0: float, mass: float, Omega: float) -> float:
+    """Gamma / Omega = omega P_sca / (5 m c^2 Omega^2) (dimensionless).
+
+    Note: the project plan wrote this ratio as omega P_sca/(5 m c^2 Omega_0),
+    which is Gamma itself; dividing once more by Omega reproduces the
+    SiO2 reference value Gamma/Omega ~ 0.18 quoted in arXiv:2607.09896.
+    """
+    return recoil_rate(P_sca, wavelength0, mass, Omega) / Omega
 
 
 def power_balance(ibeam: Bsc, sbeam: Bsc) -> dict:

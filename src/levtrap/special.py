@@ -152,13 +152,18 @@ def legendrerow(n: int, theta) -> np.ndarray:
     return pnm * st[None, :] ** M
 
 
-def _spharm_all(n: int, theta, phi) -> np.ndarray:
-    """Y_n^m for all m = -n..n; shape ``(2n+1, npts)``."""
-    pnm = legendrerow(n, theta)
-    m = np.arange(-n, n + 1)
-    p = pnm[np.abs(m)]
-    p[m < 0] *= ((-1.0) ** m[m < 0])[:, None]
-    return p * np.exp(1j * m[:, None] * phi[None, :])
+def _ylm(P: np.ndarray, nn: int, m: np.ndarray, phi: np.ndarray) -> np.ndarray:
+    """Y_nn^m for the requested m (rows), zero where |m| > nn.
+
+    ``P`` is ``legendrerow(nn, theta)``.  Returns shape ``(len(m), npts)``.
+    """
+    am = np.abs(m)
+    ok = am <= nn
+    out = np.zeros((m.size, phi.size), dtype=complex)
+    if np.any(ok):
+        p = P[am[ok]] * np.where(m[ok] < 0, (-1.0) ** am[ok], 1.0)[:, None]
+        out[ok] = p * np.exp(1j * m[ok][:, None] * phi[None, :])
+    return out
 
 
 def spharm(n: int, m, theta, phi):
@@ -166,7 +171,9 @@ def spharm(n: int, m, theta, phi):
 
     Port of ``ott.utils.spharm``.  Returns ``(Y, Ytheta, Yphi)`` each of
     shape ``(npts, len(m))``, where ``Ytheta = dY/dtheta`` and
-    ``Yphi = 1/sin(theta) dY/dphi`` (OTT's definitions).
+    ``Yphi = 1/sin(theta) dY/dphi`` (OTT's definitions, evaluated with
+    OTT's recurrences in n+1 and m+-1 so no division by sin(theta)).
+    Only the requested ``m`` are evaluated.
     """
     theta = np.atleast_1d(np.asarray(theta, dtype=float)).ravel()
     phi = np.atleast_1d(np.asarray(phi, dtype=float)).ravel()
@@ -175,23 +182,19 @@ def spharm(n: int, m, theta, phi):
     if phi.size == 1 and theta.size > 1:
         phi = np.full(theta.shape, phi[0])
     mi = np.atleast_1d(np.asarray(m, dtype=int)).ravel()
-    Y = _spharm_all(n, theta, phi)  # (2n+1, npts)
-    mv = np.arange(-n, n + 1)[:, None]
+    P = legendrerow(n, theta)
+    P1 = legendrerow(n + 1, theta)
+    Y = _ylm(P, n, mi, phi)
+    mv = mi[:, None].astype(float)
     expplus = np.exp(1j * phi)[None, :]
     expminus = np.exp(-1j * phi)[None, :]
-    zeros = np.zeros((1, theta.size))
-    ymplus = np.vstack([Y[1:], zeros])
-    ymminus = np.vstack([zeros, Y[:-1]])
-    Ytheta = (np.sqrt((n - mv + 1) * (n + mv)) / 2 * expplus * ymminus
-              - np.sqrt((n - mv) * (n + mv + 1)) / 2 * expminus * ymplus)
-    Y2 = _spharm_all(n + 1, theta, phi)
-    ymplus = Y2[2:]
-    ymminus = Y2[:-2]
-    Yphi = 1j / 2 * np.sqrt((2 * n + 1) / (2 * n + 3)) * (
-        np.sqrt((n + mv + 1) * (n + mv + 2)) * expminus * ymplus
-        + np.sqrt((n - mv + 1) * (n - mv + 2)) * expplus * ymminus)
-    idx = n + mi
-    return Y[idx].T, Ytheta[idx].T, Yphi[idx].T
+    with np.errstate(invalid="ignore"):
+        Ytheta = (np.sqrt(np.maximum((n - mv + 1) * (n + mv), 0)) / 2 * expplus * _ylm(P, n, mi - 1, phi)
+                  - np.sqrt(np.maximum((n - mv) * (n + mv + 1), 0)) / 2 * expminus * _ylm(P, n, mi + 1, phi))
+        Yphi = 1j / 2 * np.sqrt((2 * n + 1) / (2 * n + 3)) * (
+            np.sqrt(np.maximum((n + mv + 1) * (n + mv + 2), 0)) * expminus * _ylm(P1, n + 1, mi + 1, phi)
+            + np.sqrt(np.maximum((n - mv + 1) * (n - mv + 2), 0)) * expplus * _ylm(P1, n + 1, mi - 1, phi))
+    return Y.T, Ytheta.T, Yphi.T
 
 
 # ---------------------------------------------------------------------------
