@@ -163,3 +163,75 @@ Stop and ask the human (don't guess) if:
 ## 9. Progress log
 
 Append one dated entry per work session: milestone, what was done, test status, open questions, deviations from this plan.
+
+### 2026-10-26 — Session 1 (M0–M8 implemented; M9 paper figures added on request)
+
+**Status:** M0–M5 done, all §5 tests pass locally (85 pytest). M6/M7 are implemented, but the
+Pyodide/browser acceptance runs only in CI. This sandbox cannot reach jsDelivr, and CI cannot run
+until the workflow files are enabled (see open items). M8 docs are written; the Pages deploy is
+pending the same workflow enablement.
+
+**OTT source:** github.com/ilent2/ott master @ e6736643 (v1.5.x, CC BY-NC 4.0).
+
+**Call graph ported** (→ module):
+`Bsc.m` (make_beam_vector, power, Nmax/set_Nmax/shrink_Nmax, translateZ/Xyz/Rtp, rotate*, append,
+totalField/scatteredField, emFieldXyz, scatter, mtimes/plus/sum) → `bsc.py`;
+`BscPlane.m`, `BscPointmatch.m` (bsc_farfield), `BscPmGauss.m` (lg/hg, Default translation) → `bsc.py`;
+`Tmatrix.m` (set_Nmax, set_type, mtimes, parser_wavenumber), `TmatrixMie.m` (tmatrix_mie only) → `tmatrix.py`;
+`forcetorque.m` → `force.py`; `axial_equilibrium.m`, `find_equilibrium.m`, `find_traps.m`,
+`trap_stiffness.m` → `traps.py`;
+`+utils`: sbesselj, sbesselh1, sbesselh2, legendrerow, spharm, vsh, vswf, vswfcart, emField,
+combined_index, ka2nmax, nmax2ka, laguerre, hermite, paraxial_beam_waist, angulargrid, xyz2rtp,
+rtp2xyz, rtpv2xyzv, xyzv2rtpv, rotx/roty/rotz, rotation_matrix, matchsize (implicit), translate_z
+(gumerov + calculate_AB), wigner_rotation_matrix, paraxial_transformation_matrix (genLG2HG only)
+→ `special.py`, `vswf.py`, `translate.py`, `bsc.py`.
+
+**Tests:**
+* testExamples: axial equilibrium benchmark z = 4.0234747677885e-07 m (OTT 4.023474767793779e-07),
+  kz = −62583.684 (OTT −62583.684), x ≈ 2e-23, kx = −245021.406 (OTT −245021.406). testSphere is
+  also ported: Gaussian, LG03 and HG23 radial force curves within 1 %. testCube skipped (non-spherical).
+* testForceTorque (all: simple, uneven/large Nmax, multi-particle, plane wave 0.9231/1/0.9231,
+  multi-beam, coherent), testTmatrixMie (fields, boundary conditions), testTmatrix (power/resize),
+  testBsc (translations, make_beam_vector, sum), testBscPlane, testBscPmGauss (mode errors),
+  testFindTraps (all 8 cases), utils testTranslateZ, testWignerRotationMatrix, testRotations,
+  testVswfCart — all pass with OTT tolerances.
+* Analytic: Mie vs independent BHMIE (8 cases incl. absorbing); Q_ext = Q_sca + Q_abs, with Q_abs
+  also from a volume integral of the internal field (rtol 2e-3); dipole limit (20 nm silica, 3 %);
+  power linearity; zero on-axis radial force; Nmax doubling < 1e-4; LG ℓ=1..3 on-axis null; HG
+  nodal plane; plane-wave scattered/absorbed power vs Mie (rtol 1e-8); API round trips.
+
+**Deviations / notes:**
+1. OTT `testTmatrixMie.testFields` boundary check uses `Esca + Einc`. That is inconsistent with OTT's own
+   `totalField` (2·scattered + incident) and fails at n_rel = 1.2, so it is ported with the factor 2.
+2. `mergeBeams` (testCoherent) does not exist in OTT 1.5.9 (added in 1.6); implemented as the coherent
+   column sum.
+3. Not ported: `col3to1/col1to3` (not in v1.5.9 utils); translate_z 'videen' method (only the default
+   'gumerov'; that negative-translation sub-check is skipped); layered spheres; BscPmGauss 'ig' modes and
+   'NewBeamOffset'.
+4. `emFieldXyz` uses the complex particle wavenumber (OTT uses |k|). This is identical for real k and correct
+   for absorbing internal fields.
+5. **Recoil ratio:** the plan's formula ω·P_sca/(5mc²Ω₀) is the rate Γ itself. levtrap reports
+   Γ/Ω = ωP_sca/(5mc²Ω²), which reproduces the paper's SiO₂ reference Γ/Ω ≈ 0.18. Please confirm.
+6. In OTT, `BscPlane(theta=0)` travels towards −z (documented in tests).
+7. Field normalisation found and tested: I = (P/P_ott)·4k²|E|² (used by the dipole model and the
+   intensity map).
+8. Two-beam superposition: "total power" is the power of the coherent sum, which includes interference.
+   The component ratio and phase are user inputs, and an optional "dark focus" split nulls the focal field.
+9. Performance (native CPython, this container): beam construction 0.37 s (was 1.5 s before
+   restricting `spharm` to the needed m). Full analysis: 2.3–2.9 s cold, 0.6–1.0 s warm (cached beam,
+   translation and Wigner matrices, intensity map). Pyodide timings will come from CI (`pyodide_check.mjs`
+   prints them).
+
+**M7 manual checklist** (local, native backend, Chromium via Playwright, 1440×900):
+parameters panel ✓, presets ✓ (WS₂ marked "illustrative, not validated") ✓, material presets with
+sources ✓, second beam + ratio + phase + dark-focus ✓, multipole toggles ✓, dipole overlay ✓,
+summary tiles with "No stable trap" banner ✓, line cuts ✓, xz map + quiver over intensity ✓,
+multipole bars ✓, sweep with grey unstable bands, progress and cancel ✓, collapsible notes ✓,
+light/dark ✓, loader progress bar (worker path, untested locally) ☐, Firefox/Safari ☐ (not available
+here), < 3 s in Pyodide ☐ (CI will report).
+
+**Open items for the human:**
+* Copy `ci/workflows/*.yml` to `.github/workflows/`. The session token lacks the `workflow` scope, so the
+  CI and Pages workflows cannot be pushed from here.
+* A `main` branch is needed for Pages (the workflow deploys on push to `main`). Merge this branch into main.
+* Paper questions for the authors: see docs/paper/README.md.
