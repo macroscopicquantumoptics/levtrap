@@ -26,7 +26,8 @@ through [Pyodide](https://pyodide.org) and locally for research scripts.
   aberrated focus is fed into the same force engine, giving the focus shift,
   the particle's new equilibrium, the 3×3 stiffness eigen-frequencies, the
   trap-axis tilt and the clipping loss. Sweeps follow the particle and flag
-  jumps between equilibria.
+  jumps between equilibria. A 3D view shows the tilted lens, the traced rays
+  and a magnified focus with the particle.
 * **Paper reproduction:** figures of arXiv:2607.09896 (dark trapping of
   WS₂): see [`docs/paper/`](docs/paper/README.md).
 
@@ -114,7 +115,7 @@ SI units. Internally the code uses OTT conventions:
 src/levtrap/   special.py vswf.py translate.py bsc.py tmatrix.py force.py
                traps.py derived.py dipole.py materials.py lens.py api.py
 tests/         ported OTT tests + analytic checks (pytest)
-web/           index.html app.js lens.html lens.js common.js worker.js view3d.js style.css (static site; Plotly, three.js and
+web/           index.html app.js lens.html lens.js lens3d.js common.js worker.js view3d.js style.css (static site; Plotly, three.js and
                Pyodide from jsDelivr)
 scripts/       devserver.py (native backend), pyodide_check.mjs, ui_check.js (CI)
 ci/workflows/  test.yml, pages.yml — copy to .github/workflows/ (see below)
