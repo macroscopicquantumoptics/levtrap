@@ -1,0 +1,70 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test
+        run: |
+          pip install -e ".[test]" build
+          pytest -q
+      - name: Build wheel and stage site
+        run: |
+          python -m build --wheel --outdir dist
+          mkdir -p web/wheels
+          cp dist/*.whl web/wheels/
+          WHEEL=$(basename dist/*.whl)
+          echo "{\"wheel\": \"$WHEEL\"}" > web/wheels/manifest.json
+          VERSION=$(python -c "import levtrap; print(levtrap.__version__)")
+          echo "{\"version\": \"$VERSION\", \"commit\": \"$GITHUB_SHA\", \"date\": \"$(date -u +%Y-%m-%d)\"}" > web/version.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Pyodide check (wheel loads, OTT benchmark reproduces)
+        run: |
+          npm install --no-save pyodide@0.29.5
+          node scripts/pyodide_check.mjs web/wheels/*.whl
+      - name: Browser check (real page, Pyodide worker)
+        run: |
+          npm install --no-save playwright@1.48.2
+          npx playwright install --with-deps chromium
+          python -m http.server -d web 8000 &
+          sleep 1
+          node scripts/ui_check.js http://127.0.0.1:8000/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-screenshot
+          path: ui_check.png
+          if-no-files-found: ignore
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
