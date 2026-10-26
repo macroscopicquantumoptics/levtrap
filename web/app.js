@@ -62,6 +62,75 @@ let lastReq = null;
 let busy = false;
 let queued = false;
 
+// ---------------------------------------------------------------- plain-language help
+const HELP = {
+  preset: "Ready-made example set-ups. The silica presets are standard ‘bright’ optical tweezers; the WS₂ preset is the dark bottle-beam trap from arXiv:2607.09896.",
+  material: "Choosing a material fills in its refractive index and density at the current wavelength (where we have tabulated data). Pick ‘custom’ to type your own.",
+  radius: "Radius of the sphere. Typical levitated particles are 50–500 nm. Forces change dramatically when the size approaches the wavelength (Mie resonances).",
+  n: "Refractive index: how strongly the material bends light. Silica ≈ 1.45, silicon ≈ 3.5, WS₂ ≈ 3.8. Larger contrast with the medium means stronger forces.",
+  k: "Absorption part of the refractive index (n + ik). Zero means perfectly transparent; absorbed light heats the particle.",
+  density: "Mass density, used to get the particle mass and hence the oscillation frequency. Silica ≈ 2200 kg/m³.",
+  medium: "Refractive index of what surrounds the particle: 1 for vacuum or air, 1.33 for water.",
+  wavelength: "Vacuum wavelength of the trapping laser. 1064 nm and 1550 nm are common choices.",
+  power: "Total laser power reaching the focus. Forces and stiffness scale linearly with it; frequencies with its square root.",
+  ratio: "With two beams: how the total power is shared, P₂/P₁.",
+  phase: "Phase difference between the two beams, in units of π. A phase of 1 (i.e. π) makes the beams interfere destructively at the focus, creating a dark spot.",
+  "dark-focus": "Automatically shares the power between the two beams so that their fields cancel exactly at the focus (a perfectly dark centre).",
+  dipole: "Also plot the forces predicted by treating the particle as a point dipole (Rayleigh approximation). Good for small particles; watch it fail for large ones.",
+  zrange: "Half-length of the scan along the beam axis. Increase it if the trap or its barrier lies outside the plotted range.",
+  xrange: "Half-width of the scans across the beam.",
+  npts: "Number of positions per line scan. More points: smoother curves, slower calculation.",
+  temperature: "Temperature used to express the trap depth in units of k_BT (thermal energy).",
+  type: "Shape of the laser beam. A Gaussian is the normal laser spot; Laguerre–Gauss (LG) and Hermite–Gauss (HG) are structured beams such as doughnuts or multi-lobe patterns.",
+  pol: "Direction of the light's electric field. Linear x/y or circularly rotating. It changes the trap slightly, e.g. making it stiffer along one axis.",
+  m1: "Mode index: for LG beams p = number of extra bright rings; for HG beams the number of nodes along x.",
+  m2: "Mode index: for LG beams ℓ = twist (orbital angular momentum; ℓ ≠ 0 gives a dark centre); for HG beams the number of nodes along y.",
+  focus: "Describe the focusing either by the numerical aperture of the lens or by the size of the focal spot.",
+  focusval: "NA = n·sin(half-angle of the light cone); 0.9 is a tight focus. Or the focal-spot radius w₀ in micrometres.",
+  multipoles: "Switch individual multipoles of the particle's response on or off (in the T-matrix). ED/MD = electric/magnetic dipole, EQ/MQ = quadrupoles. This is unphysical, but shows which part of the scattering creates the trap.",
+};
+const TILE_HELP = {
+  zeq: "Where the particle sits along the beam, measured from the focus. Radiation pressure usually pushes it slightly downstream (positive z).",
+  fz: "How fast the particle oscillates along the beam axis, f = √(κ/m)/2π, with κ the spring constant of the trap.",
+  fr: "Oscillation frequencies across the beam. With linear polarisation x and y differ slightly.",
+  depth: "Energy needed to escape, compared with thermal energy k_BT. ≳10 k_BT means the particle stays put; levitation in vacuum usually needs much more. ‘Lower bound’ means the barrier lies beyond the scan range.",
+  q: "Textbook Mie efficiencies for a plane wave: scattering and absorption cross-sections divided by πr².",
+  psca: "Laser power scattered by the particle at its trap position. This light is what you detect, and it is also what causes recoil heating.",
+  pabs: "Laser power absorbed by the particle at its trap position. In vacuum this heats the particle, which can only cool by thermal radiation.",
+  recoil: "Recoil heating per oscillation, Γ/Ω. Each scattered photon kicks the particle; values ≪ 1 mean many coherent oscillations between heating events, which matters for quantum experiments.",
+  mass: "Particle mass, from radius and density (1 amu ≈ 1.66×10⁻²⁷ kg).",
+  nmax: "Number of multipole orders kept for the beam and the particle (chosen automatically for accuracy).",
+};
+
+function helpIcon(text) {
+  const span = document.createElement("span");
+  span.className = "help";
+  span.tabIndex = 0;
+  span.setAttribute("role", "note");
+  span.setAttribute("aria-label", text);
+  span.innerHTML = 'ⓘ<span class="tip"></span>';
+  span.querySelector(".tip").textContent = text;
+  return span;
+}
+const helpHTML = (text) => `<span class="help" tabindex="0" role="note" aria-label="${text.replace(/"/g, "&quot;")}">ⓘ<span class="tip">${text}</span></span>`;
+
+function attachHelp(root) {
+  root.querySelectorAll("label.field, label.check").forEach((lab) => {
+    const input = lab.querySelector("input, select");
+    if (!input || lab.querySelector(".help")) return;
+    const key = input.id || input.dataset.b;
+    if (!HELP[key]) return;
+    if (lab.classList.contains("check")) { lab.appendChild(helpIcon(HELP[key])); return; }
+    // keep the caption and its icon on one line: wrap them in a row
+    const first = lab.firstChild;
+    const row = document.createElement("span");
+    row.className = "cap";
+    lab.insertBefore(row, first);
+    row.appendChild(first);
+    row.appendChild(helpIcon(HELP[key]));
+  });
+}
+
 // ---------------------------------------------------------------- beam fieldsets
 function beamFieldset(el, key) {
   el.insertAdjacentHTML("beforeend", `
@@ -290,8 +359,8 @@ const axis = (title, extra = {}) => Object.assign({
 }, extra);
 const PLOT_CONFIG = { responsive: true, displaylogo: false, modeBarButtonsToRemove: ["lasso2d", "select2d"] };
 
-function tile(label, value, sub) {
-  return `<div class="tile"><div class="label">${label}</div><div class="value">${value}</div>${sub ? `<div class="sub2">${sub}</div>` : ""}</div>`;
+function tile(label, value, sub, help, hint) {
+  return `<div class="tile"><div class="label">${label}${help ? helpHTML(TILE_HELP[help]) : ""}</div><div class="value">${value}</div>${sub ? `<div class="sub2">${sub}</div>` : ""}${hint ? `<div class="hint">${hint}</div>` : ""}</div>`;
 }
 
 function render(r, req) {
@@ -300,7 +369,7 @@ function render(r, req) {
   const wl = req.wavelength;
   if (r.stable) {
     banner.className = "banner good";
-    banner.textContent = "✓ Stable 3D trap";
+    banner.textContent = "✓ Stable 3D trap — the light holds the particle in all three directions";
   } else {
     banner.className = "banner bad";
     banner.textContent = r.z_eq === null ? "✕ No stable trap — no restoring zero crossing along the beam axis in the scanned range"
@@ -309,21 +378,26 @@ function render(r, req) {
   const kHz = (v) => (v === null ? "—" : fmt(v / 1e3, 3));
   const tiles = [];
   tiles.push(tile("z<sub>eq</sub>", r.z_eq === null ? "—" : `${fmt(r.z_eq * 1e9, 4)} nm`,
-    r.z_eq === null ? "" : `${fmt(r.z_eq / wl, 3)} λ₀ from focus`));
-  tiles.push(tile("f<sub>z</sub> (axial)", `${kHz(r.freq.z)} kHz`, r.stiffness.z !== null ? `κ = ${fmtE(r.stiffness.z)} N/m` : ""));
+    r.z_eq === null ? "" : `${fmt(r.z_eq / wl, 3)} λ₀ from focus`, "zeq",
+    r.z_eq === null ? "" : (r.z_eq > 0 ? "downstream of the focus" : "upstream of the focus")));
+  tiles.push(tile("f<sub>z</sub> (axial)", `${kHz(r.freq.z)} kHz`, r.stiffness.z !== null ? `κ = ${fmtE(r.stiffness.z)} N/m` : "", "fz"));
   tiles.push(tile("f<sub>x</sub>, f<sub>y</sub> (radial)", `${kHz(r.freq.x)}, ${kHz(r.freq.y)} kHz`,
-    r.stiffness.x !== null ? `κ = ${fmtE(r.stiffness.x)}, ${fmtE(r.stiffness.y)} N/m` : ""));
+    r.stiffness.x !== null ? `κ = ${fmtE(r.stiffness.x)}, ${fmtE(r.stiffness.y)} N/m` : "", "fr"));
   const d = r.depth || {};
+  const deep = d.kT !== undefined && d.kT !== null && r.stable;
   tiles.push(tile(`Trap depth (${d.temperature ?? req.temperature} K)`,
-    d.kT !== undefined && d.kT !== null && r.stable ? `${fmtE(d.kT)} k<sub>B</sub>T` : "—",
-    d.K !== undefined && r.stable ? `${fmtE(d.K)} K${d.bounded && !(d.bounded.x && d.bounded.y && d.bounded.z) ? " · lower bound (scan edge)" : ""}` : ""));
-  tiles.push(tile("Q<sub>sca</sub>, Q<sub>abs</sub> (plane wave)", `${fmtE(r.mie.Qsca)}, ${fmtE(r.mie.Qabs)}`, `size parameter x = ${fmt(r.mie.x, 3)}`));
-  tiles.push(tile("Scattered power at z<sub>eq</sub>", `${fmtE(r.at.P_sca * 1e3)} mW`, `${fmtE(r.at.Qsca_beam)} of beam`));
-  tiles.push(tile("Absorbed power", `${fmtE(r.at.P_abs * 1e9)} nW`, ""));
+    deep ? `${fmtE(d.kT)} k<sub>B</sub>T` : "—",
+    d.K !== undefined && r.stable ? `${fmtE(d.K)} K${d.bounded && !(d.bounded.x && d.bounded.y && d.bounded.z) ? " · lower bound (scan edge)" : ""}` : "",
+    "depth", deep ? (d.kT > 10 ? "deep enough to hold the particle" : "too shallow: thermal motion lets it escape") : ""));
+  tiles.push(tile("Q<sub>sca</sub>, Q<sub>abs</sub> (plane wave)", `${fmtE(r.mie.Qsca)}, ${fmtE(r.mie.Qabs)}`, `size parameter x = 2πn<sub>m</sub>r/λ₀ = ${fmt(r.mie.x, 3)}`, "q"));
+  tiles.push(tile("Scattered power at z<sub>eq</sub>", `${fmtE(r.at.P_sca * 1e3)} mW`, `${fmtE(r.at.Qsca_beam)} of beam`, "psca"));
+  tiles.push(tile("Absorbed power", `${fmtE(r.at.P_abs * 1e9)} nW`, "", "pabs"));
   tiles.push(tile("Γ/Ω (recoil)", r.recoil_ratio.z === null ? "—" : `${fmtE(r.recoil_ratio.z)} (z)`,
-    r.recoil_ratio.x === null ? "" : `${fmtE(r.recoil_ratio.x)} (x), ${fmtE(r.recoil_ratio.y)} (y)`));
-  tiles.push(tile("Mass", `${fmtE(r.mass)} kg`, `${fmtE(r.mass / 1.66053906660e-27)} amu`));
-  tiles.push(tile("N<sub>max</sub> beam / particle", `${r.Nmax.beam} / ${r.Nmax.particle}`, `P = ${fmt(r.power * 1e3, 4)} mW${r.beam_powers && r.beam_powers.length > 1 ? ` (${r.beam_powers.map((p) => fmt(p * 1e3, 3)).join(" + ")} mW)` : ""}`));
+    r.recoil_ratio.x === null ? "" : `${fmtE(r.recoil_ratio.x)} (x), ${fmtE(r.recoil_ratio.y)} (y)`, "recoil",
+    r.recoil_ratio.z === null ? "" : (r.recoil_ratio.z < 1 ? "below 1: coherent oscillations possible" : "above 1: recoil heating dominates")));
+  tiles.push(tile("Mass", `${fmtE(r.mass)} kg`, `${fmtE(r.mass / 1.66053906660e-27)} amu`, "mass"));
+  tiles.push(tile("N<sub>max</sub> beam / particle", `${r.Nmax.beam} / ${r.Nmax.particle}`,
+    r.beam_powers && r.beam_powers.length > 1 ? `beam components ${r.beam_powers.map((p) => fmt(p * 1e3, 3)).join(" and ")} mW (combined ${fmt(r.power * 1e3, 4)} mW, incl. interference)` : "", "nmax"));
   $("tiles").innerHTML = tiles.join("");
   renderLines(r);
   renderMap(r, req);
@@ -336,9 +410,9 @@ function renderLines(r) {
   const um = (a) => a.map((v) => v * 1e6);
   const cols = [css("--series-1"), css("--series-2"), css("--series-3")];
   const traces = [
-    { x: um(L.x), y: pN(L.Fx[0]), name: "Fₓ (Mie)", xaxis: "x", yaxis: "y", line: { color: cols[0], width: 2 } },
-    { x: um(L.y), y: pN(L.Fy[1]), name: "F_y (Mie)", xaxis: "x2", yaxis: "y2", line: { color: cols[1], width: 2 } },
-    { x: um(L.z), y: pN(L.Fz[2]), name: "F_z (Mie)", xaxis: "x3", yaxis: "y3", line: { color: cols[2], width: 2 } },
+    { x: um(L.x), y: pN(L.Fx[0]), name: "F<sub>x</sub> (Mie)", xaxis: "x", yaxis: "y", line: { color: cols[0], width: 2 } },
+    { x: um(L.y), y: pN(L.Fy[1]), name: "F<sub>y</sub> (Mie)", xaxis: "x2", yaxis: "y2", line: { color: cols[1], width: 2 } },
+    { x: um(L.z), y: pN(L.Fz[2]), name: "F<sub>z</sub> (Mie)", xaxis: "x3", yaxis: "y3", line: { color: cols[2], width: 2 } },
   ];
   traces.forEach((t) => { t.mode = "lines"; t.hovertemplate = "%{x:.3f} µm<br>%{y:.4g} pN<extra>%{fullData.name}</extra>"; });
   let legend = false;
@@ -356,9 +430,9 @@ function renderLines(r) {
                   line: { color: css("--text-muted"), width: 1, dash: "dot" } });
   }
   const ann = [
-    { text: `Fₓ along x at z = ${fmt(L.z_ref * 1e9, 3)} nm`, xref: "x domain", yref: "paper", x: 0.5, y: 1.07, showarrow: false },
-    { text: "F_y along y", xref: "x2 domain", yref: "paper", x: 0.5, y: 1.07, showarrow: false },
-    { text: "F_z along the beam axis", xref: "x3 domain", yref: "paper", x: 0.5, y: 1.07, showarrow: false },
+    { text: `F<sub>x</sub> when moving along x (at z = ${fmt(L.z_ref * 1e9, 3)} nm)`, xref: "x domain", yref: "paper", x: 0.5, y: 1.07, showarrow: false },
+    { text: "F<sub>y</sub> when moving along y", xref: "x2 domain", yref: "paper", x: 0.5, y: 1.07, showarrow: false },
+    { text: "F<sub>z</sub> when moving along the beam axis z", xref: "x3 domain", yref: "paper", x: 0.5, y: 1.07, showarrow: false },
   ];
   const layout = baseLayout({
     showlegend: legend, legend: { orientation: "h", y: -0.2, x: 0 },
@@ -485,6 +559,8 @@ async function runSweep() {
 
 function renderSweep() {
   if (!sweepData) return;
+  const ph = document.querySelector("#plot-sweep .placeholder");
+  if (ph) ph.remove();
   const P = sweepData.points;
   const qty = $("sw-qty").value;
   const xs = P.map((p) => p.ui);
@@ -494,15 +570,21 @@ function renderSweep() {
   let ylab = "";
   const line = (name, ys, c) => ({ x: xs, y: ys, name, mode: "lines+markers", line: { color: c, width: 2 }, marker: { size: 8, color: c }, connectgaps: false });
   if (qty === "freq") {
-    traces = [line("f_x", P.map((p) => st(p, p.freq && p.freq.x !== null ? p.freq.x / 1e3 : null)), cols[0]),
-              line("f_y", P.map((p) => st(p, p.freq && p.freq.y !== null ? p.freq.y / 1e3 : null)), cols[1]),
-              line("f_z", P.map((p) => st(p, p.freq && p.freq.z !== null ? p.freq.z / 1e3 : null)), cols[2])];
+    traces = [line("f<sub>x</sub>", P.map((p) => st(p, p.freq && p.freq.x !== null ? p.freq.x / 1e3 : null)), cols[0]),
+              Object.assign(line("f<sub>y</sub>", P.map((p) => st(p, p.freq && p.freq.y !== null ? p.freq.y / 1e3 : null)), cols[1]),
+                { line: { color: cols[1], width: 2, dash: "dash" }, marker: { size: 6, color: cols[1], symbol: "diamond" } }),
+              line("f<sub>z</sub>", P.map((p) => st(p, p.freq && p.freq.z !== null ? p.freq.z / 1e3 : null)), cols[2])];
     ylab = "trap frequency (kHz)";
-  } else if (qty === "z_eq") { traces = [line("z_eq", P.map((p) => st(p, p.z_eq !== null && p.z_eq !== undefined ? p.z_eq * 1e9 : null)), cols[0])]; ylab = "z_eq (nm)"; }
-  else if (qty === "depth") { traces = [line("depth", P.map((p) => st(p, p.depth_kT)), cols[0])]; ylab = "trap depth (k_BT)"; }
-  else if (qty === "recoil") { traces = [line("Γ/Ω_z", P.map((p) => st(p, p.recoil_ratio && p.recoil_ratio.z)), cols[0])]; ylab = "Γ/Ω_z"; }
-  else if (qty === "psca") { traces = [line("P_sca", P.map((p) => (p.P_sca ?? null) !== null ? p.P_sca * 1e3 : null), cols[0])]; ylab = "scattered power at z_eq (mW)"; }
-  else if (qty === "pabs") { traces = [line("P_abs", P.map((p) => (p.P_abs ?? null) !== null ? p.P_abs * 1e9 : null), cols[0])]; ylab = "absorbed power (nW)"; }
+  } else if (qty === "z_eq") { traces = [line("z<sub>eq</sub>", P.map((p) => st(p, p.z_eq !== null && p.z_eq !== undefined ? p.z_eq * 1e9 : null)), cols[0])]; ylab = "z<sub>eq</sub> (nm)"; }
+  else if (qty === "depth") { traces = [line("depth", P.map((p) => st(p, p.depth_kT)), cols[0])]; ylab = "trap depth (k<sub>B</sub>T)"; }
+  else if (qty === "recoil") { traces = [line("Γ/Ω<sub>z</sub>", P.map((p) => st(p, p.recoil_ratio && p.recoil_ratio.z)), cols[0])]; ylab = "Γ/Ω<sub>z</sub> (recoil heating per oscillation)"; }
+  else if (qty === "psca") { traces = [line("P<sub>sca</sub>", P.map((p) => (p.P_sca ?? null) !== null ? p.P_sca * 1e3 : null), cols[0])]; ylab = "scattered power at z<sub>eq</sub> (mW)"; }
+  else if (qty === "pabs") { traces = [line("P<sub>abs</sub>", P.map((p) => (p.P_abs ?? null) !== null ? p.P_abs * 1e9 : null), cols[0])]; ylab = "absorbed power (nW)"; }
+  else if (qty === "mp") {
+    const cats = [["MQ", cols[0]], ["MD", cols[1]], ["EQ", cols[2]], ["ED", css("--text-muted")]];
+    traces = cats.map(([k, c]) => line(k, P.map((p) => (p.multipoles ? p.multipoles[k] : null)), c));
+    ylab = "P<sub>sca</sub>/P at z<sub>eq</sub> (focus if unstable)";
+  }
   traces.forEach((t) => { t.hovertemplate = `%{x:.4g}: %{y:.4g}<extra>${t.name}</extra>`; });
   // shade unstable regions
   const shapes = [];
@@ -513,7 +595,7 @@ function renderSweep() {
   });
   const xlab = { radius: "particle radius (nm)", wavelength: "wavelength (nm)", power: "total power (mW)" }[sweepData.variable];
   const layout = baseLayout({
-    shapes, xaxis: axis(xlab), yaxis: axis(ylab, { type: qty === "recoil" || qty === "pabs" || qty === "psca" ? "log" : "linear", exponentformat: "power" }),
+    shapes, xaxis: axis(xlab), yaxis: axis(ylab, { type: ["recoil", "pabs", "psca", "mp"].includes(qty) ? "log" : "linear", exponentformat: "power" }),
     showlegend: traces.length > 1, legend: { orientation: "h", y: 1.12, x: 0 },
     annotations: shapes.length ? [{ text: "grey: no stable trap", xref: "paper", yref: "paper", x: 1, y: 1.08, showarrow: false, xanchor: "right", font: { size: 11 } }] : [],
     margin: { l: 70, r: 16, t: 34, b: 44 },
@@ -539,6 +621,9 @@ async function init() {
   });
   beam1 = beamFieldset($("beam1"), 1);
   beam2 = beamFieldset($("beam2"), 2);
+  attachHelp(document.querySelector(".params"));
+  const chips = document.querySelector(".chips");
+  chips.parentElement.querySelector("h3").appendChild(helpIcon(HELP.multipoles));
   $("material").innerHTML = MATERIAL_NAMES.map((m) => `<option value="${m}">${m.replace(/(\d)/g, "<sub>$1</sub>")}</option>`).join("") +
     '<option value="custom">custom</option>';
 
@@ -595,5 +680,21 @@ async function loadPreset(key) {
   sweepDefaults();
   run();
 }
+
+// keep tooltips inside the viewport (position: fixed, clamped)
+function placeTip(ev) {
+  const help = ev.target.closest && ev.target.closest(".help");
+  if (!help) return;
+  const tip = help.querySelector(".tip");
+  const r = help.getBoundingClientRect();
+  const w = Math.min(260, window.innerWidth - 24);
+  tip.style.position = "fixed";
+  tip.style.width = `${w}px`;
+  tip.style.transform = "none";
+  tip.style.left = `${Math.max(12, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 12))}px`;
+  tip.style.top = `${r.bottom + 6}px`;
+}
+document.addEventListener("mouseover", placeTip);
+document.addEventListener("focusin", placeTip);
 
 document.addEventListener("DOMContentLoaded", init);

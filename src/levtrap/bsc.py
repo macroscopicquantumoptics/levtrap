@@ -212,7 +212,7 @@ class Bsc:
 
     def append(self, other: "Bsc") -> "Bsc":
         if self.Nbeams == 0:
-            return other.copy()
+            return other._like(other.a, other.b)
         n = max(self.Nmax, other.Nmax)
         s1, s2 = self.set_Nmax(n), other.set_Nmax(n)
         return s1._like(np.hstack([s1.a, s2.a]), np.hstack([s1.b, s2.b]))

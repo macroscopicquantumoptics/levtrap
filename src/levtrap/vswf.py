@@ -130,17 +130,19 @@ def em_field(kr, theta, phi, basis: str, n, m, a, b, calc_h: bool = False):
     H = np.zeros((kr.size, 3), dtype=complex)
     func = {"incoming": sbesselh2, "outgoing": sbesselh1, "regular": sbesselj}[basis]
     scale = 0.5 if basis in ("incoming", "outgoing") else 1.0
+    if n.size == 0:
+        return (E, H) if calc_h else E
+    # radial functions for all orders at once: f_{n-1}, f_n for n = 1..max
+    nmax = int(n.max())
+    fall = func(np.arange(0, nmax + 1), kr) * scale  # (npts, nmax+1)
     for nn in np.unique(n):
         nn = int(nn)
         vv = n == nn
-        if not np.any(vv):
-            continue
         Nn = 1 / np.sqrt(nn * (nn + 1))
         Y, Yt, Yp = spharm(nn, m[vv], theta, phi)
-        hn, dhn = func(nn, kr, derivative=True)
-        hn = hn[:, 0] * scale
-        dhn = dhn[:, 0] * scale
+        hn = fall[:, nn]
         # dhn = h_{n-1} - n/kr h_n = (1/kr) d(kr h_n)/d(kr)  (OTT emField)
+        dhn = fall[:, nn - 1] - nn / kr * hn
         pidx = a[vv]
         qidx = b[vv]
         E[:, 0] += Nn * nn * (nn + 1) / kr * hn * (Y @ qidx)

@@ -86,7 +86,7 @@
         <legend>Beam 2</legend>
       </fieldset>
       <div id="beam2-extra" class="grid2" hidden>
-        <label class="field">Power ratio P₂/P₁
+        <label class="field">Component ratio P₂/P₁
           <input id="ratio" type="number" step="any" min="0">
         </label>
         <label class="field">Relative phase (π rad)
@@ -128,6 +128,17 @@
   </aside>
 
   <div class="content">
+    <details class="panel intro" id="intro" open>
+      <summary><h2>Start here — what is this?</h2></summary>
+      <p>In <b>levitated optomechanics</b> a glass or crystal sphere, a few hundred nanometres across, is held in vacuum by nothing but a focused laser beam (“optical tweezers”). Light carries momentum, so when it is bent or scattered by the sphere it pushes on it. Near a tight focus these pushes add up to a restoring force, and the sphere sits in a light-made “bowl” and oscillates in it like a mass on a spring.</p>
+      <p>This page calculates those forces exactly: it solves Maxwell’s equations for a sphere in a focused beam (Mie theory, T-matrix method from the Optical Tweezers Toolbox), entirely inside your browser.</p>
+      <ol>
+        <li><b>Pick a preset</b> on the left (a standard silica “bright” trap, or a WS₂ particle in a “dark” bottle-beam trap).</li>
+        <li><b>Change anything</b>: particle size and material, laser wavelength, power and focusing. The results update automatically after a short pause.</li>
+        <li><b>Read the summary</b>: is the particle trapped, where it sits, how fast it oscillates and how deep the trap is. Hover over or tap any <span class="help-demo">ⓘ</span> for a plain-language explanation. Each plot has a “What am I looking at?” note, and there is a glossary at the bottom of the page.</li>
+      </ol>
+    </details>
+
     <!-- ======================= 2. summary ======================= -->
     <section class="panel summary" aria-label="Summary">
       <div class="summary-head">
@@ -191,10 +202,11 @@
             <select id="sw-qty">
               <option value="freq">trap frequencies (kHz)</option>
               <option value="z_eq">equilibrium z (nm)</option>
-              <option value="depth">trap depth (k_BT)</option>
-              <option value="recoil">Γ/Ω_z</option>
+              <option value="depth">trap depth (in units of kT)</option>
+              <option value="recoil">recoil heating Γ/Ω (axial)</option>
               <option value="psca">scattered power (mW)</option>
               <option value="pabs">absorbed power (nW)</option>
+              <option value="mp">scattering by multipole (fraction of beam)</option>
             </select>
           </label>
           <button id="sw-run" type="button">Run sweep</button>
@@ -211,6 +223,30 @@
     </section>
   </div>
 </main>
+
+<section class="panel glossary-wrap">
+  <details id="glossary">
+    <summary><h2>Glossary</h2></summary>
+    <dl class="glossary">
+      <dt>Optical tweezers / trap</dt><dd>A tightly focused laser beam that holds a small particle at (or near) its focus using the momentum of light.</dd>
+      <dt>Bright vs dark trap</dt><dd>In a <i>bright</i> trap the particle is pulled into the most intense light (true for most materials). Some resonant, high-index particles are instead pushed <i>out</i> of the light; they can be held in a <i>dark</i> trap — a pocket of darkness surrounded by light, such as the “bottle beam” made by overlapping two beams with opposite phase.</dd>
+      <dt>Gradient and scattering forces</dt><dd>The gradient force pulls the particle along intensity gradients (towards or away from bright regions); the scattering force (radiation pressure) pushes it along the beam. The equilibrium is where they balance, usually a little behind the focus.</dd>
+      <dt>Numerical aperture (NA)</dt><dd>How strongly the lens focuses: NA = n·sin(θ), where θ is the half-angle of the light cone. NA ≈ 0.9 is a tight focus (spot ≈ wavelength); smaller NA means a longer, wider, weaker focus.</dd>
+      <dt>Beam waist w₀</dt><dd>The radius of the focal spot (where the intensity drops to 1/e² ≈ 13% of the centre), an alternative to NA for describing the focus.</dd>
+      <dt>LG and HG modes</dt><dd>Laguerre–Gauss (LGₚₗ) and Hermite–Gauss (HGₘₙ) beams are shaped laser beams. LG beams with ℓ ≠ 0 are doughnuts carrying orbital angular momentum; p counts the bright rings. HG beams are grids of lobes. LG₀₀ = HG₀₀ is the ordinary Gaussian beam.</dd>
+      <dt>Polarisation</dt><dd>The direction in which the light’s electric field oscillates: linear (x or y) or circular (rotating). It slightly changes the trap shape, e.g. different stiffness along x and y.</dd>
+      <dt>Refractive index n + ik</dt><dd>n sets how strongly the particle bends light (glass ≈ 1.45, silicon ≈ 3.5); k is absorption (heats the particle). The medium index is 1 for vacuum or air.</dd>
+      <dt>Equilibrium z<sub>eq</sub></dt><dd>Where the particle settles along the beam axis, measured from the focus (positive = downstream).</dd>
+      <dt>Stiffness κ and trap frequency f</dt><dd>Near equilibrium the force is like a spring, F = −κ·Δx. The particle (mass m) oscillates at f = √(κ/m)/2π, typically tens to hundreds of kHz. “Axial” is along the beam (z), “radial” across it (x, y).</dd>
+      <dt>Trap depth</dt><dd>The energy needed to escape the trap, in units of the thermal energy k<sub>B</sub>T (≈ 4×10⁻²¹ J at room temperature). Depths ≳ 10 k<sub>B</sub>T keep a particle trapped; in vacuum much more is needed during pump-down. Also shown as an equivalent temperature U/k<sub>B</sub>.</dd>
+      <dt>Multipoles (ED, MD, EQ, MQ, …)</dt><dd>The scattered light is a sum of simple radiation patterns: electric and magnetic dipoles (ED, MD), quadrupoles (EQ, MQ), octupoles (EO, MO) and so on. Small particles scatter mostly as an ED; larger or high-index particles have resonances in the higher ones, which can even reverse the force.</dd>
+      <dt>Dipole (Rayleigh) approximation</dt><dd>Treats the particle as a single point-like electric dipole. It is accurate for particles much smaller than the wavelength; comparing it with the full calculation shows when the simple picture breaks down.</dd>
+      <dt>Q<sub>sca</sub>, Q<sub>abs</sub></dt><dd>Scattering and absorption efficiencies: the cross-section divided by the particle’s geometric cross-section πr², for a plane wave (textbook Mie values).</dd>
+      <dt>Recoil heating Γ/Ω</dt><dd>Every scattered photon gives the particle a random kick. Γ is the resulting heating rate in phonons per second, and Γ/Ω is the number of kicks’ worth of heating per oscillation (in radians). Γ/Ω ≪ 1 means the particle can oscillate coherently for many periods — important for quantum experiments.</dd>
+      <dt>N<sub>max</sub></dt><dd>How many multipole orders are kept in the calculation, chosen automatically from the particle and beam size. Larger means more accurate and slower.</dd>
+    </dl>
+  </details>
+</section>
 
 <footer class="footer">
   <p>Physics ported from the <a href="https://github.com/ilent2/ott">Optical Tweezers Toolbox v1</a> © The University of Queensland — T. A. Nieminen <em>et al.</em>, “Optical tweezers computational toolbox”, <em>J. Opt. A</em> <b>9</b>, S196 (2007). Licensed <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a> — non-commercial use only.</p>

@@ -169,3 +169,26 @@ fieldset.beam legend { font-size: 12px; color: var(--text-secondary); padding: 0
 }
 
 .placeholder { display: grid; place-items: center; height: 100%; color: var(--text-muted); font-size: 13px; text-align: center; padding: 0 20px; }
+
+.intro summary, #glossary summary { cursor: pointer; list-style: none; }
+.intro summary h2, #glossary summary h2 { display: inline; }
+.intro summary::before, #glossary summary::before { content: "▸ "; color: var(--accent); }
+.intro[open] summary::before, #glossary[open] summary::before { content: "▾ "; }
+.intro p, .intro ol { max-width: 95ch; color: var(--text-secondary); margin: 8px 0; }
+.intro li { margin: 4px 0; }
+.glossary-wrap { max-width: 1700px; margin: 0 20px 0 20px; }
+@media (min-width: 1740px) { .glossary-wrap { margin: 0 auto; } }
+.glossary { display: grid; grid-template-columns: minmax(160px, 240px) 1fr; gap: 6px 16px; margin: 10px 0 0; }
+.glossary dt { font-weight: 600; }
+.glossary dd { margin: 0; color: var(--text-secondary); max-width: 95ch; }
+@media (max-width: 820px) { .glossary { grid-template-columns: 1fr; } .glossary dd { margin-bottom: 6px; } }
+.help, .help-demo { display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; font-size: 11px; line-height: 1;
+  color: var(--accent); cursor: help; position: relative; text-transform: none; letter-spacing: 0; font-weight: 400; vertical-align: 1px; margin-left: 3px; }
+.help:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.help .tip { display: none; position: absolute; left: 50%; top: 18px; transform: translateX(-50%); z-index: 30; width: 260px;
+  background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  font-size: 12px; line-height: 1.4; box-shadow: 0 6px 20px rgba(0,0,0,.18); text-align: left; white-space: normal; }
+.help:hover .tip, .help:focus .tip, .help:focus-within .tip { display: block; }
+.params .help .tip { left: 0; transform: none; }
+.tile .hint { font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
+.field .cap { display: flex; align-items: center; gap: 2px; }

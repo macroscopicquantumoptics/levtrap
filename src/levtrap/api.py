@@ -24,6 +24,8 @@ Request schema (``compute`` / ``sweep``)::
          "phase": 0.0}                   # relative phase [rad]
       ],
       "dark_focus": false,               # 2 beams: re-split power to null the focal field
+      # With two beams the sum of the "power" entries is the power of the
+      # coherent superposition; the entries set the ratio of the components.
       "multipoles": {"ED": true, "MD": true, "EQ": true, "MQ": true, "higher": true},
       "dipole_overlay": false,
       "temperature": 300.0,
@@ -61,6 +63,7 @@ DEFAULT_SCAN = dict(z_range=3e-6, z_points=61, x_range=1.5e-6, x_points=41,
                     map_nx=13, map_nz=17, intensity_n=60)
 
 _BEAM_CACHE: dict = {}
+_INTENSITY_CACHE: dict = {}
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +133,14 @@ def build_beam(req: dict) -> tuple[Bsc, float]:
     for spec, b, p in zip(specs, beams, powers):
         b = b * (math.sqrt(p) * np.exp(1j * float(spec.get("phase", 0.0))))
         total = b if total is None else total + b
+    # Beams of different shape are not orthogonal, so the coherent sum
+    # carries P1 + P2 + interference.  The requested total (sum of the
+    # "power" entries) is taken to be the power of the combined beam.
+    target = sum(powers)
+    if len(specs) > 1 and total.power > 0:
+        s = target / total.power
+        total = total * math.sqrt(s)
+        powers = [p * s for p in powers]
     total.info = dict(powers=powers)
     return total, total.power
 
@@ -298,10 +309,18 @@ def analyse(req: dict, detail: bool = True) -> dict:
         ni = int(scan["intensity_n"])
         ix = np.linspace(-scan["x_range"], scan["x_range"], ni)
         iz = np.linspace(-scan["z_range"], scan["z_range"], int(ni * 1.4))
-        XX, ZZ = np.meshgrid(ix, iz)
-        pts = np.stack([XX.ravel(), 0 * XX.ravel(), ZZ.ravel()], axis=1)
-        E = beam.em_field_xyz(pts)
-        I = 4 * beam.k_medium**2 * np.sum(np.abs(E) ** 2, axis=1).reshape(XX.shape)  # W/m^2 (beam.power = P)
+        ikey = (json.dumps(req["beams"], sort_keys=True), bool(req.get("dark_focus")), wl, nm,
+                float(scan["x_range"]), float(scan["z_range"]), ni)
+        I = _INTENSITY_CACHE.get(ikey)
+        if I is None:
+            XX, ZZ = np.meshgrid(ix, iz)
+            pts = np.stack([XX.ravel(), 0 * XX.ravel(), ZZ.ravel()], axis=1)
+            E = beam.em_field_xyz(pts)
+            # W/m^2, since beam.power = P [W] (see levtrap.derived)
+            I = 4 * beam.k_medium**2 * np.sum(np.abs(E) ** 2, axis=1).reshape(XX.shape)
+            if len(_INTENSITY_CACHE) > 8:
+                _INTENSITY_CACHE.clear()
+            _INTENSITY_CACHE[ikey] = I
         result["map"] = dict(x=mx, z=mz, Fx=FX, Fz=FZ, Ix=ix, Iz=iz, I=I)
         if req.get("dipole_overlay"):
             m_rel = n_p / nm
