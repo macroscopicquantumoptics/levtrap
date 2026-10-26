@@ -108,7 +108,8 @@ SI units. Internally the code uses OTT conventions:
 src/levtrap/   special.py vswf.py translate.py bsc.py tmatrix.py force.py
                traps.py derived.py dipole.py materials.py api.py
 tests/         ported OTT tests + analytic checks (pytest)
-web/           index.html app.js worker.js style.css (static site, Plotly + Pyodide from jsDelivr)
+web/           index.html app.js worker.js view3d.js style.css (static site; Plotly, three.js and
+               Pyodide from jsDelivr)
 scripts/       devserver.py (native backend), pyodide_check.mjs, ui_check.js (CI)
 ci/workflows/  test.yml, pages.yml — copy to .github/workflows/ (see below)
 examples/      paper_2607_09896.py
