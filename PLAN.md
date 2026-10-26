@@ -249,3 +249,32 @@ here), < 3 s in Pyodide ☐ (CI will report).
   Force arrows add about 1 s. The 3D view is not computed on every parameter change, only on the button.
 * Checked in headless Chromium (SwiftShader WebGL2) with the local backend, for the silica and WS₂
   presets, with cut planes and force arrows.
+
+### 2026-10-26 — Session 1, continued (lens tilt page, requested)
+
+* PR #2 merged. CI on it was green, including the Pyodide check: the OTT benchmark reproduces exactly. Pyodide
+  timings on the runner: cold 2.8–3.4 s, warm 0.4 s, 3D volume 1.15 s.
+* New `lens.py` and `lens.html` (outside the original scope; requested by the user). Thorlabs 354330-C,
+  prescription from its Zemax file (user upload; the numbers are embedded in `lens.py`, the file itself is
+  not committed).
+  * Sequential real-ray trace through two even aspheres, with tilt about x/y around a pivot, decentre,
+    and clear-aperture clipping.
+  * Glass: CDGM D-ZK3 Sellmeier (refractiveindex.info, CC0) plus an index offset of −0.00267, fitted so the
+    830 nm back focus matches Zemax (1.760004 mm). After that, the 830 nm design is diffraction limited
+    (4×10⁻⁵ waves rms), which independently validates the trace.
+  * Best focus: least-squares point of minimum rms wavefront error.
+  * Focused beam: projection of the aberrated far field onto VSWFs as a sum over rays. The Jacobian enters
+    as √J, which avoids caustic singularities. Energy normalisation by Parseval (coefficient power = ray
+    power, checked).
+  * Projection validated against OTT point matching (rtol 1e-4). Phase sign fixed by a displaced-reference
+    test.
+  * The nodal-point rule (lateral focus shift = α·(z_N − z_pivot)) is checked.
+* `traps.equilibrium_3d` / `stiffness_matrix`: Newton on F(r) = 0 with the full 3×3 stiffness. Reproduces the
+  OTT benchmark (z_eq and k_x, k_z). Sweeps use continuation and flag jumps where an equilibrium disappears.
+* Findings for 100 nm silica, 1550 nm, 2.5 mm beam:
+  * The aligned lens already has 0.08 waves rms of spherical aberration (830 nm design). At 1550 nm the
+    back focus is +52.9 µm longer.
+  * At 0.5° tilt (about the lens centre): focus moves 0.93 µm sideways, particle moves 1.0 µm sideways and
+    −2 µm along z, axial frequency drops to 79 %, the trap axis tilts 3.3°.
+  * Near 0.7° the followed equilibrium vanishes (the particle jumps by about 2 µm).
+* Web: shared code moved to `web/common.js`; page navigation added. 94 pytest pass.

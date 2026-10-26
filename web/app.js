@@ -1,58 +1,5 @@
-/* levtrap web UI.  Talks to the Python engine through a Web Worker
- * (Pyodide), or to a local dev server with ?backend=local
- * (scripts/devserver.py) for development without the CDN. */
+/* levtrap trap simulator page (index.html).  Shared helpers: common.js. */
 "use strict";
-
-// ---------------------------------------------------------------- backend
-const params = new URLSearchParams(location.search);
-const LOCAL = params.get("backend") === "local";
-
-const backend = (() => {
-  let worker = null;
-  let nextId = 1;
-  const pending = new Map();
-  const listeners = { progress: () => {}, ready: () => {}, fatal: () => {} };
-
-  function start() {
-    if (LOCAL) {
-      setTimeout(() => listeners.ready({ backend: "local dev server (native Python)" }), 0);
-      return;
-    }
-    worker = new Worker("worker.js");
-    worker.onmessage = (ev) => {
-      const m = ev.data;
-      if (m.type) { (listeners[m.type] || (() => {}))(m.type === "ready" ? m.versions : m); return; }
-      const p = pending.get(m.id);
-      if (!p) return;
-      pending.delete(m.id);
-      if (m.ok) p.resolve(JSON.parse(m.result)); else p.reject(new Error(m.error));
-    };
-    worker.onerror = (e) => listeners.fatal({ error: e.message || "Worker failed to start" });
-  }
-
-  async function call(method, ...args) {
-    if (LOCAL) {
-      const r = await fetch("/api", { method: "POST", body: JSON.stringify({ method, args }) });
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error);
-      return JSON.parse(j.result);
-    }
-    const id = nextId++;
-    return new Promise((resolve, reject) => {
-      pending.set(id, { resolve, reject });
-      worker.postMessage({ id, method, args });
-    });
-  }
-  return { start, call, on: (k, f) => { listeners[k] = f; } };
-})();
-
-// ---------------------------------------------------------------- helpers
-const $ = (id) => document.getElementById(id);
-const fmt = (v, d = 3) => (v === null || v === undefined || !isFinite(v)) ? "—" : Number(v).toPrecision(d);
-const fmtE = (v, d = 2) => (v === null || v === undefined || !isFinite(v)) ? "—" :
-  (Math.abs(v) >= 1e-2 && Math.abs(v) < 1e4 ? Number(v).toPrecision(d + 1) : Number(v).toExponential(d));
-const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-const clone = (o) => JSON.parse(JSON.stringify(o));
 
 let PRESETS = {};
 let MATERIALS = {};
@@ -101,35 +48,6 @@ const TILE_HELP = {
   mass: "Particle mass, from radius and density (1 amu ≈ 1.66×10⁻²⁷ kg).",
   nmax: "Number of multipole orders kept for the beam and the particle (chosen automatically for accuracy).",
 };
-
-function helpIcon(text) {
-  const span = document.createElement("span");
-  span.className = "help";
-  span.tabIndex = 0;
-  span.setAttribute("role", "note");
-  span.setAttribute("aria-label", text);
-  span.innerHTML = 'ⓘ<span class="tip"></span>';
-  span.querySelector(".tip").textContent = text;
-  return span;
-}
-const helpHTML = (text) => `<span class="help" tabindex="0" role="note" aria-label="${text.replace(/"/g, "&quot;")}">ⓘ<span class="tip">${text}</span></span>`;
-
-function attachHelp(root) {
-  root.querySelectorAll("label.field, label.check").forEach((lab) => {
-    const input = lab.querySelector("input, select");
-    if (!input || lab.querySelector(".help")) return;
-    const key = input.id || input.dataset.b;
-    if (!HELP[key]) return;
-    if (lab.classList.contains("check")) { lab.appendChild(helpIcon(HELP[key])); return; }
-    // keep the caption and its icon on one line: wrap them in a row
-    const first = lab.firstChild;
-    const row = document.createElement("span");
-    row.className = "cap";
-    lab.insertBefore(row, first);
-    row.appendChild(first);
-    row.appendChild(helpIcon(HELP[key]));
-  });
-}
 
 // ---------------------------------------------------------------- beam fieldsets
 function beamFieldset(el, key) {
@@ -343,23 +261,6 @@ async function run() {
 }
 
 // ---------------------------------------------------------------- rendering
-function baseLayout(extra = {}) {
-  const text = css("--text-secondary");
-  const grid = css("--border");
-  return Object.assign({
-    paper_bgcolor: "rgba(0,0,0,0)",
-    plot_bgcolor: "rgba(0,0,0,0)",
-    font: { family: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif", size: 12, color: text },
-    margin: { l: 60, r: 16, t: 28, b: 44 },
-    hoverlabel: { bgcolor: css("--surface-1"), bordercolor: grid, font: { color: css("--text-primary") } },
-  }, extra);
-}
-const axis = (title, extra = {}) => Object.assign({
-  title: { text: title, standoff: 6 }, gridcolor: css("--border"), zerolinecolor: css("--text-muted"),
-  linecolor: css("--border"), ticks: "outside", tickcolor: css("--border"),
-}, extra);
-const PLOT_CONFIG = { responsive: true, displaylogo: false, modeBarButtonsToRemove: ["lasso2d", "select2d"] };
-
 function tile(label, value, sub, help, hint) {
   return `<div class="tile"><div class="label">${label}${help ? helpHTML(TILE_HELP[help]) : ""}</div><div class="value">${value}</div>${sub ? `<div class="sub2">${sub}</div>` : ""}${hint ? `<div class="hint">${hint}</div>` : ""}</div>`;
 }
@@ -448,8 +349,7 @@ function renderLines(r) {
 function renderMap(r, req) {
   const M = r.map;
   const um = (a) => a.map((v) => v * 1e6);
-  const dark = document.documentElement.dataset.theme === "dark" ||
-    (!document.documentElement.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
+  const dark = isDark();
   const ramp = dark
     ? [[0, "#1a1a19"], [0.25, "#104281"], [0.5, "#256abf"], [0.75, "#5598e7"], [1, "#b7d3f6"]]
     : [[0, "#fcfcfb"], [0.2, "#cde2fb"], [0.45, "#86b6ef"], [0.7, "#2a78d6"], [1, "#104281"]];
@@ -682,34 +582,18 @@ function init3d() {
   });
 }
 
-// ---------------------------------------------------------------- theme
-function setTheme(t) {
-  if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
-  try { if (t) localStorage.setItem("levtrap-theme", t); else localStorage.removeItem("levtrap-theme"); } catch (e) { /* storage unavailable */ }
-  if (lastResult) render(lastResult, lastReq);
-  renderSweep();
-}
-
 // ---------------------------------------------------------------- init
 async function init() {
-  try { const t = localStorage.getItem("levtrap-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) { /* ignore */ }
-  $("theme-toggle").addEventListener("click", () => {
-    const cur = document.documentElement.dataset.theme ||
-      (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    setTheme(cur === "dark" ? "light" : "dark");
-  });
+  initTheme(() => { if (lastResult) render(lastResult, lastReq); renderSweep(); });
   beam1 = beamFieldset($("beam1"), 1);
   beam2 = beamFieldset($("beam2"), 2);
-  attachHelp(document.querySelector(".params"));
+  attachHelp(document.querySelector(".params"), HELP);
   const chips = document.querySelector(".chips");
   chips.parentElement.querySelector("h3").appendChild(helpIcon(HELP.multipoles));
   $("material").innerHTML = MATERIAL_NAMES.map((m) => `<option value="${m}">${m.replace(/(\d)/g, "<sub>$1</sub>")}</option>`).join("") +
     '<option value="custom">custom</option>';
 
-  // version footer
-  fetch("version.json", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).then((v) => {
-    if (v) $("ver").textContent = `${v.version} · commit ${String(v.commit).slice(0, 7)} · built ${v.date}`;
-  }).catch(() => {});
+  showVersion();
 
   $("plot-sweep").innerHTML = '<div class="placeholder">Choose a parameter and range above, then press “Run sweep”. Each point is a full trap calculation, so 20 points take a little while.</div>';
   backend.on("progress", (m) => { $("loader-stage").textContent = m.stage; $("loader-bar").style.width = `${Math.round(m.fraction * 100)}%`; });
@@ -753,7 +637,6 @@ async function init() {
   $("sw-qty").addEventListener("change", renderSweep);
   $("sw-run").addEventListener("click", runSweep);
   $("sw-cancel").addEventListener("click", () => { sweepCancel = true; });
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (lastResult) render(lastResult, lastReq); renderSweep(); });
 }
 
 async function loadPreset(key) {
@@ -766,21 +649,5 @@ async function loadPreset(key) {
   sweepDefaults();
   run();
 }
-
-// keep tooltips inside the viewport (position: fixed, clamped)
-function placeTip(ev) {
-  const help = ev.target.closest && ev.target.closest(".help");
-  if (!help) return;
-  const tip = help.querySelector(".tip");
-  const r = help.getBoundingClientRect();
-  const w = Math.min(260, window.innerWidth - 24);
-  tip.style.position = "fixed";
-  tip.style.width = `${w}px`;
-  tip.style.transform = "none";
-  tip.style.left = `${Math.max(12, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 12))}px`;
-  tip.style.top = `${r.bottom + 6}px`;
-}
-document.addEventListener("mouseover", placeTip);
-document.addEventListener("focusin", placeTip);
 
 document.addEventListener("DOMContentLoaded", init);

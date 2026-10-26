@@ -21,6 +21,12 @@ through [Pyodide](https://pyodide.org) and locally for research scripts.
   energy conservation via a volume integral of the internal field, the
   dipole limit, power scaling, symmetry and convergence. See `tests/` and
   the progress log in `PLAN.md`.
+* **Lens tilt page** (`lens.html`): ray trace of the Thorlabs 354330-C asphere
+  (prescription from the Thorlabs Zemax file), tilted and decentred. The
+  aberrated focus is fed into the same force engine, giving the focus shift,
+  the particle's new equilibrium, the 3×3 stiffness eigen-frequencies, the
+  trap-axis tilt and the clipping loss. Sweeps follow the particle and flag
+  jumps between equilibria.
 * **Paper reproduction:** figures of arXiv:2607.09896 (dark trapping of
   WS₂): see [`docs/paper/`](docs/paper/README.md).
 
@@ -106,9 +112,9 @@ SI units. Internally the code uses OTT conventions:
 
 ```
 src/levtrap/   special.py vswf.py translate.py bsc.py tmatrix.py force.py
-               traps.py derived.py dipole.py materials.py api.py
+               traps.py derived.py dipole.py materials.py lens.py api.py
 tests/         ported OTT tests + analytic checks (pytest)
-web/           index.html app.js worker.js view3d.js style.css (static site; Plotly, three.js and
+web/           index.html app.js lens.html lens.js common.js worker.js view3d.js style.css (static site; Plotly, three.js and
                Pyodide from jsDelivr)
 scripts/       devserver.py (native backend), pyodide_check.mjs, ui_check.js (CI)
 ci/workflows/  test.yml, pages.yml — copy to .github/workflows/ (see below)

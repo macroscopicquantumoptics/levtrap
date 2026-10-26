@@ -322,3 +322,53 @@ def trap_depth(position, force, x_eq: float):
     if bl <= br:
         return float(max(bl, 0.0)), bool(bounded_l)
     return float(max(br, 0.0)), bool(bounded_r)
+
+
+def stiffness_matrix(beam: Bsc, T, r, h: float | None = None):
+    """K_ij = -dF_i/dx_j by central differences at position r [m].
+
+    Units: force units of ``forcetorque`` per metre.  Returns ``(K, F0)``.
+    """
+    r = np.asarray(r, dtype=float)
+    h = (2 * np.pi / beam.k_medium) / 200 if h is None else h
+    # translate once to r, then use axis-aligned steps: their rotations and
+    # translation matrices are the same at every r (cached in levtrap.bsc)
+    tb = beam.translate_xyz(r) if np.any(r != 0) else beam
+    pos = [np.zeros(3)]
+    for j in range(3):
+        for s in (-1, 1):
+            d = np.zeros(3)
+            d[j] = s * h
+            pos.append(d)
+    f = forcetorque(tb, T, position=np.array(pos).T)[0]
+    K = np.zeros((3, 3))
+    for j in range(3):
+        K[:, j] = -(f[:, 2 + 2 * j] - f[:, 1 + 2 * j]) / (2 * h)
+    return K, f[:, 0]
+
+
+def equilibrium_3d(beam: Bsc, T, r0, max_iter: int = 25, tol: float | None = None):
+    """Stable 3D equilibrium near r0 by Newton iteration on F(r) = 0.
+
+    Returns ``(r_eq, K, converged)``: K is the stiffness matrix at r_eq
+    (restoring when positive definite).  Steps are limited to a quarter
+    wavelength so the iteration stays in the basin of r0.
+    """
+    lam = 2 * np.pi / beam.k_medium
+    tol = lam * 1e-4 if tol is None else tol
+    r = np.asarray(r0, dtype=float).copy()
+    K = None
+    for _ in range(max_iter):
+        K, F = stiffness_matrix(beam, T, r)
+        try:
+            step = np.linalg.solve(K, F)
+        except np.linalg.LinAlgError:
+            return r, K, False
+        n = np.linalg.norm(step)
+        if n > lam / 4:
+            step *= lam / 4 / n
+        r = r + step
+        if n < tol:
+            K, _ = stiffness_matrix(beam, T, r)
+            return r, K, True
+    return r, K, False

@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>levtrap · lens tilt</title>
+  <meta name="description" content="How tilting the trapping asphere moves the focus and the trapped particle — ray trace of the Thorlabs 354330-C plus full Mie forces, in your browser.">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js" defer></script>
+  <script src="common.js" defer></script>
+  <script src="lens.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">◉</span>
+    <div>
+      <h1>levtrap</h1>
+      <p class="sub">What happens to the trap when the lens is tilted?</p>
+    </div>
+  </div>
+  <nav class="pages"><a href="index.html">Trap simulator</a><a href="lens.html" aria-current="page">Lens tilt</a></nav>
+  <div class="topbar-right">
+    <span id="status" class="status" role="status">Loading…</span>
+    <button id="theme-toggle" class="ghost" type="button" aria-label="Toggle light/dark theme">◐</button>
+  </div>
+</header>
+
+<div id="loader" class="loader">
+  <div class="loader-card">
+    <h2>Starting the Python engine</h2>
+    <p id="loader-stage">Loading Python runtime (Pyodide)…</p>
+    <div class="bar"><div id="loader-bar"></div></div>
+    <p class="muted small">First load downloads ~25 MB (Python, NumPy, SciPy); later visits use the browser cache.</p>
+  </div>
+</div>
+
+<main class="layout">
+  <aside class="panel params" aria-label="Parameters">
+    <section>
+      <h3>Lens</h3>
+      <p class="note small"><b>Thorlabs 354330-C</b> moulded asphere, f = 3.10 mm, NA 0.68, D-ZK3M glass, designed for 830 nm (prescription from the Thorlabs Zemax file). Clear aperture Ø5.0 mm on the beam side (S1), Ø3.84 mm on the particle side (S2).</p>
+      <div class="grid2">
+        <label class="field">Tilt about x (°)
+          <input id="tilt_x" type="number" step="0.05" value="0">
+        </label>
+        <label class="field">Tilt about y (°)
+          <input id="tilt_y" type="number" step="0.05" value="0">
+        </label>
+        <label class="field">Pivot point
+          <select id="pivot">
+            <option value="centre">lens centre</option>
+            <option value="S1">front vertex (S1)</option>
+            <option value="S2">back vertex (S2)</option>
+          </select>
+        </label>
+        <label class="field">Decentre x (mm)
+          <input id="dec_x" type="number" step="0.01" value="0">
+        </label>
+      </div>
+    </section>
+
+    <section>
+      <h3>Laser</h3>
+      <div class="grid2">
+        <label class="field">Wavelength (nm)
+          <input id="wavelength" type="number" step="any" value="1550">
+        </label>
+        <label class="field">Power at the lens (mW)
+          <input id="power" type="number" step="any" min="0" value="500">
+        </label>
+        <label class="field">Beam diameter 1/e² (mm)
+          <input id="diameter" type="number" step="0.1" min="0.2" value="2.5">
+        </label>
+        <label class="field">Polarisation
+          <select id="pol">
+            <option value="x">linear x</option>
+            <option value="y">linear y</option>
+            <option value="circular+">circular +</option>
+          </select>
+        </label>
+      </div>
+      <p id="fill-note" class="note small"></p>
+    </section>
+
+    <section>
+      <h3>Particle (in vacuum)</h3>
+      <div class="grid2">
+        <label class="field">Material
+          <select id="material"></select>
+        </label>
+        <label class="field">Radius (nm)
+          <input id="radius" type="number" step="any" min="1" value="100">
+        </label>
+        <label class="field">n
+          <input id="n" type="number" step="any" value="1.444">
+        </label>
+        <label class="field">k (absorption)
+          <input id="k" type="number" step="any" min="0" value="0">
+        </label>
+        <label class="field">Density (kg/m³)
+          <input id="density" type="number" step="any" min="1" value="2200">
+        </label>
+        <label class="field">Temperature (K)
+          <input id="temperature" type="number" step="any" min="1" value="300">
+        </label>
+      </div>
+    </section>
+
+    <details>
+      <summary>Display</summary>
+      <div class="grid2">
+        <label class="field span2">Draw the optical axis (z)
+          <select id="axis-orient">
+            <option value="horizontal">horizontal (as on an optical table)</option>
+            <option value="vertical">vertical</option>
+          </select>
+        </label>
+      </div>
+    </details>
+  </aside>
+
+  <div class="content">
+    <details class="panel intro" open>
+      <summary><h2>Start here — what does this page do?</h2></summary>
+      <p>The trapping lens is placed in the vacuum chamber by hand, so it is never perfectly square to the beam. A small tilt moves the focus (sideways and along the beam) and adds aberrations — mainly <b>coma</b> and <b>astigmatism</b> — that smear the focal spot. That changes where the particle sits, how stiff the trap is, and whether it holds at all.</p>
+      <p>This page traces real rays through the actual asphere surfaces (from the Thorlabs Zemax file), turns the resulting aberrated wavefront into a focused beam, and computes the full optical force on the particle with the same Mie/T-matrix engine as the trap simulator. Because the lens was designed for 830 nm, using it at 1550 nm already adds some <b>spherical aberration</b> and moves the focus away from the lens — try the wavelength field to see this.</p>
+      <ol>
+        <li>Set the tilt (a few tenths of a degree is realistic for hand placement) and the beam diameter: a larger beam fills more of the lens (higher NA, stiffer trap) but is more sensitive to tilt, and overfilling clips light at the lens edge.</li>
+        <li>Read the summary: how far the focus and the particle move, the three trap frequencies compared with a perfectly aligned lens, and whether the trap is still stable.</li>
+        <li>Use the sweep at the bottom to see how everything changes with tilt angle or beam size.</li>
+      </ol>
+    </details>
+
+    <section class="panel summary" aria-label="Summary">
+      <div class="summary-head">
+        <h2>Summary</h2>
+        <span id="timing" class="muted small"></span>
+        <span id="spinner" class="spinner" hidden aria-label="computing"></span>
+      </div>
+      <div id="trap-banner" class="banner" hidden></div>
+      <div id="tiles" class="tiles"></div>
+      <p id="error" class="note error" hidden></p>
+    </section>
+
+    <div class="two-col">
+      <section class="panel plot-card">
+        <h2>Focal spot and particle</h2>
+        <div id="plot-focus" class="plot square"></div>
+        <details class="explain">
+          <summary>What am I looking at?</summary>
+          <p>Light intensity near the focus in the plane containing the optical axis z (top) and across the beam at the particle’s height (bottom). Coordinates are measured from the focus of a <em>perfectly aligned</em> lens, so you can see the spot move and distort as you tilt. The circle is the particle, drawn to scale at its equilibrium; the cross marks the new best focus. With coma the spot develops a comet-like tail, and the particle usually does not sit exactly at the focus.</p>
+          <p class="eq">best focus P* = point minimising the rms wavefront error &nbsp;&nbsp; equilibrium: F(r<sub>eq</sub>) = 0, all eigenvalues of K = −∂F/∂r positive</p>
+        </details>
+      </section>
+      <section class="panel plot-card">
+        <h2>Wavefront error across the lens</h2>
+        <div id="plot-wf" class="plot square"></div>
+        <details class="explain">
+          <summary>What am I looking at?</summary>
+          <p>How far (in wavelengths) each part of the beam lags or leads a perfect spherical wave converging on the best focus, as seen across the input beam (the lens aperture). A perfect focus is flat (all zero). A tilt produces a characteristic coma pattern (odd, one side up and the other down); spherical aberration is a ring pattern. The rule of thumb (Maréchal): rms error below λ/14 ≈ 0.07 waves is “diffraction limited”, i.e. the focus is essentially perfect.</p>
+          <p class="eq">Strehl ratio ≈ exp[−(2π σ<sub>W</sub>)²] &nbsp;&nbsp; σ<sub>W</sub> = rms wavefront error in waves</p>
+        </details>
+      </section>
+    </div>
+
+    <section class="panel plot-card">
+      <div class="sweep-head">
+        <h2>Sweep</h2>
+        <div class="sweep-controls">
+          <label class="field inline">Vary
+            <select id="sw-var">
+              <option value="tilt_y_deg">tilt about y (°)</option>
+              <option value="tilt_x_deg">tilt about x (°)</option>
+              <option value="diameter_mm">beam diameter (mm)</option>
+              <option value="decenter_x_mm">decentre x (mm)</option>
+            </select>
+          </label>
+          <label class="field inline">from <input id="sw-from" type="number" step="any" value="0"></label>
+          <label class="field inline">to <input id="sw-to" type="number" step="any" value="1"></label>
+          <label class="field inline">steps <input id="sw-n" type="number" step="1" min="2" max="60" value="11"></label>
+          <label class="field inline">Show
+            <select id="sw-qty">
+              <option value="shift">focus &amp; particle displacement (µm)</option>
+              <option value="freq">trap frequencies (kHz)</option>
+              <option value="rms">wavefront error (waves rms)</option>
+              <option value="trans">transmitted fraction</option>
+            </select>
+          </label>
+          <button id="sw-run" type="button">Run sweep</button>
+          <button id="sw-cancel" type="button" class="ghost" disabled>Cancel</button>
+        </div>
+      </div>
+      <div class="bar thin" id="sw-progress-wrap" hidden><div id="sw-progress"></div></div>
+      <div id="plot-sweep" class="plot"></div>
+      <details class="explain">
+        <summary>What am I looking at?</summary>
+        <p>Each point re-traces the lens and recomputes the trap with one setting changed. Displacements are measured from the aligned lens. The sweep follows the particle: each point starts from where the particle sat at the previous one, as if you turned the lens slowly. “Jump” marks where that equilibrium disappears and the particle would hop to another one (or be lost). Grey bands: no stable trap. Each point takes a few seconds, so start with ~10 steps.</p>
+      </details>
+    </section>
+
+    <section class="panel">
+      <details>
+        <summary><h2 style="display:inline">Model and limitations</h2></summary>
+        <ul class="small muted">
+          <li>Collimated Gaussian input beam along z; the lens is rotated about the chosen pivot on its axis (tilt about x first, then y) and optionally decentred.</li>
+          <li>Real ray trace through both even-asphere surfaces with Snell’s law; rays outside either clear aperture are blocked (this is the overfilling loss). Glass index: CDGM D-ZK3 Sellmeier formula with a constant offset (−0.0027) chosen so the trace reproduces the Zemax back focal distance (1.760 mm) at 830 nm; the lens is then diffraction-limited at 830 nm, as designed.</li>
+          <li>The aberrated wavefront behind the lens is expanded in vector spherical waves about the best focus (same basis as the trap simulator). Polarisation changes at the lens surfaces and Fresnel losses (the C coating) are neglected.</li>
+          <li>Forces: full Mie theory for a sphere in vacuum; equilibrium by Newton iteration on the 3D force, frequencies from the eigenvalues of the 3×3 stiffness matrix (with a tilted lens the trap axes rotate slightly).</li>
+          <li>Not included: the vacuum window or any other optics, mechanical clipping by the mount, thermal lensing, gravity.</li>
+        </ul>
+      </details>
+    </section>
+  </div>
+</main>
+
+<footer class="footer">
+  <p>Forces: physics ported from the <a href="https://github.com/ilent2/ott">Optical Tweezers Toolbox v1</a> © The University of Queensland — T. A. Nieminen <em>et al.</em>, <em>J. Opt. A</em> <b>9</b>, S196 (2007). Lens prescription: Thorlabs 354330-C Zemax file (for information only). Licensed <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a> — non-commercial use only.</p>
+  <p class="muted small" id="versions">levtrap <span id="ver">dev</span></p>
+</footer>
+</body>
+</html>

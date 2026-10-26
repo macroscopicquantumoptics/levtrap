@@ -40,5 +40,13 @@ for (const [key, p] of Object.entries(presets)) {
   const v = JSON.parse(api.field3d(JSON.stringify(presets.silica_1064.request), "{}"));
   console.log(`3D view volume (${v.dims.join("x")}): ${((performance.now() - t) / 1000).toFixed(2)} s`);
 }
+{
+  const req = { wavelength: 1.55e-6, power: 0.5, particle: { radius: 100e-9, n: 1.444, k: 0, density: 2200 },
+                lens: { diameter_mm: 2.5, tilt_y_deg: 0.5 } };
+  const t = performance.now();
+  const out = JSON.parse(api.lens_trap(JSON.stringify(req)));
+  if (!out.ok) fail.push(`lens_trap: ${out.error}`);
+  else console.log(`lens tilt page (0.5 deg, cold): ${((performance.now() - t) / 1000).toFixed(2)} s, stable=${out.result.stable}`);
+}
 if (fail.length) { console.error("FAILED:", fail); process.exit(1); }
 console.log("OK: Pyodide reproduces the OTT benchmark");
