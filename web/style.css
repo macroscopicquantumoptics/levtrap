@@ -192,3 +192,18 @@ fieldset.beam legend { font-size: 12px; color: var(--text-secondary); padding: 0
 .params .help .tip { left: 0; transform: none; }
 .tile .hint { font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
 .field .cap { display: flex; align-items: center; gap: 2px; }
+
+.v3-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 14px; }
+.v3-canvas { position: relative; height: 520px; border-radius: 8px; overflow: hidden; background: #0d0f14; }
+.v3-canvas canvas { display: block; width: 100%; height: 100%; }
+.v3-canvas .placeholder { color: #a9adb8; }
+.v3-controls { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.v3-controls .check { margin: 0; }
+.v3-cut { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4px 8px; }
+.v3-cut input[type=range] { grid-column: 1 / span 2; width: 100%; }
+.v3-cut span { grid-column: 1 / span 2; }
+.seg { display: flex; flex-direction: column; gap: 3px; margin-top: 3px; color: var(--text-primary); }
+.seg label { display: flex; align-items: center; gap: 6px; }
+.field .seg input { width: auto; }
+.v3-controls input[type=range] { width: 100%; accent-color: var(--accent); }
+@media (max-width: 900px) { .v3-wrap { grid-template-columns: 1fr; } .v3-canvas { height: 420px; } }

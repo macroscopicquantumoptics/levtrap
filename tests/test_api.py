@@ -97,3 +97,21 @@ def test_materials():
 def test_benchmark_endpoint():
     b = json.loads(api.benchmark())
     assert abs(b["z"] - b["expected"]["z"]) < 1e-9
+
+
+def test_field3d_volume(presets):
+    """3D view data: decodes to the right size and matches direct field evaluation."""
+    import base64
+    req = json.loads(json.dumps(presets["ws2_bottle_1550"]["request"]))
+    out = json.loads(api.field3d(json.dumps(req), json.dumps({"nxy": 24, "nz": 32, "forces": True,
+                                                              "force_n": [3, 3]})))
+    assert len(base64.b64decode(out["I"])) == 24 * 24 * 32
+    assert len(out["forces"]["pos"]) == 27
+    beam, _ = api.build_beam(req)
+    I, x, y, z = api.intensity_volume(beam, 1e-6, 2e-6, 48, 64)
+    rng = np.random.default_rng(1)
+    ijk = [tuple(int(rng.integers(0, s)) for s in I.shape) for _ in range(40)]
+    pts = np.array([[x[i], y[j], z[k]] for i, j, k in ijk])
+    direct = 4 * beam.k_medium**2 * np.sum(np.abs(beam.em_field_xyz(pts)) ** 2, 1)
+    vol = np.array([I[t] for t in ijk])
+    assert np.max(np.abs(vol - direct)) < 0.02 * I.max()  # interpolated: visual accuracy

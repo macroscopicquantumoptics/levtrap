@@ -57,7 +57,7 @@ from .special import paraxial_beam_waist
 from .tmatrix import TmatrixMie
 from .traps import NoStableTrap, axial_equilibrium, find_traps, trap_depth
 
-__all__ = ["compute", "sweep", "presets", "materials", "benchmark", "handle"]
+__all__ = ["compute", "sweep", "presets", "materials", "benchmark", "field3d", "handle"]
 
 DEFAULT_SCAN = dict(z_range=3e-6, z_points=61, x_range=1.5e-6, x_points=41,
                     map_nx=13, map_nz=17, intensity_n=60)
@@ -339,6 +339,123 @@ def analyse(req: dict, detail: bool = True) -> dict:
     return _finite(result)
 
 
+# ---------------------------------------------------------------------------
+# 3D view (visual aid)
+# ---------------------------------------------------------------------------
+
+
+def _bilinear(F: np.ndarray, rho_g: np.ndarray, z_g: np.ndarray, rho: np.ndarray, z: np.ndarray):
+    """Bilinear interpolation of F[irho, iz, ...] on a regular grid."""
+    fr = np.clip((rho - rho_g[0]) / (rho_g[1] - rho_g[0]), 0, rho_g.size - 1.000001)
+    fz = np.clip((z - z_g[0]) / (z_g[1] - z_g[0]), 0, z_g.size - 1.000001)
+    i0 = fr.astype(int)
+    k0 = fz.astype(int)
+    tr = (fr - i0)[..., None]
+    tz = (fz - k0)[..., None]
+    return ((1 - tr) * (1 - tz) * F[i0, k0] + tr * (1 - tz) * F[i0 + 1, k0]
+            + (1 - tr) * tz * F[i0, k0 + 1] + tr * tz * F[i0 + 1, k0 + 1])
+
+
+def intensity_volume(beam: Bsc, x_range: float, z_range: float, nxy: int = 64, nz: int = 96):
+    """|E|^2 on an (nxy, nxy, nz) grid, assembled from azimuthal orders.
+
+    Every VSWF term carries exp(i m phi), and its spherical field components
+    depend on (r, theta) only, so E(rho, phi, z) = sum_m E_m(rho, z) exp(i m phi).
+    Each E_m is evaluated on a fine (rho, z) grid and interpolated, which is
+    much cheaper than evaluating every voxel (accurate to the interpolation,
+    sufficient for visualisation).  Returns ``(I, x, y, z)`` with I in W/m^2
+    for ``beam.power`` in watts.
+    """
+    from .special import combined_index as _ci, sbesselh1, sbesselh2, sbesselj, spharm, xyz2rtp
+    x = np.linspace(-x_range, x_range, nxy)
+    z = np.linspace(-z_range, z_range, nz)
+    rho_g = np.linspace(0, x_range * math.sqrt(2) * 1.001, int(nxy * 1.25))
+    z_g = np.linspace(-z_range, z_range, int(nz * 1.25))
+    R2, Z2 = np.meshgrid(rho_g, z_g, indexing="ij")
+    r, t, _ = xyz2rtp(R2.ravel(), 0 * R2.ravel(), Z2.ravel())
+    kr = np.maximum(r * beam.k_medium, 1e-15)
+    a, b = beam.a[:, 0], beam.b[:, 0]
+    idx = np.nonzero(np.abs(a) + np.abs(b))[0]
+    n_all, m_all = _ci(idx + 1)
+    ms = np.unique(m_all)
+    col = {int(m): i for i, m in enumerate(ms)}
+    # E_m(r, theta) at phi = 0, spherical components, all m in one pass
+    # (same expressions as levtrap.vswf.em_field)
+    Em = np.zeros((kr.size, ms.size, 3), dtype=complex)
+    func = {"incoming": sbesselh2, "outgoing": sbesselh1, "regular": sbesselj}[beam.basis]
+    scale = 0.5 if beam.basis in ("incoming", "outgoing") else 1.0
+    fall = func(np.arange(0, int(n_all.max()) + 1), kr) * scale
+    for nn in np.unique(n_all):
+        nn = int(nn)
+        sel = n_all == nn
+        mm = m_all[sel]
+        Nn = 1 / math.sqrt(nn * (nn + 1))
+        Y, Yt, Yp = spharm(nn, mm, t, np.zeros_like(t))
+        hn = fall[:, nn][:, None]
+        dhn = (fall[:, nn - 1] - nn / kr * fall[:, nn])[:, None]
+        p_, q_ = a[idx][sel][None, :], b[idx][sel][None, :]
+        cols = [col[int(m)] for m in mm]
+        Em[:, cols, 0] += Nn * nn * (nn + 1) / kr[:, None] * hn * Y * q_
+        Em[:, cols, 1] += Nn * (hn * Yp * p_ + dhn * Yt * q_)
+        Em[:, cols, 2] += Nn * (-hn * Yt * p_ + dhn * Yp * q_)
+    Em = Em.reshape(R2.shape + (ms.size, 3))
+    X, Y3, Z = np.meshgrid(x, x, z, indexing="ij")
+    rho = np.hypot(X, Y3)
+    phi = np.arctan2(Y3, X)
+    E = np.zeros(X.shape + (3,), dtype=complex)
+    for i, m in enumerate(ms):
+        E += _bilinear(Em[:, :, i, :], rho_g, z_g, rho, Z) * np.exp(1j * m * phi)[..., None]
+    I = 4 * beam.k_medium**2 * np.sum(np.abs(E) ** 2, axis=-1)
+    return I, x, x, z
+
+
+def _b64_u8(v: np.ndarray) -> str:
+    import base64
+    vmax = float(v.max()) or 1.0
+    u8 = np.clip(np.round(v / vmax * 255), 0, 255).astype(np.uint8)
+    # x fastest, then y, then z (WebGL 3D texture order)
+    return base64.b64encode(np.ascontiguousarray(u8.transpose(2, 1, 0)).tobytes()).decode()
+
+
+def field3d(req_json: str, opts_json: str = "{}") -> str:
+    """Intensity and |grad I| volumes (and optional force arrows) for the 3D view.
+
+    opts: {"nxy": 64, "nz": 96, "forces": false, "force_n": [7, 11], "z_eq": float|null}
+    Volumes are returned as base64 uint8 (normalised to their maxima, given
+    in W/m^2 and W/m^3), x fastest.
+    """
+    req = json.loads(req_json)
+    opts = json.loads(opts_json)
+    t0 = time.perf_counter()
+    scan = {**DEFAULT_SCAN, **req.get("scan", {})}
+    beam, P = build_beam(req)
+    xr, zr = float(scan["x_range"]), float(scan["z_range"])
+    nxy, nzz = int(opts.get("nxy", 64)), int(opts.get("nz", 96))
+    I, x, y, z = intensity_volume(beam, xr, zr, nxy, nzz)
+    gx, gy, gz = np.gradient(I, x, y, z)
+    G = np.sqrt(gx**2 + gy**2 + gz**2)
+    out = dict(dims=[nxy, nxy, nzz], bounds=dict(x=xr, y=xr, z=zr), I=_b64_u8(I), Imax=float(I.max()),
+               G=_b64_u8(G), Gmax=float(G.max()), radius=float(req["particle"]["radius"]),
+               z_eq=opts.get("z_eq"), wavelength=float(req["wavelength"]))
+    if opts.get("forces"):
+        T, _ = build_tmatrix(req)
+        nf, nzf = opts.get("force_n", [7, 11])
+        fx_ = np.linspace(-xr * 0.85, xr * 0.85, int(nf))
+        fz_ = np.linspace(-zr * 0.85, zr * 0.85, int(nzf))
+        FX, FY = np.meshgrid(fx_, fx_, indexing="ij")
+        lat = np.vstack([FX.ravel(), FY.ravel(), 0 * FX.ravel()])
+        pos, vec = [], []
+        for zz in fz_:
+            bz = beam.translate_z(zz) if zz != 0 else beam
+            f = forcetorque(bz, T, position=lat)[0] * (nm_ := float(req.get("medium_index", 1.0))) / C
+            for i in range(lat.shape[1]):
+                pos.append([lat[0, i], lat[1, i], zz])
+                vec.append(f[:, i].tolist())
+        out["forces"] = dict(pos=pos, vec=vec)
+    out["time"] = time.perf_counter() - t0
+    return json.dumps(_finite(out))
+
+
 def compute(req_json: str) -> str:
     """JSON wrapper around :func:`analyse`."""
     req = json.loads(req_json)
@@ -451,7 +568,7 @@ def benchmark() -> str:
 
 def handle(method: str, *args) -> str:
     """Dispatch used by the web worker."""
-    return {"compute": compute, "sweep": sweep, "presets": presets,
+    return {"compute": compute, "sweep": sweep, "presets": presets, "field3d": field3d,
             "materials": materials, "benchmark": benchmark}[method](*args)
 
 

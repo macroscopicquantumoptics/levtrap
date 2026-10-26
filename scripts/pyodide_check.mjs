@@ -35,5 +35,10 @@ for (const [key, p] of Object.entries(presets)) {
                 `stable=${out.result.stable} z_eq=${out.result.z_eq}`);
   }
 }
+{
+  const t = performance.now();
+  const v = JSON.parse(api.field3d(JSON.stringify(presets.silica_1064.request), "{}"));
+  console.log(`3D view volume (${v.dims.join("x")}): ${((performance.now() - t) / 1000).toFixed(2)} s`);
+}
 if (fail.length) { console.error("FAILED:", fail); process.exit(1); }
 console.log("OK: Pyodide reproduces the OTT benchmark");

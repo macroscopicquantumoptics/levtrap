@@ -235,3 +235,17 @@ here), < 3 s in Pyodide ☐ (CI will report).
   CI and Pages workflows cannot be pushed from here.
 * A `main` branch is needed for Pages (the workflow deploys on push to `main`). Merge this branch into main.
 * Paper questions for the authors: see docs/paper/README.md.
+
+### 2026-10-26 — Session 1, continued (3D view, requested after M8)
+
+* PR #1 merged. The user added the workflows to `.github/workflows/`.
+* New: **3D view** (visual aid, three.js 0.160.0 from jsDelivr, lazy-loaded). It shows a ray-marched
+  intensity or |∇I| volume, with cut planes (x/y/z) whose face shows a heat map. The part between
+  the cut and the camera is removed. The particle is drawn to scale at z_eq, with optional force arrows
+  on a 7×7×11 grid, log/linear brightness, and opacity and contrast controls.
+* `api.field3d` / `api.intensity_volume`: since E = Σ_m E_m(ρ, z) e^{imφ}, each azimuthal order is
+  evaluated once on a 2D (ρ, z) grid and interpolated onto the 64×64×96 volume. Native cost is
+  0.4–1.3 s (direct evaluation took 3.4 s), with error ≤ 0.5 % of peak (test asserts < 2 %).
+  Force arrows add about 1 s. The 3D view is not computed on every parameter change, only on the button.
+* Checked in headless Chromium (SwiftShader WebGL2) with the local backend, for the silica and WS₂
+  presets, with cut planes and force arrows.

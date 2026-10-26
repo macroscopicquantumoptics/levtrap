@@ -330,6 +330,7 @@ async function run() {
     lastResult = out.result;
     lastReq = req;
     render(lastResult, req);
+    if (v3data) $("v3-status").textContent = "parameters changed — press “Build 3D view” to update";
     $("timing").textContent = `computed in ${((performance.now() - t0) / 1000).toFixed(2)} s`;
   } catch (err) {
     $("error").hidden = false;
@@ -603,6 +604,70 @@ function renderSweep() {
   Plotly.react("plot-sweep", traces, layout, PLOT_CONFIG);
 }
 
+// ---------------------------------------------------------------- 3D view
+let view3d = null;
+let v3data = null;
+let v3busy = false;
+
+async function build3d(withForces) {
+  if (v3busy) return;
+  v3busy = true;
+  $("v3-build").disabled = true;
+  $("v3-status").textContent = withForces ? "computing intensity and force arrows…" : "computing intensity…";
+  const t0 = performance.now();
+  try {
+    if (!view3d) {
+      const mod = await import("./view3d.js");
+      $("v3-canvas").innerHTML = "";
+      view3d = mod.createView($("v3-canvas"));
+    }
+    const req = readRequest();
+    const opts = { forces: withForces, z_eq: lastResult ? lastResult.z_eq : null, nxy: 64, nz: 96 };
+    v3data = await backend.call("field3d", JSON.stringify(req), JSON.stringify(opts));
+    const fresh = !view3d._built;
+    view3d.update(v3data);
+    applyV3Controls();
+    if (fresh) { view3d.resetCamera(); view3d._built = true; }
+    $("v3-status").textContent = `built in ${((performance.now() - t0) / 1000).toFixed(1)} s · peak ${fmtE(v3data.Imax * 1e-9)} mW/µm²`;
+  } catch (err) {
+    $("v3-status").textContent = `3D view failed: ${err.message || err}`;
+  } finally {
+    v3busy = false;
+    $("v3-build").disabled = false;
+  }
+}
+
+function applyV3Controls() {
+  if (!view3d || !v3data) return;
+  const half = { x: v3data.bounds.x * 1e6, y: v3data.bounds.y * 1e6, z: v3data.bounds.z * 1e6 };
+  for (const ax of ["x", "y", "z"]) {
+    const on = document.querySelector(`[data-cut="${ax}"]`).checked;
+    const f = parseFloat(document.querySelector(`[data-cutpos="${ax}"]`).value);
+    const v = f * half[ax];
+    document.querySelector(`[data-cutval="${ax}"]`).textContent = on ? `${v.toFixed(2)} µm` : "";
+    view3d.setClip(ax, on ? v : null);
+  }
+  view3d.setMode(document.querySelector('input[name="v3-mode"]:checked').value);
+  view3d.setOpacity(parseFloat($("v3-opacity").value));
+  view3d.setGamma(parseFloat($("v3-gamma").value));
+  view3d.setLog($("v3-log").checked);
+  view3d.setParticle($("v3-particle").checked);
+  view3d.setForcesVisible($("v3-forces").checked);
+}
+
+function init3d() {
+  $("v3-build").addEventListener("click", () => build3d($("v3-forces").checked));
+  $("v3-reset").addEventListener("click", () => view3d && view3d.resetCamera());
+  $("v3-controls").addEventListener("input", (e) => {
+    if (e.target.id === "v3-forces") return;
+    applyV3Controls();
+  });
+  $("v3-forces").addEventListener("change", () => {
+    if ($("v3-forces").checked && v3data && !v3data.forces) build3d(true);
+    else applyV3Controls();
+  });
+}
+
 // ---------------------------------------------------------------- theme
 function setTheme(t) {
   if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
@@ -663,6 +728,7 @@ async function init() {
   document.querySelector(".params").addEventListener("change", (e) => {
     if (e.target.tagName === "SELECT" && !["preset", "material"].includes(e.target.id)) schedule();
   });
+  init3d();
   $("sw-var").addEventListener("change", sweepDefaults);
   $("sw-qty").addEventListener("change", renderSweep);
   $("sw-run").addEventListener("click", runSweep);

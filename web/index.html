@@ -6,6 +6,11 @@
   <title>levtrap · optical trap simulator</title>
   <meta name="description" content="Optical forces on a sphere in a focused beam — Mie T-matrix (port of the Optical Tweezers Toolbox v1) running in your browser.">
   <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    { "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js" defer></script>
   <script src="app.js" defer></script>
 </head>
@@ -183,6 +188,43 @@
         </details>
       </section>
     </div>
+
+    <section class="panel plot-card" id="view3d-card">
+      <div class="sweep-head">
+        <h2>3D view of the beam <span class="muted small">(visual aid)</span></h2>
+        <div class="sweep-controls">
+          <button id="v3-build" type="button">Build 3D view</button>
+          <span id="v3-status" class="muted small"></span>
+        </div>
+      </div>
+      <div class="v3-wrap">
+        <div id="v3-canvas" class="v3-canvas">
+          <div class="placeholder">Press “Build 3D view” to render the beam’s intensity in 3D, with the particle at its trap position. Drag to rotate, scroll to zoom, right-drag to pan.</div>
+        </div>
+        <div class="v3-controls" id="v3-controls">
+          <div class="field">Show
+            <div class="seg" role="radiogroup">
+              <label><input type="radio" name="v3-mode" value="I" checked> intensity |E|²</label>
+              <label><input type="radio" name="v3-mode" value="G"> gradient |∇I|</label>
+            </div>
+          </div>
+          <div class="v3-cut" data-ax="z"><label class="check"><input type="checkbox" data-cut="z"> cut at z =</label><input type="range" data-cutpos="z" min="-1" max="1" step="0.01" value="0"><span data-cutval="z" class="small muted"></span></div>
+          <div class="v3-cut" data-ax="x"><label class="check"><input type="checkbox" data-cut="x"> cut at x =</label><input type="range" data-cutpos="x" min="-1" max="1" step="0.01" value="0"><span data-cutval="x" class="small muted"></span></div>
+          <div class="v3-cut" data-ax="y"><label class="check"><input type="checkbox" data-cut="y"> cut at y =</label><input type="range" data-cutpos="y" min="-1" max="1" step="0.01" value="0"><span data-cutval="y" class="small muted"></span></div>
+          <label class="field">Glow (opacity)<input id="v3-opacity" type="range" min="0.1" max="3" step="0.05" value="0.6"></label>
+          <label class="field">Contrast<input id="v3-gamma" type="range" min="0.4" max="3" step="0.05" value="1.4"></label>
+          <label class="check"><input id="v3-log" type="checkbox" checked> log brightness (shows faint parts)</label>
+          <label class="check"><input id="v3-particle" type="checkbox" checked> show particle</label>
+          <label class="check"><input id="v3-forces" type="checkbox"> force arrows (slower)</label>
+          <button id="v3-reset" type="button" class="ghost">Reset view</button>
+        </div>
+      </div>
+      <details class="explain">
+        <summary>What am I looking at?</summary>
+        <p>The glowing cloud is the trapping light: brighter means more intense. The beam travels upwards (orange arrow) and is focused at the centre of the box (grey ring marks the focal plane). The white sphere is the particle, drawn to scale at its equilibrium position. Tick “cut” to slice the cloud open: the part between the cut and you is removed (rotate to look from the other side) and the cut face shows the intensity as a heat map, so you can see e.g. the doughnut of an LG beam or the dark pocket of the bottle beam. “Gradient |∇I|” shows where the intensity changes fastest — that is where the gradient force is strongest. Force arrows show the direction of the total force on the particle if its centre were at each arrow (all the same length).</p>
+        <p class="muted small">This view is for intuition: the intensity is interpolated from a finer 2D calculation (within ~1% of the exact value) and colour/opacity are tuned for visibility, not as a quantitative scale.</p>
+      </details>
+    </section>
 
     <section class="panel plot-card">
       <div class="sweep-head">
