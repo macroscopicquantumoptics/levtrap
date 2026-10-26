@@ -121,3 +121,21 @@ def test_lens_api_round_trip_and_continuation():
     assert pts[0]["particle_shift_um"] == pytest.approx([0, 0, 0], abs=1e-6)
     # small tilts move the particle smoothly (continuation follows the same trap)
     assert abs(pts[2]["particle_shift_um"][0]) > abs(pts[1]["particle_shift_um"][0]) > 0
+
+
+def test_web_3d_view_uses_the_same_prescription():
+    """web/lens3d.js traces rays in the browser; its copy of the lens must match."""
+    import pathlib
+    import re
+
+    js = (pathlib.Path(__file__).parents[1] / "web" / "lens3d.js").read_text()
+    block = js[js.index("export const LENS"):js.index("};", js.index("export const LENS"))]
+    s1, s2 = block[block.index("s1:"):block.index("s2:")], block[block.index("s2:"):block.index("t:")]
+    for surf, src in ((LENS.s1, s1), (LENS.s2, s2)):
+        assert float(re.search(r"c: (\S+),", src).group(1)) == surf.curv
+        assert float(re.search(r"k: (\S+),", src).group(1)) == surf.conic
+        assert float(re.search(r"sd: (\S+),", src).group(1)) == surf.semi_diameter
+        assert [float(v) for v in re.search(r"A: \[([^\]]*)\]", src).group(1).split(",")] == list(surf.coeffs)
+    assert float(re.search(r"\bt: (\S+),", block).group(1)) == LENS.thickness
+    assert float(re.search(r"indexOffset: (\S+),", block).group(1)) == LENS.index_offset
+    assert [float(v) for v in re.search(r"sellmeier: \[([^\]]*)\]", block).group(1).split(",")] == list(L._SELLMEIER[LENS.glass])

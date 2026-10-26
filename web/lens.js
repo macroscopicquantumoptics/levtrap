@@ -129,51 +129,30 @@ function render(r) {
   renderWavefront(r);
 }
 
-function ramp() {
-  return isDark()
-    ? [[0, "#1a1a19"], [0.25, "#104281"], [0.5, "#256abf"], [0.75, "#5598e7"], [1, "#b7d3f6"]]
-    : [[0, "#fcfcfb"], [0.2, "#cde2fb"], [0.45, "#86b6ef"], [0.7, "#2a78d6"], [1, "#104281"]];
+// ---------------------------------------------------------------- 3D view
+let view3d = null;
+
+function lensParams() {
+  return { tx: parseFloat($("tilt_x").value) || 0, ty: parseFloat($("tilt_y").value) || 0, pivot: $("pivot").value,
+           dx: parseFloat($("dec_x").value) || 0, dy: 0, D: parseFloat($("diameter").value) || 2.5,
+           lam_nm: parseFloat($("wavelength").value) || 1550, a_nm: parseFloat($("radius").value) || 100 };
+}
+
+async function init3d() {
+  try {
+    const mod = await import("./lens3d.js");
+    $("lens3d").innerHTML = "";
+    view3d = mod.createLensView($("lens3d"));
+    view3d.setHorizontal($("axis-orient").value !== "vertical");
+    view3d.setLens(lensParams());
+    if (lastResult) view3d.setResult(lastResult);
+  } catch (err) {
+    $("lens3d").innerHTML = `<div class="placeholder">3D view unavailable: ${err.message || err}</div>`;
+  }
 }
 
 function renderFocus(r) {
-  const M = r.maps;
-  const H = $("axis-orient").value !== "vertical";
-  const um = (a) => a.map((v) => v * 1e6);
-  const fx = M.focus_um;  // P* relative to the aligned focus (um); map coordinates are about P*
-  const xs = um(M.x).map((v) => v + fx[0]);
-  const zs = um(M.z).map((v) => v + fx[2]);
-  const ys = um(M.x).map((v) => v + fx[1]);
-  const Ixz = M.Ixz.map((row) => row.map((v) => v * 1e-9));  // [iz][ix] mW/um^2
-  const Ixy = M.Ixy.map((row) => row.map((v) => v * 1e-9));  // [iy][ix]
-  const heat1 = H
-    ? { type: "heatmap", x: zs, y: xs, z: Ixz[0].map((_, j) => Ixz.map((row) => row[j])), xaxis: "x", yaxis: "y" }
-    : { type: "heatmap", x: xs, y: zs, z: Ixz, xaxis: "x", yaxis: "y" };
-  const heat2 = { type: "heatmap", x: xs, y: ys, z: Ixy, xaxis: "x2", yaxis: "y2", showscale: false };
-  for (const h of [heat1, heat2]) Object.assign(h, { colorscale: ramp(), zsmooth: "best", hovertemplate: "%{x:.2f}, %{y:.2f} µm<br>I = %{z:.3g} mW/µm²<extra></extra>" });
-  heat1.colorbar = { title: { text: "I (mW/µm²)", side: "right" }, thickness: 12, outlinewidth: 0 };
-  const shapes = [];
-  const marks = [];
-  const P = (x, z) => (H ? [z, x] : [x, z]);
-  const [fX, fY] = P(fx[0], fx[2]);
-  marks.push({ type: "scatter", mode: "markers", x: [fX], y: [fY], xaxis: "x", yaxis: "y", marker: { symbol: "x-thin", size: 12, line: { width: 2, color: css("--series-2") } }, name: "best focus", hovertemplate: "best focus<extra></extra>" });
-  marks.push({ type: "scatter", mode: "markers", x: [fx[0]], y: [fx[1]], xaxis: "x2", yaxis: "y2", marker: { symbol: "x-thin", size: 12, line: { width: 2, color: css("--series-2") } }, showlegend: false, hoverinfo: "skip" });
-  const [oX, oY] = P(0, 0);
-  marks.push({ type: "scatter", mode: "markers", x: [oX], y: [oY], xaxis: "x", yaxis: "y", marker: { symbol: "cross-thin", size: 10, line: { width: 1.5, color: css("--text-muted") } }, name: "aligned focus", hovertemplate: "aligned-lens focus<extra></extra>" });
-  if (r.eq_um) {
-    const rad = parseFloat($("radius").value) * 1e-3;
-    const [cX, cY] = P(r.eq_um[0], r.eq_um[2]);
-    const col = r.stable ? css("--good") : css("--bad");
-    shapes.push({ type: "circle", xref: "x", yref: "y", x0: cX - rad, x1: cX + rad, y0: cY - rad, y1: cY + rad, line: { color: col, width: 2 } });
-    shapes.push({ type: "circle", xref: "x2", yref: "y2", x0: r.eq_um[0] - rad, x1: r.eq_um[0] + rad, y0: r.eq_um[1] - rad, y1: r.eq_um[1] + rad, line: { color: col, width: 2 } });
-  }
-  const zl = H ? "z (µm) — beam →" : "z (µm) — beam ↑";
-  const layout = baseLayout({
-    showlegend: true, legend: { orientation: "h", y: -0.12, x: 0 },
-    xaxis: axis(H ? zl : "x (µm)", { domain: [0, 1], anchor: "y" }), yaxis: axis(H ? "x (µm)" : zl, { domain: [0.44, 1], scaleanchor: "x" }),
-    xaxis2: axis("x (µm)", { domain: [0.25, 0.75], anchor: "y2" }), yaxis2: axis(`y (µm) at z = ${fmt(r.eq_um ? r.eq_um[2] : fx[2], 3)} µm`, { domain: [0, 0.34], scaleanchor: "x2" }),
-    shapes, margin: { l: 60, r: 16, t: 10, b: 60 },
-  });
-  Plotly.react("plot-focus", [heat1, heat2, ...marks], layout, PLOT_CONFIG);
+  if (view3d) view3d.setResult(r);
 }
 
 function renderWavefront(r) {
@@ -271,7 +250,7 @@ function sweepDefaults() {
 
 // ---------------------------------------------------------------- init
 function init() {
-  initTheme(() => { if (lastResult) render(lastResult); renderSweep(); });
+  initTheme(() => { if (lastResult) render(lastResult); renderSweep(); if (view3d) view3d.themeChanged(); });
   showVersion();
   $("material").innerHTML = MATERIAL_NAMES.map((m) => `<option value="${m}">${m.replace(/(\d)/g, "<sub>$1</sub>")}</option>`).join("") + '<option value="custom">custom</option>';
   attachHelp(document.querySelector(".params"), HELP);
@@ -288,18 +267,20 @@ function init() {
   });
   if (LOCAL) $("loader").hidden = true;
   backend.start();
+  init3d();
   document.querySelector(".params").addEventListener("input", (e) => {
     if (["n", "k"].includes(e.target.id)) $("material").value = "custom";
     if (e.target.id === "diameter") updateFillNote();
     if (e.target.id === "axis-orient") return;
+    if (view3d) view3d.setLens(lensParams());
     schedule();
   });
   document.querySelector(".params").addEventListener("change", async (e) => {
     if (e.target.id === "material" || e.target.id === "wavelength") { await refreshMaterial(); schedule(); }
     else if (e.target.id === "axis-orient") {
       try { localStorage.setItem("levtrap-axis", e.target.value); } catch (err) { /* ignore */ }
-      if (lastResult) renderFocus(lastResult);
-    } else if (e.target.tagName === "SELECT") schedule();
+      if (view3d) view3d.setHorizontal(e.target.value !== "vertical");
+    } else if (e.target.tagName === "SELECT") { if (view3d) view3d.setLens(lensParams()); schedule(); }
   });
   $("sw-var").addEventListener("change", sweepDefaults);
   $("sw-qty").addEventListener("change", renderSweep);

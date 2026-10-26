@@ -6,6 +6,11 @@
   <title>levtrap · lens tilt</title>
   <meta name="description" content="How tilting the trapping asphere moves the focus and the trapped particle — ray trace of the Thorlabs 354330-C plus full Mie forces, in your browser.">
   <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    { "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js" defer></script>
   <script src="common.js" defer></script>
   <script src="lens.js" defer></script>
@@ -145,11 +150,17 @@
 
     <div class="two-col">
       <section class="panel plot-card">
-        <h2>Focal spot and particle</h2>
-        <div id="plot-focus" class="plot square"></div>
+        <h2>Lens, rays and particle</h2>
+        <div id="lens3d" class="l3-canvas"><div class="placeholder">Loading the 3D view…</div></div>
+        <p class="l3-legend small muted">
+          <span><i style="background:var(--accent)"></i>lens, its axis and the pivot point</span>
+          <span><i style="background:var(--text-muted)"></i>aligned lens and beam axis z</span>
+          <span><i style="background:var(--series-2)"></i>rays (brighter = more light)</span>
+          <span><i style="background:var(--good)"></i>particle</span></p>
         <details class="explain">
           <summary>What am I looking at?</summary>
-          <p>Light intensity near the focus in the plane containing the optical axis z (top) and across the beam at the particle’s height (bottom). Coordinates are measured from the focus of a <em>perfectly aligned</em> lens, so you can see the spot move and distort as you tilt. The circle is the particle, drawn to scale at its equilibrium; the cross marks the new best focus. With coma the spot develops a comet-like tail, and the particle usually does not sit exactly at the focus.</p>
+          <p>The lens drawn to scale with real rays traced through it. The faint outline is where a perfectly aligned lens would sit; the dot on the lens axis is the pivot it is tilted about. Drag to orbit, scroll to zoom.</p>
+          <p>The box at the focus is shown magnified in the inset (scale bar in µm). The cross is the focus of the aligned lens, the orange dot the new best focus, and the sphere the particle at its equilibrium, drawn to scale (green: stable trap, red: not). The arrow shows how far the particle moved. The lens and rays follow your inputs straight away; the particle updates when the force calculation finishes.</p>
           <p class="eq">best focus P* = point minimising the rms wavefront error &nbsp;&nbsp; equilibrium: F(r<sub>eq</sub>) = 0, all eigenvalues of K = −∂F/∂r positive</p>
         </details>
       </section>
