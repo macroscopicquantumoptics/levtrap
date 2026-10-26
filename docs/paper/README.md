@@ -39,8 +39,10 @@ numbers stated in the text.
   radial depths are several thousand k_BT.
 * **Stable window:** levtrap ≈ 292–305 nm; paper ≈ 289–307 nm.
 * **z_eq:** levtrap minimum ≈ 0.15 λ₀; paper ≈ 0.05 λ₀.
-* **Frequencies (0.8 W):** levtrap gives radial > axial (≈ 30–55 kHz radial,
-  ≈ 15–35 kHz axial). The paper reports axial > radial (≈ 18 kHz axial).
+* **Frequencies (0.8 W):** levtrap gives radial > axial (≈ 24–43 kHz radial,
+  ≈ 13–28 kHz axial). The paper reports axial > radial (≈ 18 kHz axial).
+* **Depths:** levtrap radial ≈ 3000–6300 k_BT and axial up to ≈ 1300 k_BT;
+  paper radial ≈ 6000–7000 k_BT and axial ≈ 1000 k_BT.
 * **Γ/Ω_z at R = 298 nm:** levtrap ≈ 0.24; paper 0.025.
 * **MQ-only map (S1b):** the paper finds a stable point with MQ alone. In
   levtrap the MQ-only force has no stable axial zero for this beam.
