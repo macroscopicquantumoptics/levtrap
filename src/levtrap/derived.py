@@ -138,8 +138,11 @@ def power_balance(ibeam: Bsc, sbeam: Bsc) -> dict:
     i, s = ibeam.set_Nmax(n), sbeam.set_Nmax(n)
     pin = np.sum(np.abs(i.a) ** 2 + np.abs(i.b) ** 2)
     psca = 4 * np.sum(np.abs(s.a) ** 2 + np.abs(s.b) ** 2)
-    pout = np.sum(np.abs(i.a + 2 * s.a) ** 2 + np.abs(i.b + 2 * s.b) ** 2)
-    return dict(sca=float(psca / pin), abs=float((pin - pout) / pin))
+    # P_inc - P_out expanded so the large |a|^2 terms cancel analytically:
+    # |a|^2 - |a + 2p|^2 = -4 (Re(a* p) + |p|^2)
+    pabs = -4 * np.sum(np.real(np.conj(i.a) * s.a) + np.abs(s.a) ** 2
+                       + np.real(np.conj(i.b) * s.b) + np.abs(s.b) ** 2)
+    return dict(sca=float(psca / pin), abs=float(pabs / pin))
 
 
 def intensity_si(beam: Bsc, xyz, power: float) -> np.ndarray:

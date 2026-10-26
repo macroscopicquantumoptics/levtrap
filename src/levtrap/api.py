@@ -238,6 +238,8 @@ def analyse(req: dict, detail: bool = True) -> dict:
     beam_ref = beam.translate_z(z_ref) if z_ref != 0 else beam
     sbeam, _ = beam_ref.scatter(T)
     pb = power_balance(beam_ref, sbeam)
+    if abs(pb["abs"]) < 1e-12:  # round-off for (nearly) lossless particles
+        pb["abs"] = max(pb["abs"], 0.0)
     result["at"] = dict(z=z_ref, P_sca=pb["sca"] * P, P_abs=pb["abs"] * P,
                         Qsca_beam=pb["sca"], Qabs_beam=pb["abs"],
                         multipoles=_multipole_powers(sbeam, beam_ref.power))
@@ -408,8 +410,9 @@ def presets() -> str:
     return json.dumps(PRESETS)
 
 
-def materials(wavelength: float) -> str:
-    return json.dumps({k: get_material(k, wavelength) for k in MATERIALS}, default=str)
+def materials(wavelength) -> str:
+    wl = float(wavelength)
+    return json.dumps(_finite({k: get_material(k, wl) for k in MATERIALS}))
 
 
 def benchmark() -> str:

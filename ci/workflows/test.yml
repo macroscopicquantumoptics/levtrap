@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.12"]
+        python-version: ["3.10", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -17,3 +17,17 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[test]"
       - run: pytest -q
+
+  pyodide:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build && python -m build --wheel --outdir dist
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-save pyodide@0.29.5
+      - run: node scripts/pyodide_check.mjs dist/*.whl

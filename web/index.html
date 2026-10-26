@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>levtrap · optical trap simulator</title>
+  <meta name="description" content="Optical forces on a sphere in a focused beam — Mie T-matrix (port of the Optical Tweezers Toolbox v1) running in your browser.">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">◉</span>
+    <div>
+      <h1>levtrap</h1>
+      <p class="sub">Optical forces on a sphere — Mie T-matrix in your browser</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span id="status" class="status" role="status">Loading…</span>
+    <button id="theme-toggle" class="ghost" type="button" aria-label="Toggle light/dark theme">◐</button>
+  </div>
+</header>
+
+<div id="loader" class="loader">
+  <div class="loader-card">
+    <h2>Starting the Python engine</h2>
+    <p id="loader-stage">Loading Python runtime (Pyodide)…</p>
+    <div class="bar"><div id="loader-bar"></div></div>
+    <p class="muted small">First load downloads ~25 MB (Python, NumPy, SciPy); later visits use the browser cache.</p>
+  </div>
+</div>
+
+<main class="layout">
+  <!-- ======================= 1. parameters ======================= -->
+  <aside class="panel params" aria-label="Parameters">
+    <section>
+      <label class="field">Preset
+        <select id="preset"></select>
+      </label>
+      <p id="preset-note" class="note warn" hidden></p>
+    </section>
+
+    <section>
+      <h3>Particle</h3>
+      <div class="grid2">
+        <label class="field">Material
+          <select id="material"></select>
+        </label>
+        <label class="field">Radius (nm)
+          <input id="radius" type="number" step="any" min="1">
+        </label>
+        <label class="field">n
+          <input id="n" type="number" step="any">
+        </label>
+        <label class="field">k (absorption)
+          <input id="k" type="number" step="any" min="0">
+        </label>
+        <label class="field">Density (kg/m³)
+          <input id="density" type="number" step="any" min="1">
+        </label>
+        <label class="field">Medium index
+          <input id="medium" type="number" step="any" min="1">
+        </label>
+      </div>
+      <p id="material-note" class="note small" hidden></p>
+    </section>
+
+    <section>
+      <h3>Light</h3>
+      <div class="grid2">
+        <label class="field">Wavelength (nm)
+          <input id="wavelength" type="number" step="any" min="100">
+        </label>
+        <label class="field">Total power (mW)
+          <input id="power" type="number" step="any" min="0">
+        </label>
+      </div>
+      <fieldset class="beam" id="beam1">
+        <legend>Beam 1</legend>
+      </fieldset>
+      <label class="check"><input id="beam2-on" type="checkbox"> Add a second, coherent beam</label>
+      <fieldset class="beam" id="beam2" hidden>
+        <legend>Beam 2</legend>
+      </fieldset>
+      <div id="beam2-extra" class="grid2" hidden>
+        <label class="field">Power ratio P₂/P₁
+          <input id="ratio" type="number" step="any" min="0">
+        </label>
+        <label class="field">Relative phase (π rad)
+          <input id="phase" type="number" step="any">
+        </label>
+        <label class="check span2"><input id="dark-focus" type="checkbox"> Auto power split for a dark focus (field = 0 at focus)</label>
+      </div>
+    </section>
+
+    <section>
+      <h3>Teaching toggles</h3>
+      <div class="chips" role="group" aria-label="Multipoles included in the T-matrix">
+        <label class="chip"><input type="checkbox" data-mp="ED" checked> ED</label>
+        <label class="chip"><input type="checkbox" data-mp="MD" checked> MD</label>
+        <label class="chip"><input type="checkbox" data-mp="EQ" checked> EQ</label>
+        <label class="chip"><input type="checkbox" data-mp="MQ" checked> MQ</label>
+        <label class="chip"><input type="checkbox" data-mp="higher" checked> n ≥ 3</label>
+      </div>
+      <label class="check"><input id="dipole" type="checkbox"> Overlay dipole (Rayleigh) approximation</label>
+    </section>
+
+    <details>
+      <summary>Scan &amp; resolution</summary>
+      <div class="grid2">
+        <label class="field">z range ± (µm)
+          <input id="zrange" type="number" step="any" min="0.1">
+        </label>
+        <label class="field">x, y range ± (µm)
+          <input id="xrange" type="number" step="any" min="0.1">
+        </label>
+        <label class="field">Points per line
+          <input id="npts" type="number" step="1" min="11" max="201">
+        </label>
+        <label class="field">Temperature (K)
+          <input id="temperature" type="number" step="any" min="1">
+        </label>
+      </div>
+    </details>
+  </aside>
+
+  <div class="content">
+    <!-- ======================= 2. summary ======================= -->
+    <section class="panel summary" aria-label="Summary">
+      <div class="summary-head">
+        <h2>Summary</h2>
+        <span id="timing" class="muted small"></span>
+        <span id="spinner" class="spinner" hidden aria-label="computing"></span>
+      </div>
+      <div id="trap-banner" class="banner" hidden></div>
+      <div id="tiles" class="tiles"></div>
+      <p id="error" class="note error" hidden></p>
+    </section>
+
+    <!-- ======================= 3. plots ======================= -->
+    <section class="panel plot-card">
+      <h2>Force through the trap</h2>
+      <div id="plot-lines" class="plot tall"></div>
+      <details class="explain">
+        <summary>What am I looking at?</summary>
+        <p>Each panel moves the sphere along one axis through the trap (x and y at the axial equilibrium height z<sub>eq</sub>; z along the beam axis) and plots the optical force component along that axis. A stable trap needs the force to point back towards the equilibrium on every axis: the curve crosses zero with a <em>negative</em> slope. The slope there is the spring constant, and the area under the restoring part is the well depth. The beam propagates towards +z, so radiation pressure pushes the equilibrium slightly downstream of the focus.</p>
+        <p class="eq">F = Q · n<sub>m</sub> P / c &nbsp;&nbsp; κ = −∂F/∂x |<sub>eq</sub> &nbsp;&nbsp; Ω = √(κ/m) &nbsp;&nbsp; U = −∫ F dx</p>
+      </details>
+    </section>
+
+    <div class="two-col">
+      <section class="panel plot-card">
+        <h2>Force map over beam intensity (xz plane)</h2>
+        <div id="plot-map" class="plot square"></div>
+        <details class="explain">
+          <summary>What am I looking at?</summary>
+          <p>The colour is the intensity of the trapping light in the plane containing the beam axis; arrows show the direction of the total optical force on the sphere if its centre sat at that point (arrow length is normalised, so only the direction is shown). In a bright tweezer the arrows converge just behind the focus; in a dark (bottle-beam) trap they converge on the intensity minimum, because a resonant particle can be pushed <em>out</em> of the light.</p>
+          <p class="eq">I = 4 k² |E|² · P / P<sub>beam</sub> (OTT field units) &nbsp;&nbsp; F(r) from the full T-matrix at each point</p>
+        </details>
+      </section>
+
+      <section class="panel plot-card">
+        <h2>Multipole contributions at z<sub>eq</sub></h2>
+        <div id="plot-mp" class="plot square"></div>
+        <details class="explain">
+          <summary>What am I looking at?</summary>
+          <p>The light scattered by the sphere is a sum of multipoles: electric/magnetic dipole (ED, MD), quadrupole (EQ, MQ), octupole (EO, MO)… Bars show the fraction of the beam power each one scatters with the particle at the trap position, and the textbook plane-wave Mie efficiencies of the same sphere. Switch multipoles off in “Teaching toggles” to see which ones make the trap work.</p>
+          <p class="eq">P<sub>sca</sub>/P = Σ<sub>n,m</sub> 4(|p<sub>nm</sub>|² + |q<sub>nm</sub>|²)/Σ(|a<sub>nm</sub>|² + |b<sub>nm</sub>|²) &nbsp;&nbsp; Q<sub>sca</sub> = (2/x²) Σ (2n+1)(|a<sub>n</sub>|² + |b<sub>n</sub>|²)</p>
+        </details>
+      </section>
+    </div>
+
+    <section class="panel plot-card">
+      <div class="sweep-head">
+        <h2>Parameter sweep</h2>
+        <div class="sweep-controls">
+          <label class="field inline">Vary
+            <select id="sw-var">
+              <option value="radius">radius (nm)</option>
+              <option value="wavelength">wavelength (nm)</option>
+              <option value="power">total power (mW)</option>
+            </select>
+          </label>
+          <label class="field inline">from <input id="sw-from" type="number" step="any"></label>
+          <label class="field inline">to <input id="sw-to" type="number" step="any"></label>
+          <label class="field inline">steps <input id="sw-n" type="number" step="1" min="2" max="200" value="21"></label>
+          <label class="field inline">Show
+            <select id="sw-qty">
+              <option value="freq">trap frequencies (kHz)</option>
+              <option value="z_eq">equilibrium z (nm)</option>
+              <option value="depth">trap depth (k_BT)</option>
+              <option value="recoil">Γ/Ω_z</option>
+              <option value="psca">scattered power (mW)</option>
+              <option value="pabs">absorbed power (nW)</option>
+            </select>
+          </label>
+          <button id="sw-run" type="button">Run sweep</button>
+          <button id="sw-cancel" type="button" class="ghost" disabled>Cancel</button>
+        </div>
+      </div>
+      <div class="bar thin" id="sw-progress-wrap" hidden><div id="sw-progress"></div></div>
+      <div id="plot-sweep" class="plot"></div>
+      <details class="explain">
+        <summary>What am I looking at?</summary>
+        <p>Every point is a full calculation (axial scan, equilibrium, stiffness, depth) with one parameter changed and everything else as in the panel on the left. Grey bands mark values where no 3D-stable trap exists (no restoring zero crossing along z, or a non-restoring lateral stiffness). Wavelength sweeps keep the particle index fixed unless the material preset tabulates it at that wavelength.</p>
+        <p class="eq">Γ/Ω = ω P<sub>sca</sub> / (5 m c² Ω²) &nbsp;&nbsp; f = Ω / 2π</p>
+      </details>
+    </section>
+  </div>
+</main>
+
+<footer class="footer">
+  <p>Physics ported from the <a href="https://github.com/ilent2/ott">Optical Tweezers Toolbox v1</a> © The University of Queensland — T. A. Nieminen <em>et al.</em>, “Optical tweezers computational toolbox”, <em>J. Opt. A</em> <b>9</b>, S196 (2007). Licensed <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a> — non-commercial use only.</p>
+  <p class="muted small" id="versions">levtrap <span id="ver">dev</span></p>
+</footer>
+</body>
+</html>
