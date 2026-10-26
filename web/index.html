@@ -128,6 +128,12 @@
         <label class="field">Temperature (K)
           <input id="temperature" type="number" step="any" min="1">
         </label>
+        <label class="field span2">Draw the optical axis (z)
+          <select id="axis-orient">
+            <option value="horizontal">horizontal (as on an optical table)</option>
+            <option value="vertical">vertical</option>
+          </select>
+        </label>
       </div>
     </details>
   </aside>
@@ -221,7 +227,7 @@
       </div>
       <details class="explain">
         <summary>What am I looking at?</summary>
-        <p>The glowing cloud is the trapping light: brighter means more intense. The beam travels upwards (orange arrow) and is focused at the centre of the box (grey ring marks the focal plane). The white sphere is the particle, drawn to scale at its equilibrium position. Tick “cut” to slice the cloud open: the part between the cut and you is removed (rotate to look from the other side) and the cut face shows the intensity as a heat map, so you can see e.g. the doughnut of an LG beam or the dark pocket of the bottle beam. “Gradient |∇I|” shows where the intensity changes fastest — that is where the gradient force is strongest. Force arrows show the direction of the total force on the particle if its centre were at each arrow (all the same length).</p>
+        <p>The glowing cloud is the trapping light: brighter means more intense. The beam travels along z (orange arrow; drawn horizontally by default, change under “Scan &amp; resolution”) and is focused at the centre of the box (grey ring marks the focal plane). The white sphere is the particle, drawn to scale at its equilibrium position. Tick “cut” to slice the cloud open: the part between the cut and you is removed (rotate to look from the other side) and the cut face shows the intensity as a heat map, so you can see e.g. the doughnut of an LG beam or the dark pocket of the bottle beam. “Gradient |∇I|” shows where the intensity changes fastest — that is where the gradient force is strongest. Force arrows show the direction of the total force on the particle if its centre were at each arrow (all the same length).</p>
         <p class="muted small">This view is for intuition: the intensity is interpolated from a finer 2D calculation (within ~1% of the exact value) and colour/opacity are tuned for visibility, not as a quantitative scale.</p>
       </details>
     </section>

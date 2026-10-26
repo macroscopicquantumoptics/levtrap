@@ -453,45 +453,53 @@ function renderMap(r, req) {
   const ramp = dark
     ? [[0, "#1a1a19"], [0.25, "#104281"], [0.5, "#256abf"], [0.75, "#5598e7"], [1, "#b7d3f6"]]
     : [[0, "#fcfcfb"], [0.2, "#cde2fb"], [0.45, "#86b6ef"], [0.7, "#2a78d6"], [1, "#104281"]];
-  const I = M.I.map((row) => row.map((v) => v * 1e-9)); // W/m² -> mW/µm²
-  const heat = {
-    type: "heatmap", x: um(M.Ix), y: um(M.Iz), z: I, colorscale: ramp, zsmooth: "best",
-    colorbar: { title: { text: "I (mW/µm²)", side: "right" }, thickness: 12, outlinewidth: 0 },
-    hovertemplate: "x %{x:.2f} µm, z %{y:.2f} µm<br>I = %{z:.3g} mW/µm²<extra></extra>",
-  };
+  const I = M.I.map((row) => row.map((v) => v * 1e-9)); // W/m² -> mW/µm², I[iz][ix]
+  // optical axis (z) drawn horizontally by default, as traps are usually built
+  const H = axisHorizontal();
+  const P = (x, z) => (H ? [z, x] : [x, z]); // physical (x, z) -> plot (X, Y)
+  const heat = H
+    ? { type: "heatmap", x: um(M.Iz), y: um(M.Ix), z: I[0].map((_, j) => I.map((row) => row[j])),
+        hovertemplate: "z %{x:.2f} µm, x %{y:.2f} µm<br>I = %{z:.3g} mW/µm²<extra></extra>" }
+    : { type: "heatmap", x: um(M.Ix), y: um(M.Iz), z: I,
+        hovertemplate: "x %{x:.2f} µm, z %{y:.2f} µm<br>I = %{z:.3g} mW/µm²<extra></extra>" };
+  Object.assign(heat, { colorscale: ramp, zsmooth: "best",
+    colorbar: { title: { text: "I (mW/µm²)", side: "right" }, thickness: 12, outlinewidth: 0 } });
   // normalised arrows
   const xs = um(M.x), zs = um(M.z);
   const dx = xs.length > 1 ? xs[1] - xs[0] : 1, dz = zs.length > 1 ? zs[1] - zs[0] : 1;
   const len = 0.42 * Math.min(Math.abs(dx), Math.abs(dz));
-  const lx = [], lz = [], hx = [], hz = [], ang = [], txt = [];
+  const lx = [], ly = [], hx = [], hy = [], ang = [], txt = [];
   for (let i = 0; i < zs.length; i++) {
     for (let j = 0; j < xs.length; j++) {
       const fx = M.Fx[i][j], fz = M.Fz[i][j];
       const mag = Math.hypot(fx, fz);
       if (!(mag > 0)) continue;
-      const ux = fx / mag, uz = fz / mag;
-      const x0 = xs[j] - ux * len / 2, z0 = zs[i] - uz * len / 2;
-      const x1 = xs[j] + ux * len / 2, z1 = zs[i] + uz * len / 2;
-      lx.push(x0, x1, null); lz.push(z0, z1, null);
-      hx.push(x1); hz.push(z1);
-      ang.push(Math.atan2(ux, uz) * 180 / Math.PI);
+      const [ux, uy] = P(fx / mag, fz / mag);
+      const [cx, cy] = P(xs[j], zs[i]);
+      lx.push(cx - ux * len / 2, cx + ux * len / 2, null);
+      ly.push(cy - uy * len / 2, cy + uy * len / 2, null);
+      hx.push(cx + ux * len / 2); hy.push(cy + uy * len / 2);
+      ang.push(Math.atan2(ux, uy) * 180 / Math.PI); // marker angle: clockwise from up
       txt.push(`|F| = ${(mag * 1e12).toPrecision(3)} pN`);
     }
   }
   const arrowCol = dark ? "#f0efec" : "#0b0b0b";
-  const shafts = { type: "scatter", mode: "lines", x: lx, y: lz, line: { color: arrowCol, width: 1.4 }, hoverinfo: "skip", showlegend: false };
-  const heads = { type: "scatter", mode: "markers", x: hx, y: hz, text: txt,
+  const shafts = { type: "scatter", mode: "lines", x: lx, y: ly, line: { color: arrowCol, width: 1.4 }, hoverinfo: "skip", showlegend: false };
+  const heads = { type: "scatter", mode: "markers", x: hx, y: hy, text: txt,
     marker: { symbol: "triangle-up", size: 7, angle: ang, color: arrowCol },
     hovertemplate: "%{text}<extra></extra>", showlegend: false };
   const shapes = [];
   if (r.z_eq !== null) {
-    const rad = req.particle.radius * 1e6, z0 = r.z_eq * 1e6;
-    shapes.push({ type: "circle", x0: -rad, x1: rad, y0: z0 - rad, y1: z0 + rad,
+    const rad = req.particle.radius * 1e6;
+    const [cx, cy] = P(0, r.z_eq * 1e6);
+    shapes.push({ type: "circle", x0: cx - rad, x1: cx + rad, y0: cy - rad, y1: cy + rad,
       line: { color: r.stable ? css("--good") : css("--bad"), width: 2 },
       fillcolor: "rgba(127,127,127,0.25)" });
   }
+  const zlab = H ? "z (µm)  — beam propagates →" : "z (µm)  — beam propagates ↑";
   const layout = baseLayout({
-    xaxis: axis("x (µm)", { constrain: "domain" }), yaxis: axis("z (µm)  — beam propagates ↑", { scaleanchor: "x" }),
+    xaxis: axis(H ? zlab : "x (µm)", { constrain: "domain" }),
+    yaxis: axis(H ? "x (µm)" : zlab, { scaleanchor: "x" }),
     shapes, margin: { l: 60, r: 16, t: 10, b: 44 },
   });
   Plotly.react("plot-map", [heat, shafts, heads], layout, PLOT_CONFIG);
@@ -604,6 +612,11 @@ function renderSweep() {
   Plotly.react("plot-sweep", traces, layout, PLOT_CONFIG);
 }
 
+// optical-axis orientation for the force map and 3D view (z horizontal by default)
+function axisHorizontal() {
+  return $("axis-orient").value !== "vertical";
+}
+
 // ---------------------------------------------------------------- 3D view
 let view3d = null;
 let v3data = null;
@@ -625,6 +638,7 @@ async function build3d(withForces) {
     const opts = { forces: withForces, z_eq: lastResult ? lastResult.z_eq : null, nxy: 64, nz: 96 };
     v3data = await backend.call("field3d", JSON.stringify(req), JSON.stringify(opts));
     const fresh = !view3d._built;
+    view3d.setHorizontal(axisHorizontal());
     view3d.update(v3data);
     applyV3Controls();
     if (fresh) { view3d.resetCamera(); view3d._built = true; }
@@ -729,6 +743,12 @@ async function init() {
     if (e.target.tagName === "SELECT" && !["preset", "material"].includes(e.target.id)) schedule();
   });
   init3d();
+  $("axis-orient").addEventListener("change", () => {
+    try { localStorage.setItem("levtrap-axis", $("axis-orient").value); } catch (e) { /* storage unavailable */ }
+    if (lastResult) renderMap(lastResult, lastReq);
+    if (view3d) { view3d.setHorizontal(axisHorizontal()); view3d.resetCamera(); }
+  });
+  try { const a = localStorage.getItem("levtrap-axis"); if (a) $("axis-orient").value = a; } catch (e) { /* ignore */ }
   $("sw-var").addEventListener("change", sweepDefaults);
   $("sw-qty").addEventListener("change", renderSweep);
   $("sw-run").addEventListener("click", runSweep);

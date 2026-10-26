@@ -6,7 +6,8 @@
  * scale at its equilibrium, and optional force arrows.
  *
  * Loaded lazily by app.js with import("./view3d.js").
- * Scene units are micrometres; z (beam axis) points up.
+ * Scene units are micrometres.  The beam axis is z; by default it is drawn
+ * horizontally (camera "up" = +x), optionally vertically (up = +z).
  */
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -125,9 +126,16 @@ export function createView(container) {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 1000);
-  camera.up.set(0, 0, 1);
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
+  camera.up.set(1, 0, 0);
+  // OrbitControls fixes its orbit frame from camera.up when constructed, so
+  // it is rebuilt whenever the up direction changes
+  let controls = null;
+  function makeControls() {
+    if (controls) controls.dispose();
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+  }
+  makeControls();
 
   scene.add(new THREE.HemisphereLight(0xdfe9ff, 0x202030, 1.6));
   const sun = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -266,7 +274,7 @@ export function createView(container) {
     particle.scale.setScalar(r);
     particle.position.set(0, 0, z0);
     volMat.uniforms.uSphere.value.set(0, 0, z0, state.showParticle ? r : 0);
-    beamArrow.position.set(-half.x * 1.15, -half.y * 1.15, -half.z);
+    beamArrow.position.set(-half.x * 1.15, 0, -half.z);
     beamArrow.setLength(2 * half.z, 0.18 * half.z, 0.08 * half.z);
     focusRing.scale.setScalar(Math.max(half.x, half.y) * 0.08);
     lastForces = data.forces || null;
@@ -281,9 +289,17 @@ export function createView(container) {
     sliceMat.uniforms.uData.value = textures[m] || null;
   }
 
+  let horizontal = true;
+  function setHorizontal(h) {
+    horizontal = h;
+    camera.up.set(h ? 1 : 0, 0, h ? 0 : 1);
+    makeControls();
+  }
   function resetCamera() {
     const d = Math.max(half.x, half.y, half.z) * 3.4;
-    camera.position.set(d * 0.75, -d * 0.95, d * 0.35);
+    // horizontal: look from +y so that z runs left -> right and x is up
+    if (horizontal) camera.position.set(d * 0.35, d * 0.95, d * 0.3);
+    else camera.position.set(d * 0.75, -d * 0.95, d * 0.35);
     controls.target.set(0, 0, 0);
     controls.update();
   }
@@ -309,6 +325,7 @@ export function createView(container) {
   return {
     update(data) { update(data); },
     resetCamera,
+    setHorizontal,
     setMode,
     setClip(ax, value) { state.clip[ax] = value; rebuildSlices(); setForces(lastForces, lastSpacing); },
     setOpacity(v) { volMat.uniforms.uOpacity.value = v; },
