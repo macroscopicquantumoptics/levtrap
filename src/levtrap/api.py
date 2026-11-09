@@ -765,7 +765,8 @@ def benchmark() -> str:
 
 def handle(method: str, *args) -> str:
     """Dispatch used by the web worker."""
-    return {"compute": compute, "sweep": sweep, "presets": presets, "field3d": field3d,
+    from .solve import solve_json
+    return {"solve": solve_json, "compute": compute, "sweep": sweep, "presets": presets, "field3d": field3d,
             "lens_trap": lens_trap, "lens_sweep": lens_sweep,
             "materials": materials, "benchmark": benchmark}[method](*args)
 
