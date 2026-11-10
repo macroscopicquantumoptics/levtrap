@@ -12,6 +12,7 @@ naming what is missing; the generic field solver replaces this path.
 from __future__ import annotations
 
 import json
+import math
 from typing import Any, Iterable
 
 from . import __version__
@@ -20,10 +21,10 @@ from .rates import rates_block
 from .setup import SetupError, parse, unknown_keys
 
 __all__ = ["solve", "solve_json", "check_supported", "resolve_particle", "UnsupportedSetup",
-           "RESULT_VERSION", "WANTS"]
+           "RESULT_VERSION", "WANTS", "pattern_result"]
 
 RESULT_VERSION = 1
-WANTS = ("curves",)
+WANTS = ("curves", "pattern")
 AXES = {"x": [1.0, 0.0, 0.0], "y": [0.0, 1.0, 0.0], "z": [0.0, 0.0, 1.0]}
 
 
@@ -77,7 +78,8 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     ----------
     setup : dict or JSON text, see :mod:`levtrap.setup`.
     want : extra blocks to compute, from :data:`WANTS`.  ``"curves"`` adds the
-        force along x, y and z through the equilibrium.
+        force along x, y and z through the equilibrium; ``"pattern"`` adds the
+        radiation pattern at the equilibrium (:func:`pattern_result`).
 
     Returns
     -------
@@ -152,7 +154,35 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
             y=dict(position=ln["y"], force=ln["Fy"][1]),
             z=dict(position=ln["z"], force=ln["Fz"][2]),
         )
+    if "pattern" in want:
+        result["pattern"] = pattern_result(s, 0.0 if z_eq is None else z_eq)
+        result["models"].append(dict(quantity="pattern", model="mie", validity="ok", notes=[]))
+        if z_eq is None:
+            result["warnings"].append("Radiation pattern taken with the particle at the focus "
+                                      "(there is no equilibrium).")
     return result
+
+
+def pattern_result(s: dict, z: float) -> dict:
+    """``pattern`` block (see :func:`levtrap.pattern.pattern_block`) for the
+    particle at (0, 0, z) [m] in the beams of a parsed, resolved setup.
+
+    ``trap_NA`` is the numerical aperture of the first beam's focusing optic
+    (``n_medium sin(convergence angle)``): the cone a backward detector
+    through the trapping lens collects.
+    """
+    from .api import _beam_angle, build_beam, build_tmatrix
+    from .pattern import pattern_block
+
+    beam, _ = build_beam(s)
+    T, _ = build_tmatrix(s)
+    nm = float(s["environment"]["medium_index"])
+    b0 = s["trap"]["fields"][0]
+    m = [int(v) for v in b0["mode"]["indices"]]
+    order = (2 * m[0] + abs(m[1])) if b0["mode"]["type"] == "lg" else (m[0] + m[1])
+    angle = _beam_angle(b0["focus"], float(b0["wavelength"]), nm, order)
+    ref = beam.translate_z(z) if z else beam
+    return pattern_block(ref, T, n_medium=nm, trap_NA=nm * math.sin(angle))
 
 
 def solve_json(setup_json: str, want_json: str = "[]") -> str:
