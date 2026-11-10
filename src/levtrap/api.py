@@ -10,28 +10,23 @@ All inputs and outputs are SI.  Internally the OTT conventions are used
 * k [N/m] = -dQ/dx n P / c,  Omega = sqrt(k/m).
 * U [J] = -integral F dx;  depth in k_B T at the given temperature.
 
-Request schema (``compute`` / ``sweep``)::
+Request schema (``compute`` / ``sweep`` / ``field3d``)::
 
     {
-      "wavelength": 1.064e-6,            # vacuum wavelength [m]
-      "medium_index": 1.0,
-      "particle": {"radius": 1e-7, "n": 1.45, "k": 0.0, "density": 2200},
-      "beams": [                         # 1 or 2 beams, summed coherently
-        {"type": "lg" | "hg", "mode": [p, l] | [m, n],
-         "NA": 0.9  (or "waist": 1e-6 [m], or "angle_deg": 50),
-         "power": 0.1,                   # [W]
-         "polarisation": "x" | "y" | "circular+" | "circular-" | [[re, im], [re, im]],
-         "phase": 0.0}                   # relative phase [rad]
-      ],
-      "dark_focus": false,               # 2 beams: re-split power to null the focal field
-      # With two beams the sum of the "power" entries is the power of the
-      # coherent superposition; the entries set the ratio of the components.
-      "multipoles": {"ED": true, "MD": true, "EQ": true, "MQ": true, "higher": true},
-      "dipole_overlay": false,
-      "temperature": 300.0,
-      "scan": {"z_range": 3e-6, "z_points": 61, "x_range": 1.5e-6, "x_points": 41,
-               "map_nx": 13, "map_nz": 17, "intensity_n": 60}
+      "setup": {...},                    # a version-1 setup file, see levtrap.setup
+      "options": {                       # how to compute and what to return
+        "dark_focus": false,             # 2 beams: re-split power to null the focal field
+        "multipoles": {"ED": true, "MD": true, "EQ": true, "MQ": true, "higher": true},
+        "dipole_overlay": false,
+        "scan": {"z_range": 3e-6, "z_points": 61, "x_range": 1.5e-6, "x_points": 41,
+                 "map_nx": 13, "map_nz": 17, "intensity_n": 60}
+      }
     }
+
+The setup must be one this engine computes (see :func:`levtrap.solve.check_supported`):
+one beam, or two coherent beams, along +z with the focus at the origin.  With
+two beams the sum of their ``power`` entries is the power of the coherent
+superposition; the entries set the ratio of the components.
 
 Each response contains plain lists / floats only (``json.dumps``-able).
 """
@@ -78,30 +73,32 @@ def _pol(p) -> tuple[complex, complex]:
     return complex(p[0][0], p[0][1]), complex(p[1][0], p[1][1])
 
 
-def _beam_angle(spec: dict, wavelength: float, n_medium: float, order: int) -> float:
-    """Convergence angle [rad] from NA, angle or waist.
+def _beam_angle(focus: dict, wavelength: float, n_medium: float, order: int) -> float:
+    """Convergence angle [rad] from the focus block (NA, angle_deg or waist).
 
     For a waist W (1/e^2 field radius of the paraxial LG/HG mode at focus)
     OTT's far-field mapping gives tan(angle) = lambda_m w_p / (pi W) with
     w_p = ``paraxial_beam_waist(order)`` (BscPmGauss.m).
     """
-    if spec.get("waist"):
+    if focus.get("waist"):
         lam_m = wavelength / n_medium
-        return math.atan(lam_m * paraxial_beam_waist(order) / (math.pi * float(spec["waist"])))
-    if spec.get("angle_deg"):
-        return math.radians(float(spec["angle_deg"]))
-    na = float(spec.get("NA", 0.9))
+        return math.atan(lam_m * paraxial_beam_waist(order) / (math.pi * float(focus["waist"])))
+    if focus.get("angle_deg"):
+        return math.radians(float(focus["angle_deg"]))
+    na = float(focus["NA"])
     if na >= n_medium:
         raise ValueError(f"NA ({na}) must be smaller than the medium index ({n_medium})")
     return math.asin(na / n_medium)
 
 
-def _single_beam(spec: dict, wavelength: float, n_medium: float) -> Bsc:
-    btype = spec.get("type", "lg")
-    mode = tuple(int(v) for v in spec.get("mode", (0, 0)))
+def _single_beam(b: dict, n_medium: float) -> Bsc:
+    """Unit-power beam for one beam field of a parsed setup."""
+    wavelength = float(b["wavelength"])
+    btype = b["mode"]["type"]
+    mode = tuple(int(v) for v in b["mode"]["indices"])
     order = (2 * mode[0] + abs(mode[1])) if btype == "lg" else (mode[0] + mode[1])
-    angle = _beam_angle(spec, wavelength, n_medium, order)
-    pol = _pol(spec.get("polarisation", "x"))
+    angle = _beam_angle(b["focus"], wavelength, n_medium, order)
+    pol = _pol(b["polarisation"])
     key = (btype, mode, round(angle, 12), pol, wavelength, n_medium)
     beam = _BEAM_CACHE.get(key)
     if beam is None:
@@ -113,17 +110,39 @@ def _single_beam(spec: dict, wavelength: float, n_medium: float) -> Bsc:
     return beam
 
 
-def build_beam(req: dict) -> tuple[Bsc, float]:
-    """Coherent superposition of the requested beams, scaled to watts.
+def prepare(req: dict | str) -> tuple[dict, dict]:
+    """``{"setup": …, "options": …}`` -> (parsed setup, options).
+
+    The setup is validated, checked to be one this engine computes, and its
+    particle's n, k and density are filled in from the material if not given.
+    """
+    from .setup import parse
+    from .solve import check_supported, resolve_particle
+    if isinstance(req, str):
+        req = json.loads(req)
+    if not isinstance(req, dict) or "setup" not in req:
+        raise ValueError('the request must be {"setup": …, "options": …}')
+    s = parse(req["setup"])
+    check_supported(s)
+    resolve_particle(s)
+    return s, dict(req.get("options") or {})
+
+
+def wavelength_of(s: dict) -> float:
+    return float(s["trap"]["fields"][0]["wavelength"])
+
+
+def build_beam(s: dict, options: dict | None = None) -> tuple[Bsc, float]:
+    """Coherent superposition of the setup's beams, scaled to watts.
 
     Returns ``(beam, P_total)`` with ``beam.power == P_total`` [W].
     """
-    wl = float(req["wavelength"])
-    nm = float(req.get("medium_index", 1.0))
-    specs = req["beams"]
-    powers = [max(float(s.get("power", 1.0)), 0.0) for s in specs]
-    beams = [_single_beam(s, wl, nm) for s in specs]
-    if req.get("dark_focus") and len(beams) == 2:
+    options = options or {}
+    nm = float(s["environment"]["medium_index"])
+    specs = s["trap"]["fields"]
+    powers = [max(float(b["power"]), 0.0) for b in specs]
+    beams = [_single_beam(b, nm) for b in specs]
+    if options.get("dark_focus") and len(beams) == 2:
         # choose the power split that nulls the field at the focus,
         # keeping the total power: P1 |E1(0)|^2 = P2 |E2(0)|^2 (unit-power beams)
         e = [float(np.sum(np.abs(b.em_field_xyz(np.zeros((1, 3)))) ** 2)) for b in beams]
@@ -131,16 +150,16 @@ def build_beam(req: dict) -> tuple[Bsc, float]:
         powers = [ptot * e[1] / (e[0] + e[1]), ptot * e[0] / (e[0] + e[1])]
     total = None
     for spec, b, p in zip(specs, beams, powers):
-        b = b * (math.sqrt(p) * np.exp(1j * float(spec.get("phase", 0.0))))
+        b = b * (math.sqrt(p) * np.exp(1j * float(spec["phase"])))
         total = b if total is None else total + b
     # Beams of different shape are not orthogonal, so the coherent sum
     # carries P1 + P2 + interference.  The requested total (sum of the
     # "power" entries) is taken to be the power of the combined beam.
     target = sum(powers)
     if len(specs) > 1 and total.power > 0:
-        s = target / total.power
-        total = total * math.sqrt(s)
-        powers = [p * s for p in powers]
+        scale = target / total.power
+        total = total * math.sqrt(scale)
+        powers = [p * scale for p in powers]
     total.info = dict(powers=powers)
     return total, total.power
 
@@ -154,14 +173,17 @@ def _multipole_fn(mp: dict | None):
     return lambda n, kind: bool(mp.get(labels.get((n, kind), "higher"), True))
 
 
-def build_tmatrix(req: dict, nmax_beam: int | None = None):
-    wl = float(req["wavelength"])
-    nm = float(req.get("medium_index", 1.0))
-    p = req["particle"]
-    n_p = complex(float(p["n"]), float(p.get("k", 0.0)))
-    T = TmatrixMie(float(p["radius"]), index_medium=nm, index_particle=n_p, wavelength0=wl,
-                   multipoles=_multipole_fn(req.get("multipoles")))
+def _tmatrix(particle: dict, wavelength: float, n_medium: float, multipoles: dict | None = None):
+    n_p = complex(float(particle["n"]), float(particle.get("k") or 0.0))
+    T = TmatrixMie(float(particle["radius"]), index_medium=n_medium, index_particle=n_p,
+                   wavelength0=wavelength, multipoles=_multipole_fn(multipoles))
     return T, n_p
+
+
+def build_tmatrix(s: dict, options: dict | None = None):
+    """T-matrix of the setup's particle (n, k already resolved by :func:`prepare`)."""
+    return _tmatrix(s["particle"], wavelength_of(s), float(s["environment"]["medium_index"]),
+                    (options or {}).get("multipoles"))
 
 
 def _finite(x):
@@ -202,19 +224,20 @@ def _axial_scan(beam: Bsc, T, zs: np.ndarray) -> np.ndarray:
     return np.atleast_2d(f.T).T if f.ndim == 1 else f
 
 
-def analyse(req: dict, detail: bool = True) -> dict:
-    """Full single-point analysis.  See module docstring for the schema."""
+def analyse(s: dict, options: dict | None = None, detail: bool = True) -> dict:
+    """Full single-point analysis of a setup prepared by :func:`prepare`."""
     t0 = time.perf_counter()
-    scan = {**DEFAULT_SCAN, **req.get("scan", {})}
-    wl = float(req["wavelength"])
-    nm = float(req.get("medium_index", 1.0))
-    temp = float(req.get("temperature", 300.0))
-    part = req["particle"]
+    options = options or {}
+    scan = {**DEFAULT_SCAN, **options.get("scan", {})}
+    wl = wavelength_of(s)
+    nm = float(s["environment"]["medium_index"])
+    temp = float(s["environment"]["temperature"])
+    part = s["particle"]
     radius = float(part["radius"])
     density = float(part["density"])
     mass = sphere_mass(radius, density)
-    beam, P = build_beam(req)
-    T, n_p = build_tmatrix(req)
+    beam, P = build_beam(s, options)
+    T, n_p = build_tmatrix(s, options)
     unit = nm / C  # Q (with beam.power in W) -> N
     t_beam = time.perf_counter()
 
@@ -309,7 +332,7 @@ def analyse(req: dict, detail: bool = True) -> dict:
         ni = int(scan["intensity_n"])
         ix = np.linspace(-scan["x_range"], scan["x_range"], ni)
         iz = np.linspace(-scan["z_range"], scan["z_range"], int(ni * 1.4))
-        ikey = (json.dumps(req["beams"], sort_keys=True), bool(req.get("dark_focus")), wl, nm,
+        ikey = (json.dumps(s["trap"]["fields"], sort_keys=True), bool(options.get("dark_focus")), wl, nm,
                 float(scan["x_range"]), float(scan["z_range"]), ni)
         I = _INTENSITY_CACHE.get(ikey)
         if I is None:
@@ -322,7 +345,7 @@ def analyse(req: dict, detail: bool = True) -> dict:
                 _INTENSITY_CACHE.clear()
             _INTENSITY_CACHE[ikey] = I
         result["map"] = dict(x=mx, z=mz, Fx=FX, Fz=FZ, Ix=ix, Iz=iz, I=I)
-        if req.get("dipole_overlay"):
+        if options.get("dipole_overlay"):
             m_rel = n_p / nm
             zpts = np.stack([0 * zs, 0 * zs, zs], 1)
             xpts = np.stack([xs, 0 * xs, z_ref + 0 * xs], 1)
@@ -424,21 +447,22 @@ def field3d(req_json: str, opts_json: str = "{}") -> str:
     Volumes are returned as base64 uint8 (normalised to their maxima, given
     in W/m^2 and W/m^3), x fastest.
     """
-    req = json.loads(req_json)
+    s, options = prepare(req_json)
     opts = json.loads(opts_json)
     t0 = time.perf_counter()
-    scan = {**DEFAULT_SCAN, **req.get("scan", {})}
-    beam, P = build_beam(req)
+    scan = {**DEFAULT_SCAN, **options.get("scan", {})}
+    beam, P = build_beam(s, options)
     xr, zr = float(scan["x_range"]), float(scan["z_range"])
     nxy, nzz = int(opts.get("nxy", 64)), int(opts.get("nz", 96))
     I, x, y, z = intensity_volume(beam, xr, zr, nxy, nzz)
     gx, gy, gz = np.gradient(I, x, y, z)
     G = np.sqrt(gx**2 + gy**2 + gz**2)
     out = dict(dims=[nxy, nxy, nzz], bounds=dict(x=xr, y=xr, z=zr), I=_b64_u8(I), Imax=float(I.max()),
-               G=_b64_u8(G), Gmax=float(G.max()), radius=float(req["particle"]["radius"]),
-               z_eq=opts.get("z_eq"), wavelength=float(req["wavelength"]))
+               G=_b64_u8(G), Gmax=float(G.max()), radius=float(s["particle"]["radius"]),
+               z_eq=opts.get("z_eq"), wavelength=wavelength_of(s))
     if opts.get("forces"):
-        T, _ = build_tmatrix(req)
+        T, _ = build_tmatrix(s, options)
+        nm = float(s["environment"]["medium_index"])
         nf, nzf = opts.get("force_n", [7, 11])
         fx_ = np.linspace(-xr * 0.85, xr * 0.85, int(nf))
         fz_ = np.linspace(-zr * 0.85, zr * 0.85, int(nzf))
@@ -447,7 +471,7 @@ def field3d(req_json: str, opts_json: str = "{}") -> str:
         pos, vec = [], []
         for zz in fz_:
             bz = beam.translate_z(zz) if zz != 0 else beam
-            f = forcetorque(bz, T, position=lat)[0] * (nm_ := float(req.get("medium_index", 1.0))) / C
+            f = forcetorque(bz, T, position=lat)[0] * nm / C
             for i in range(lat.shape[1]):
                 pos.append([lat[0, i], lat[1, i], zz])
                 vec.append(f[:, i].tolist())
@@ -487,7 +511,7 @@ def _lens_trap(req: dict, lens_req: dict, detail: bool, r_start=None):
     lr = _lens_beam(lens_req, wl)
     P = float(req.get("power", 0.1))
     beam = lr.beam * math.sqrt(P * lr.transmitted)  # coefficients in sqrt(W)
-    T, n_p = build_tmatrix(dict(req, medium_index=1.0))
+    T, n_p = _tmatrix(req["particle"], wl, 1.0)
     part = req["particle"]
     mass = sphere_mass(float(part["radius"]), float(part["density"]))
     unit = 1.0 / C  # vacuum
@@ -654,50 +678,57 @@ def lens_sweep(req_json: str, variable: str, values_json: str, start_json: str =
 
 
 def compute(req_json: str) -> str:
-    """JSON wrapper around :func:`analyse`."""
-    req = json.loads(req_json)
+    """JSON wrapper around :func:`analyse`: ``{"ok": true, "result": …}`` or
+    ``{"ok": false, "error": …}`` (with ``"path"`` for an invalid setup)."""
+    from .setup import SetupError
     try:
-        return json.dumps(dict(ok=True, result=analyse(req)))
+        s, options = prepare(req_json)
+        return json.dumps(dict(ok=True, result=analyse(s, options)))
+    except SetupError as exc:
+        return json.dumps(dict(ok=False, path=exc.path, error=exc.message))
     except Exception as exc:  # report to the UI rather than crash the worker
         return json.dumps(dict(ok=False, error=f"{type(exc).__name__}: {exc}"))
 
 
-def sweep_point(req: dict) -> dict:
+def sweep_point(s: dict, options: dict | None = None) -> dict:
     """Reduced analysis for one sweep point (no maps)."""
-    r = analyse(req, detail=False)
+    r = analyse(s, options, detail=False)
     return dict(stable=r["stable"], z_eq=r["z_eq"], freq=r["freq"], depth_kT=r["depth"].get("kT"),
                 recoil_ratio=r["recoil_ratio"], P_sca=r["at"]["P_sca"], P_abs=r["at"]["P_abs"],
                 multipoles=r["at"]["multipoles"], Qsca=r["mie"]["Qsca"], Qabs=r["mie"]["Qabs"])
 
 
-def _set_param(req: dict, variable: str, value: float) -> dict:
-    req = json.loads(json.dumps(req))
+def _set_param(s: dict, variable: str, value: float) -> dict:
+    """Copy of a prepared setup with one quantity changed."""
+    s = json.loads(json.dumps(s))
+    beams = s["trap"]["fields"]
     if variable == "radius":
-        req["particle"]["radius"] = value
+        s["particle"]["radius"] = value
     elif variable == "wavelength":
-        req["wavelength"] = value
-        mat = req["particle"].get("material")
+        for b in beams:
+            b["wavelength"] = value
+        mat = s["particle"].get("material")
         if mat and mat in MATERIALS:
             m = get_material(mat, value)
             if m["valid"]:
-                req["particle"].update(n=m["n"], k=m["k"])
+                s["particle"].update(n=m["n"], k=m["k"])
     elif variable == "power":
-        tot = sum(float(b.get("power", 1.0)) for b in req["beams"])
-        for b in req["beams"]:
-            b["power"] = float(b.get("power", 1.0)) * value / tot
+        tot = sum(float(b["power"]) for b in beams)
+        for b in beams:
+            b["power"] = float(b["power"]) * value / tot
     else:
         raise ValueError(f"Unknown sweep variable {variable}")
-    return req
+    return s
 
 
 def sweep(req_json: str, variable: str, values_json: str) -> str:
     """Sweep ``variable`` in {'radius', 'wavelength', 'power'} over values."""
-    req = json.loads(req_json)
+    s, options = prepare(req_json)
     values = json.loads(values_json)
     pts = []
     for v in values:
         try:
-            pts.append(dict(value=v, **sweep_point(_set_param(req, variable, float(v)))))
+            pts.append(dict(value=v, **sweep_point(_set_param(s, variable, float(v)), options)))
         except Exception as exc:
             pts.append(dict(value=v, stable=False, error=str(exc)))
     return json.dumps(_finite(dict(ok=True, variable=variable, points=pts)))
@@ -713,29 +744,40 @@ def _silica(wl: float, radius: float) -> dict:
     return dict(material="SiO2", radius=radius, n=m["n"], k=m["k"], density=m["density"])
 
 
+def _beam(wavelength: float, power: float, *, focus: dict, mode=(0, 0), polarisation="x",
+          phase: float = 0.0, **extra) -> dict:
+    return dict(kind="beam", wavelength=wavelength, power=power, focus=dict(kind="lens", **focus),
+                mode=dict(type="lg", indices=list(mode)), polarisation=polarisation,
+                direction=[0, 0, 1], position=[0, 0, 0], phase=phase, **extra)
+
+
+def _setup(particle: dict, *beams: dict) -> dict:
+    return dict(version=1, particle=particle, environment=dict(medium_index=1.0, temperature=300.0),
+                trap=dict(fields=list(beams)))
+
+
 PRESETS = {
     "silica_1064": dict(
         label="Silica bright tweezer @ 1064 nm", validated=True,
-        request=dict(wavelength=1064e-9, medium_index=1.0, particle=_silica(1064e-9, 100e-9),
-                     beams=[dict(type="lg", mode=[0, 0], NA=0.9, power=0.2, polarisation="x", phase=0.0)],
-                     scan=dict(z_range=2.5e-6, x_range=1.2e-6))),
+        setup=_setup(_silica(1064e-9, 100e-9),
+                     _beam(1064e-9, 0.2, focus=dict(NA=0.9))),
+        options=dict(scan=dict(z_range=2.5e-6, x_range=1.2e-6))),
     "silica_1550": dict(
         label="Silica bright tweezer @ 1550 nm", validated=True,
-        request=dict(wavelength=1550e-9, medium_index=1.0, particle=_silica(1550e-9, 100e-9),
-                     beams=[dict(type="lg", mode=[0, 0], NA=0.9, power=0.2, polarisation="x", phase=0.0)],
-                     scan=dict(z_range=3e-6, x_range=1.6e-6))),
+        setup=_setup(_silica(1550e-9, 100e-9),
+                     _beam(1550e-9, 0.2, focus=dict(NA=0.9))),
+        options=dict(scan=dict(z_range=3e-6, x_range=1.6e-6))),
     "ws2_bottle_1550": dict(
         label="WS₂ bottle-beam dark trap @ 1550 nm (illustrative, not validated)", validated=False,
         note=("Two coherent circularly polarised LG beams (p=0, w=1.59 um) and (p=1, w=0.866 um) "
               "with relative phase pi and 0.8 W total, after arXiv:2607.09896. The power split is "
               "not given in the paper; it is chosen so the field vanishes at the focus. "
               "No OTT reference covers this case."),
-        request=dict(wavelength=1550e-9, medium_index=1.0, dark_focus=True,
-                     particle=dict(material="WS2", radius=300e-9, n=3.79, k=2.83e-10, density=7500.0),
-                     beams=[dict(type="lg", mode=[0, 0], waist=1.59e-6, power=0.4, polarisation="circular+", phase=0.0),
-                            dict(type="lg", mode=[1, 0], waist=0.866e-6, power=0.4, polarisation="circular+",
-                                 phase=math.pi)],
-                     scan=dict(z_range=3.1e-6, x_range=2.0e-6))),
+        setup=_setup(dict(material="WS2", radius=300e-9, n=3.79, k=2.83e-10, density=7500.0),
+                     _beam(1550e-9, 0.4, focus=dict(waist=1.59e-6), polarisation="circular+", id="b1"),
+                     _beam(1550e-9, 0.4, focus=dict(waist=0.866e-6), mode=(1, 0), polarisation="circular+",
+                           phase=math.pi, id="b2", coherent_with="b1")),
+        options=dict(dark_focus=True, scan=dict(z_range=3.1e-6, x_range=2.0e-6))),
 }
 
 

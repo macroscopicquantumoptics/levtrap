@@ -73,17 +73,22 @@ pytest -q                  # ~85 tests, ~30 s
 ```
 
 ```python
-import json
-from levtrap import api
+from levtrap.solve import solve
 
-req = {
-    "wavelength": 1064e-9, "medium_index": 1.0,
+setup = {
+    "version": 1,
     "particle": {"radius": 100e-9, "n": 1.45, "k": 0.0, "density": 2200},
-    "beams": [{"type": "lg", "mode": [0, 0], "NA": 0.9, "power": 0.2, "polarisation": "x"}],
+    "trap": {"fields": [{"kind": "beam", "wavelength": 1064e-9, "power": 0.2,
+                         "focus": {"NA": 0.9}, "polarisation": "x"}]},
 }
-r = api.analyse(req, detail=False)          # SI in, SI out
-print(r["stable"], r["z_eq"], r["freq"], r["depth"]["kT"], r["recoil_ratio"])
+r = solve(setup)                               # SI in, SI out
+print(r["stable"], r["equilibrium"], [m["frequency"] for m in r["modes"]], r["depth"]["kT"])
 ```
+
+The setup file is described in `docs/ARCHITECTURE.md` §4 and checked by
+`levtrap.setup`. The web page sends the same setup to `api.compute` as
+`{"setup": …, "options": …}`, where the options hold display settings
+(scan ranges, dipole overlay, multipole switches, dark focus).
 
 Lower-level, OTT-style:
 

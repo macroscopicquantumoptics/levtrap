@@ -97,24 +97,31 @@ function beamFieldset(el, key) {
   sync();
   return {
     read() {
+      // one beam field of a version-1 setup (wavelength, power, phase set by the caller)
       const t = q("type").value;
-      const spec = {
-        type: t === "hg" ? "hg" : "lg",
-        mode: t === "gauss" ? [0, 0] : [parseInt(q("m1").value || 0, 10), parseInt(q("m2").value || 0, 10)],
-        polarisation: q("pol").value,
-      };
       const v = parseFloat(q("focusval").value);
-      if (q("focus").value === "NA") spec.NA = v; else spec.waist = v * 1e-6;
-      return spec;
+      return {
+        kind: "beam",
+        mode: {
+          type: t === "hg" ? "hg" : "lg",
+          indices: t === "gauss" ? [0, 0] : [parseInt(q("m1").value || 0, 10), parseInt(q("m2").value || 0, 10)],
+        },
+        focus: q("focus").value === "NA" ? { kind: "lens", NA: v } : { kind: "lens", waist: v * 1e-6 },
+        polarisation: q("pol").value,
+        direction: [0, 0, 1],
+        position: [0, 0, 0],
+      };
     },
-    write(spec) {
-      const gauss = spec.type === "lg" && spec.mode[0] === 0 && spec.mode[1] === 0;
-      q("type").value = gauss ? "gauss" : spec.type;
-      q("m1").value = spec.mode[0];
-      q("m2").value = spec.mode[1];
-      q("pol").value = typeof spec.polarisation === "string" ? spec.polarisation : "x";
-      if (spec.waist) { q("focus").value = "waist"; q("focusval").value = +(spec.waist * 1e6).toPrecision(6); }
-      else { q("focus").value = "NA"; q("focusval").value = spec.NA ?? 0.9; }
+    write(b) {
+      const mode = b.mode || { type: "lg", indices: [0, 0] };
+      const focus = b.focus || {};
+      const gauss = mode.type === "lg" && mode.indices[0] === 0 && mode.indices[1] === 0;
+      q("type").value = gauss ? "gauss" : mode.type;
+      q("m1").value = mode.indices[0];
+      q("m2").value = mode.indices[1];
+      q("pol").value = typeof b.polarisation === "string" ? b.polarisation : "x";
+      if (focus.waist) { q("focus").value = "waist"; q("focusval").value = +(focus.waist * 1e6).toPrecision(6); }
+      else { q("focus").value = "NA"; q("focusval").value = focus.NA ?? 0.9; }
       sync();
     },
   };
@@ -123,24 +130,27 @@ function beamFieldset(el, key) {
 let beam1, beam2;
 
 // ---------------------------------------------------------------- form <-> request
+// A request is {setup, options}: setup is a version-1 setup file (see
+// src/levtrap/setup.py), options say how to compute it.
 function readRequest() {
   const wl = parseFloat($("wavelength").value) * 1e-9;
   const Ptot = parseFloat($("power").value) * 1e-3;
-  const b1 = beam1.read();
+  const b1 = Object.assign(beam1.read(), { wavelength: wl, phase: 0 });
   const beams = [b1];
   let dark = false;
   if ($("beam2-on").checked) {
     const r = Math.max(parseFloat($("ratio").value) || 0, 0);
-    const b2 = beam2.read();
+    const b2 = Object.assign(beam2.read(), { wavelength: wl,
+      phase: (parseFloat($("phase").value) || 0) * Math.PI });
     b1.power = Ptot / (1 + r);
     b2.power = Ptot * r / (1 + r);
-    b1.phase = 0;
-    b2.phase = (parseFloat($("phase").value) || 0) * Math.PI;
+    b1.id = "b1";
+    b2.id = "b2";
+    b2.coherent_with = "b1";
     beams.push(b2);
     dark = $("dark-focus").checked;
   } else {
     b1.power = Ptot;
-    b1.phase = 0;
   }
   const mp = {};
   document.querySelectorAll("[data-mp]").forEach((c) => { mp[c.dataset.mp] = c.checked; });
@@ -148,52 +158,60 @@ function readRequest() {
   const zr = parseFloat($("zrange").value) * 1e-6;
   const xr = parseFloat($("xrange").value) * 1e-6;
   return {
-    wavelength: wl,
-    medium_index: parseFloat($("medium").value),
-    particle: {
-      material: $("material").value === "custom" ? null : $("material").value,
-      radius: parseFloat($("radius").value) * 1e-9,
-      n: parseFloat($("n").value),
-      k: parseFloat($("k").value) || 0,
-      density: parseFloat($("density").value),
+    setup: {
+      version: 1,
+      particle: {
+        material: $("material").value === "custom" ? null : $("material").value,
+        radius: parseFloat($("radius").value) * 1e-9,
+        n: parseFloat($("n").value),
+        k: parseFloat($("k").value) || 0,
+        density: parseFloat($("density").value),
+      },
+      environment: {
+        medium_index: parseFloat($("medium").value),
+        temperature: parseFloat($("temperature").value) || 300,
+      },
+      trap: { fields: beams },
     },
-    beams,
-    dark_focus: dark,
-    multipoles: mp,
-    dipole_overlay: $("dipole").checked,
-    temperature: parseFloat($("temperature").value) || 300,
-    scan: { z_range: zr, x_range: xr, z_points: Math.round(npts * 1.5) | 1, x_points: npts,
-            map_nx: 13, map_nz: 17, intensity_n: 60 },
+    options: {
+      dark_focus: dark,
+      multipoles: mp,
+      dipole_overlay: $("dipole").checked,
+      scan: { z_range: zr, x_range: xr, z_points: Math.round(npts * 1.5) | 1, x_points: npts,
+              map_nx: 13, map_nz: 17, intensity_n: 60 },
+    },
   };
 }
 
-function applyRequest(req) {
-  $("wavelength").value = +(req.wavelength * 1e9).toPrecision(6);
-  $("medium").value = req.medium_index ?? 1.0;
-  const p = req.particle;
+function applyRequest({ setup, options = {} }) {
+  const beams = setup.trap.fields.filter((f) => f.kind === "beam");
+  const env = setup.environment || {};
+  $("wavelength").value = +(beams[0].wavelength * 1e9).toPrecision(6);
+  $("medium").value = env.medium_index ?? 1.0;
+  const p = setup.particle;
   $("material").value = p.material || "custom";
   $("radius").value = +(p.radius * 1e9).toPrecision(6);
   $("n").value = +Number(p.n).toPrecision(6);
   $("k").value = p.k ?? 0;
   $("density").value = p.density;
-  const P = req.beams.reduce((s, b) => s + (b.power ?? 0), 0);
+  const P = beams.reduce((s, b) => s + (b.power ?? 0), 0);
   $("power").value = +(P * 1e3).toPrecision(6);
-  beam1.write(req.beams[0]);
-  const two = req.beams.length > 1;
+  beam1.write(beams[0]);
+  const two = beams.length > 1;
   $("beam2-on").checked = two;
   if (two) {
-    beam2.write(req.beams[1]);
-    $("ratio").value = +((req.beams[1].power || 0) / (req.beams[0].power || 1)).toPrecision(4);
-    $("phase").value = +(((req.beams[1].phase || 0) - (req.beams[0].phase || 0)) / Math.PI).toPrecision(4);
+    beam2.write(beams[1]);
+    $("ratio").value = +((beams[1].power || 0) / (beams[0].power || 1)).toPrecision(4);
+    $("phase").value = +(((beams[1].phase || 0) - (beams[0].phase || 0)) / Math.PI).toPrecision(4);
   }
-  $("dark-focus").checked = !!req.dark_focus;
+  $("dark-focus").checked = !!options.dark_focus;
   document.querySelectorAll("[data-mp]").forEach((c) => { c.checked = true; });
-  $("dipole").checked = !!req.dipole_overlay;
-  const sc = req.scan || {};
+  $("dipole").checked = !!options.dipole_overlay;
+  const sc = options.scan || {};
   $("zrange").value = +((sc.z_range ?? 3e-6) * 1e6).toPrecision(4);
   $("xrange").value = +((sc.x_range ?? 1.5e-6) * 1e6).toPrecision(4);
   $("npts").value = sc.x_points ?? 41;
-  $("temperature").value = req.temperature ?? 300;
+  $("temperature").value = env.temperature ?? 300;
   syncBeam2();
 }
 
@@ -244,7 +262,7 @@ async function run() {
   const t0 = performance.now();
   try {
     const out = await backend.call("compute", JSON.stringify(req));
-    if (!out.ok) throw new Error(out.error);
+    if (!out.ok) throw new Error(out.path ? `${out.path}: ${out.error}` : out.error);
     lastResult = out.result;
     lastReq = req;
     render(lastResult, req);
@@ -268,7 +286,7 @@ function tile(label, value, sub, help, hint) {
 function render(r, req) {
   const banner = $("trap-banner");
   banner.hidden = false;
-  const wl = req.wavelength;
+  const wl = r.wavelength;
   if (r.stable) {
     banner.className = "banner good";
     banner.textContent = "✓ Stable 3D trap — the light holds the particle in all three directions";
@@ -287,7 +305,7 @@ function render(r, req) {
     r.stiffness.x !== null ? `κ = ${fmtE(r.stiffness.x)}, ${fmtE(r.stiffness.y)} N/m` : "", "fr"));
   const d = r.depth || {};
   const deep = d.kT !== undefined && d.kT !== null && r.stable;
-  tiles.push(tile(`Trap depth (${d.temperature ?? req.temperature} K)`,
+  tiles.push(tile(`Trap depth (${d.temperature ?? req.setup.environment.temperature} K)`,
     deep ? `${fmtE(d.kT)} k<sub>B</sub>T` : "—",
     d.K !== undefined && r.stable ? `${fmtE(d.K)} K${d.bounded && !(d.bounded.x && d.bounded.y && d.bounded.z) ? " · lower bound (scan edge)" : ""}` : "",
     "depth", deep ? (d.kT > 10 ? "deep enough to hold the particle" : "too shallow: thermal motion lets it escape") : ""));
@@ -390,7 +408,7 @@ function renderMap(r, req) {
     hovertemplate: "%{text}<extra></extra>", showlegend: false };
   const shapes = [];
   if (r.z_eq !== null) {
-    const rad = req.particle.radius * 1e6;
+    const rad = req.setup.particle.radius * 1e6;
     const [cx, cy] = P(0, r.z_eq * 1e6);
     shapes.push({ type: "circle", x0: cx - rad, x1: cx + rad, y0: cy - rad, y1: cy + rad,
       line: { color: r.stable ? css("--good") : css("--bad"), width: 2 },
@@ -444,7 +462,7 @@ async function runSweep() {
   const n = Math.max(2, Math.min(200, parseInt($("sw-n").value, 10) || 21));
   const scale = variable === "power" ? 1e-3 : 1e-9;
   const req = readRequest();
-  req.dipole_overlay = false;
+  req.options.dipole_overlay = false;
   sweepCancel = false;
   $("sw-run").disabled = true;
   $("sw-cancel").disabled = false;
@@ -641,7 +659,7 @@ async function init() {
 
 async function loadPreset(key) {
   const p = PRESETS[key];
-  applyRequest(clone(p.request));
+  applyRequest(clone({ setup: p.setup, options: p.options }));
   const note = $("preset-note");
   note.hidden = !p.note && p.validated !== false;
   note.textContent = (p.validated === false ? "⚠ Illustrative, not validated. " : "") + (p.note || "");
