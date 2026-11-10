@@ -1,0 +1,91 @@
+/*
+ * levtrap theme tokens. Components use only these variables; light and dark
+ * are switched by data-theme on <html>.
+ *
+ * Palette: graphite ink on a cool paper, an infrared-red accent for the
+ * laser, a cyan for fields and a violet for the particle.
+ */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #eceef2;
+  --border: #d5d9e0;
+  --text: #171a21;
+  --text-muted: #5a6170;
+  --accent: #c42a3b; /* laser */
+  --accent-soft: #fbe6e8;
+  --on-accent: #ffffff;
+  --field: #0e7490;
+  --particle: #6d28d9;
+  --ok: #15803d;
+  --warn: #b45309;
+  --danger: #b91c1c;
+  --focus-ring: #2563eb;
+  --shadow: 0 1px 2px rgb(23 26 33 / 6%), 0 4px 16px rgb(23 26 33 / 6%);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d1015;
+  --surface: #151a22;
+  --surface-2: #1c222c;
+  --border: #2b3340;
+  --text: #e6e8ee;
+  --text-muted: #98a0b0;
+  --accent: #ff5c6c;
+  --accent-soft: #3a1a20;
+  --on-accent: #12060a;
+  --field: #38bdf8;
+  --particle: #a78bfa;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --focus-ring: #60a5fa;
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 16px rgb(0 0 0 / 30%);
+}
+
+:root {
+  --font-sans: var(--font-plex), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jbmono), ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.75rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
