@@ -4,7 +4,7 @@ See ``docs/ARCHITECTURE.md`` §4 (Setup) and §6 (Result).  Everything is SI.
 
 This first version covers what the OTT port already computes: one beam, or
 one coherent group of two beams, travelling along +z with the focus at the
-origin.  It delegates to :func:`levtrap.api.analyse`, so the numbers are
+origin.  It calls :func:`levtrap.api.analyse` on the setup, so the numbers are
 those of the validated engine.  Other setups raise :class:`UnsupportedSetup`
 naming what is missing; the generic field solver replaces this path.
 """
@@ -18,7 +18,8 @@ from . import __version__
 from .materials import get_material
 from .setup import SetupError, parse, unknown_keys
 
-__all__ = ["solve", "solve_json", "UnsupportedSetup", "RESULT_VERSION", "WANTS"]
+__all__ = ["solve", "solve_json", "check_supported", "resolve_particle", "UnsupportedSetup",
+           "RESULT_VERSION", "WANTS"]
 
 RESULT_VERSION = 1
 WANTS = ("curves",)
@@ -29,8 +30,8 @@ class UnsupportedSetup(NotImplementedError):
     """The setup is valid but this version of the engine cannot compute it yet."""
 
 
-def _legacy_request(s: dict, warnings: list[str]) -> dict:
-    """Translate a setup into the request of :func:`levtrap.api.analyse`."""
+def check_supported(s: dict) -> None:
+    """Raise :class:`UnsupportedSetup` unless this engine computes the parsed setup."""
     fields = s["trap"]["fields"]
     others = sorted({f["kind"] for f in fields if f["kind"] != "beam"})
     if others:
@@ -50,30 +51,22 @@ def _legacy_request(s: dict, warnings: list[str]) -> dict:
                  (b["coherent_with"] is not None and b["coherent_with"] == a.get("id"))
         if not linked:
             raise UnsupportedSetup("two beams that are not coherent with each other are not computed yet")
-    wl = beams[0]["wavelength"]
 
+
+def resolve_particle(s: dict) -> dict:
+    """Fill the particle's missing n, k and density from its material at the
+    beam wavelength (in place); returns the particle."""
     p = s["particle"]
-    n, k, density = p["n"], p["k"], p["density"]
-    if p["material"] is not None and (n is None or k is None or density is None):
+    wl = s["trap"]["fields"][0]["wavelength"]
+    if p["material"] is not None and (p["n"] is None or p["k"] is None or p["density"] is None):
         m = get_material(p["material"], wl)
-        if not m["valid"] and n is None:
+        if not m["valid"] and p["n"] is None:
             raise SetupError("particle.material", f"no refractive-index data for {p['material']} at "
                                                   f"{wl * 1e9:.0f} nm; give n and k")
-        n = m["n"] if n is None else n
-        k = m["k"] if k is None else k
-        density = m["density"] if density is None else density
-
-    def beam(b: dict) -> dict:
-        f = b["focus"]
-        spec = dict(type=b["mode"]["type"], mode=b["mode"]["indices"], power=b["power"],
-                    polarisation=b["polarisation"], phase=b["phase"])
-        spec.update({key: f[key] for key in ("NA", "waist", "angle_deg") if f.get(key) is not None})
-        return spec
-
-    return dict(wavelength=wl, medium_index=s["environment"]["medium_index"],
-                temperature=s["environment"]["temperature"],
-                particle=dict(radius=p["radius"], n=n, k=k, density=density),
-                beams=[beam(b) for b in beams])
+        for key in ("n", "k", "density"):
+            if p[key] is None:
+                p[key] = m[key]
+    return p
 
 
 def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
@@ -110,8 +103,9 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     raw = json.loads(setup) if isinstance(setup, str) else setup
     s = parse(raw)
     warnings = [f"{path}: unknown key, ignored" for path in unknown_keys(raw)]
-    req = _legacy_request(s, warnings)
-    r = analyse(req, detail=False)
+    check_supported(s)
+    p = resolve_particle(s)
+    r = analyse(s, detail=False)
     warnings += r.get("notes", [])
 
     z_eq = r["z_eq"]
@@ -132,8 +126,7 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
         equilibrium=None if z_eq is None else [0.0, 0.0, z_eq],
         modes=modes,
         depth=dict(J=depth.get("U", 0.0), K=depth.get("K", 0.0), kT=depth.get("kT", 0.0)),
-        particle=dict(n=req["particle"]["n"], k=req["particle"]["k"],
-                      density=req["particle"]["density"], mass=r["mass"]),
+        particle=dict(n=p["n"], k=p["k"], density=p["density"], mass=r["mass"]),
         optical=dict(P_sca=r["at"]["P_sca"], P_abs=r["at"]["P_abs"], power=r["power"],
                      Qext=r["mie"]["Qext"], Qsca=r["mie"]["Qsca"], Qabs=r["mie"]["Qabs"],
                      size_parameter=r["mie"]["x"], Nmax=r["Nmax"]),

@@ -48,14 +48,9 @@ def test_result_shape(ott):
 
 
 def test_matches_analyse():
-    """solve() must give exactly the numbers of the validated legacy entry point."""
+    """solve() reports exactly the numbers of api.analyse (the web page's path)."""
     r = solve(DEFAULT_SETUP, want=["curves"])
-    silica = api.get_material("SiO2", 1.064e-6)
-    ref = api.analyse(dict(
-        wavelength=1.064e-6, medium_index=1.0, temperature=300.0,
-        particle=dict(radius=1e-7, n=silica["n"], k=silica["k"], density=silica["density"]),
-        beams=[dict(type="lg", mode=[0, 0], NA=0.8, power=0.2, polarisation="x", phase=0.0)]),
-        detail=False)
+    ref = api.analyse(*api.prepare(dict(setup=DEFAULT_SETUP)), detail=False)
     assert r["stable"] == ref["stable"]
     assert r["equilibrium"][2] == ref["z_eq"]
     for m in r["modes"]:

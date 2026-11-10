@@ -28,7 +28,7 @@ const presets = JSON.parse(api.presets());
 for (const [key, p] of Object.entries(presets)) {
   for (const pass of ["cold", "warm"]) {
     const t = performance.now();
-    const out = JSON.parse(api.compute(JSON.stringify(p.request)));
+    const out = JSON.parse(api.compute(JSON.stringify({ setup: p.setup, options: p.options })));
     const dt = (performance.now() - t) / 1000;
     if (!out.ok) { fail.push(`${key}: ${out.error}`); break; }
     console.log(`${key} (${pass} beam cache): ${dt.toFixed(2)} s`, JSON.stringify(out.result.timing),
@@ -37,7 +37,7 @@ for (const [key, p] of Object.entries(presets)) {
 }
 {
   const t = performance.now();
-  const v = JSON.parse(api.field3d(JSON.stringify(presets.silica_1064.request), "{}"));
+  const v = JSON.parse(api.field3d(JSON.stringify({ setup: presets.silica_1064.setup, options: presets.silica_1064.options }), "{}"));
   console.log(`3D view volume (${v.dims.join("x")}): ${((performance.now() - t) / 1000).toFixed(2)} s`);
 }
 {
