@@ -31,6 +31,11 @@ through [Pyodide](https://pyodide.org) and locally for research scripts.
 * **Paper reproduction:** figures of arXiv:2607.09896 (dark trapping of
   WS₂): see [`docs/paper/`](docs/paper/README.md).
 
+> **levtrap 2 is being planned and built.** The design is in
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), the work is tracked in
+> [issue #6](https://github.com/macroscopicquantumoptics/levtrap/issues/6).
+> The new engine entry point is `levtrap.solve.solve(setup)`.
+
 ## Quick start — web
 
 Open the website and pick a preset. The first visit downloads ~25 MB
