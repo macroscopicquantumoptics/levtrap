@@ -31,3 +31,44 @@ jobs:
           node-version: "22"
       - run: npm install --no-save pyodide@0.29.5
       - run: node scripts/pyodide_check.mjs dist/*.whl
+
+  app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install the engine (for the local backend) and the app
+        run: |
+          pip install -e "..[test]" build
+          npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - name: Build the static export under a sub-path
+        run: NEXT_BASE_PATH=/next npm run build
+      - name: Stage the wheel for the Pyodide check
+        run: |
+          python -m build --wheel --outdir ../dist ..
+          mkdir -p out/wheels
+          cp ../dist/*.whl out/wheels/
+          echo "{\"wheel\": \"$(basename ../dist/*.whl)\"}" > out/wheels/manifest.json
+      - name: Playwright (local backend, and Pyodide in the browser)
+        run: |
+          npx playwright install --with-deps chromium
+          E2E_PYODIDE=1 npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app-screenshots
+          path: app/screenshots
+          if-no-files-found: ignore

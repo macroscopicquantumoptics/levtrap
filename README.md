@@ -65,6 +65,24 @@ python scripts/devserver.py            # open http://localhost:8000/?backend=loc
 
 (Plotly is still loaded from the CDN.)
 
+### levtrap 2 preview (`app/`)
+
+The new front end (Next static export, React, TypeScript) is deployed at
+`/next/` beside the current site until it reaches parity
+(`docs/ARCHITECTURE.md`). To work on it with the native engine:
+
+```bash
+pip install -e .
+python scripts/devserver.py            # native engine on :8000
+```
+
+```bash
+cd app && npm install && npm run dev   # open http://localhost:3000/?backend=local
+```
+
+Checks: `npm run typecheck`, `npm run lint`, `npm test`, and for the
+browser tests `NEXT_BASE_PATH=/next npm run build && npm run e2e`.
+
 ## Quick start — Python
 
 ```bash
@@ -128,6 +146,8 @@ tests/         ported OTT tests + analytic checks (pytest)
 web/           index.html app.js lens.html lens.js lens3d.js common.js
                worker.js view3d.js style.css
                (static site; Plotly, three.js and Pyodide from jsDelivr)
+app/           levtrap 2 front end (Next, React, TypeScript); src/engine/ is
+               the typed engine client, public/engine/worker.js the Pyodide worker
 scripts/       devserver.py (native backend), pyodide_check.mjs, ui_check.js (CI)
 ci/workflows/  test.yml, pages.yml — copy to .github/workflows/ (see below)
 examples/      paper_2607_09896.py
@@ -146,7 +166,8 @@ git add .github && git commit -m "Enable CI and Pages" && git push
 
 Then, in **Settings → Pages**, set **Source = GitHub Actions**. `pages.yml`
 runs on every push to `main`: it runs the tests, builds the wheel, checks it
-in Pyodide (OTT benchmark) and in a headless browser, and deploys `web/`.
+in Pyodide (OTT benchmark) and in a headless browser, and deploys `web/`
+with the new app (`app/`) at `/next/`.
 
 ## Adding a feature
 

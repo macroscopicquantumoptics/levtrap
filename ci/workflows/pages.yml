@@ -55,6 +55,17 @@ jobs:
           name: ui-screenshot
           path: ui_check.png
           if-no-files-found: ignore
+      - uses: actions/configure-pages@v5
+        id: pages
+      - name: Build the new app (app/) at /next/
+        working-directory: app
+        env:
+          NEXT_BASE_PATH: ${{ steps.pages.outputs.base_path }}/next
+        run: |
+          npm ci
+          npm run build
+          cp -r ../web/wheels out/wheels
+          cp -r out ../web/next
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
