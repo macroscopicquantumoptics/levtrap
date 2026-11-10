@@ -55,6 +55,22 @@ jobs:
           name: ui-screenshot
           path: ui_check.png
           if-no-files-found: ignore
+      - name: Build the new app (app/) for /next/
+        working-directory: app
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/next
+        run: |
+          npm ci
+          mkdir -p public/wheels
+          cp ../web/wheels/* public/wheels/
+          npm run build
+      - name: Browser check of the new app (Pyodide worker)
+        working-directory: app
+        run: |
+          npx playwright install --with-deps chromium
+          E2E_PYODIDE=1 npx playwright test --trace off
+      - name: Stage the new app next to the current site
+        run: cp -r app/out web/next
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
