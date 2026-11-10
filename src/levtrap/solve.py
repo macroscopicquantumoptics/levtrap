@@ -16,6 +16,7 @@ from typing import Any, Iterable
 
 from . import __version__
 from .materials import get_material
+from .rates import rates_block
 from .setup import SetupError, parse, unknown_keys
 
 __all__ = ["solve", "solve_json", "check_supported", "resolve_particle", "UnsupportedSetup",
@@ -92,6 +93,9 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     * ``particle`` — resolved ``n``, ``k``, ``density`` and ``mass`` [kg].
     * ``optical`` — scattered and absorbed power [W] at the equilibrium, and
       the plane-wave Mie efficiencies.
+    * ``rates`` — gas damping [1/s], and per mode the gas, recoil and total
+      reheating [phonons/s], Q, coherence time [s], coherent oscillations and
+      the pressure [Pa] where recoil equals gas heating (:mod:`levtrap.rates`).
     * ``models``, ``warnings`` — what was used and what to be careful about.
     """
     from .api import analyse  # late import: api imports the whole engine
@@ -135,6 +139,12 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
         warnings=warnings,
         time=r["time"],
     )
+    q = r["mie"]
+    rates, rate_models = rates_block(s, modes=modes, mass=r["mass"], P_sca=r["at"]["P_sca"],
+                                     P_abs=r["at"]["P_abs"],
+                                     ed_fraction=q["multipoles"]["ED"] / q["Qsca"] if q["Qsca"] > 0 else None)
+    result["rates"] = rates
+    result["models"] += rate_models
     if "curves" in want:
         ln = r["lines"]
         result["curves"] = dict(
