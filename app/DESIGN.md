@@ -5,8 +5,8 @@ the wording below are proposals until a human approves them. D2 to D6 build
 on what is approved; section 12 lists the decisions that are open.
 
 The prototype is clickable and runs on the real engine. Try it with
-`npm run dev` (see the README), or look at the screenshots in
-[`design/screens/`](design/screens/): section 13 says what each one shows.
+`npm run dev` (see the README), or look at the screenshots, in order and
+with captions, in [`design/README.md`](design/README.md).
 
 ![The tweezer preset: the trap drawn, its parts labelled, the answer at the bottom](design/screens/w1-2-answer-desktop-light.webp)
 
@@ -316,7 +316,8 @@ gravity, a beam's direction and focus position.
 ## 13. The screenshots
 
 `npm run test:e2e` photographs the walkthroughs; `npm run shots` copies them
-here as lossless WebP. Names end in the view and the theme.
+to `design/screens/` as lossless WebP. [`design/README.md`](design/README.md)
+shows them in order. Names end in the view and the theme.
 
 | File | Shows |
 |---|---|
