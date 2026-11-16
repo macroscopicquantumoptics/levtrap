@@ -1,8 +1,14 @@
 import type { NextConfig } from "next";
 
-// The site is served from a sub-path on GitHub Pages (e.g. /levtrap/next).
-// NEXT_BASE_PATH sets it at build time; empty for local development.
-const basePath = process.env.NEXT_BASE_PATH ?? "";
+/**
+ * Static export, served from a sub-path on GitHub Pages.
+ *
+ *   BASE_PATH=/levtrap/next npm run build   ->  out/, served at /levtrap/next/
+ *   npm run build                           ->  out/, served at /
+ *
+ * The base path is baked into the bundle at build time.
+ */
+const basePath = (process.env.BASE_PATH ?? "").replace(/\/+$/, "");
 
 const nextConfig: NextConfig = {
   output: "export",

@@ -6,4 +6,3 @@ build/
 .pytest_cache/
 web/wheels/
 node_modules/
-web/next/

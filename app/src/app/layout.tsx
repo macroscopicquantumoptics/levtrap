@@ -1,24 +1,30 @@
-import type { Metadata, Viewport } from "next";
-import "@fontsource-variable/inter";
-import "@fontsource-variable/jetbrains-mono";
+import type { Metadata } from "next";
+import localFont from "next/font/local";
+import { THEME_SCRIPT } from "@/lib/theme";
 import "./globals.css";
+
+// Self-hosted (SIL OFL 1.1, licences in src/fonts/)
+const plex = localFont({
+  src: "../fonts/ibm-plex-sans-latin-wght-normal.woff2",
+  variable: "--font-plex",
+  weight: "100 700",
+  display: "swap",
+});
+const mono = localFont({
+  src: "../fonts/jetbrains-mono-latin-wght-normal.woff2",
+  variable: "--font-jbmono",
+  weight: "100 800",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "levtrap",
-  description: "Trap simulator for levitated particles: optical tweezers, Paul traps and hybrids.",
+  description: "Trap frequencies, depth and rates for levitated particles in optical, Paul and hybrid traps.",
 };
 
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-};
-
-// Runs before first paint: stored choice, else the system preference.
-const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("levtrap-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`;
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" data-theme="light" suppressHydrationWarning>
+    <html lang="en" data-theme="light" className={`${plex.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>

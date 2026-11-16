@@ -1,161 +1,106 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  EngineClient,
-  EngineError,
-  HttpTransport,
-  WorkerTransport,
-  chooseBackend,
-  isSuperseded,
-  parseReply,
-  type EngineStatus,
-  type WorkerLike,
-} from "./client.ts";
-import { DEFAULT_SETUP } from "./defaults.ts";
-import type { Result } from "./types.ts";
+import { test } from "node:test";
+import { createEngine, EngineError, isAbortError, type EngineStatus, type Transport } from "./client.ts";
+import { DEFAULT_SETUP } from "./setup.ts";
+import type { Result, SolveResponse } from "./types.ts";
 
-const RESULT: Result = {
-  version: 1,
-  stable: true,
-  equilibrium: [0, 0, 2e-7],
-  modes: [
-    { name: "x", axis: [1, 0, 0], frequency: 2e5, stiffness: 1e-5 },
-    { name: "y", axis: [0, 1, 0], frequency: 3e5, stiffness: 3e-5 },
-    { name: "z", axis: [0, 0, 1], frequency: 1e5, stiffness: 3e-6 },
-  ],
-  depth: { J: 1e-18, K: 1e5, kT: 380 },
-  models: [],
-  warnings: [],
-};
-
-/** A fake worker: records posted messages; the test replies by hand. */
-class FakeWorker implements WorkerLike {
-  sent: Record<string, unknown>[] = [];
-  private fn: ((ev: { data: unknown }) => void) | null = null;
-  postMessage(msg: unknown) {
-    this.sent.push(msg as Record<string, unknown>);
-  }
-  addEventListener(_t: "message", fn: (ev: { data: unknown }) => void) {
-    this.fn = fn;
-  }
-  terminate() {}
-  emit(data: unknown) {
-    this.fn?.({ data });
-  }
-  calls() {
-    return this.sent.filter((m) => "method" in m);
-  }
+/** A transport whose requests the test answers by hand. */
+function fakeTransport() {
+  const calls: { setup: string; want: string; signal: AbortSignal; answer(r: SolveResponse): void }[] = [];
+  let report: (s: EngineStatus) => void = () => {};
+  const transport: Transport = {
+    start(onStatus) {
+      report = onStatus;
+    },
+    request(setup, want, signal) {
+      return new Promise((resolve, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        calls.push({ setup, want, signal, answer: resolve });
+      });
+    },
+    dispose() {},
+  };
+  return { transport, calls, report: (s: EngineStatus) => report(s) };
 }
 
-const reply = (result: Result) => JSON.stringify({ ok: true, result });
+const result = (f: number) => ({ version: 1, modes: [{ frequency: f }] }) as unknown as Result;
 
-test("solve sends the setup as JSON and parses the reply", async () => {
-  const w = new FakeWorker();
-  const engine = new EngineClient(new WorkerTransport(w));
+test("solve sends the setup and wants as JSON and returns the result", async () => {
+  const { transport, calls } = fakeTransport();
+  const engine = createEngine(transport);
   const p = engine.solve(DEFAULT_SETUP, ["curves"]);
-  const [call] = w.calls();
-  assert.equal(call.method, "solve");
-  const [setupJson, wantJson] = call.args as string[];
-  assert.deepEqual(JSON.parse(setupJson), DEFAULT_SETUP);
-  assert.deepEqual(JSON.parse(wantJson), ["curves"]);
-  w.emit({ id: call.id, ok: true, result: reply(RESULT) });
-  assert.deepEqual(await p, RESULT);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(JSON.parse(calls[0].setup), DEFAULT_SETUP);
+  assert.deepEqual(JSON.parse(calls[0].want), ["curves"]);
+  calls[0].answer({ ok: true, result: result(1e5) });
+  assert.equal((await p).modes[0].frequency, 1e5);
 });
 
-test("a newer request supersedes the older one on the same channel", async () => {
-  const w = new FakeWorker();
-  const engine = new EngineClient(new WorkerTransport(w));
+test("a newer solve supersedes the older one", async () => {
+  const { transport, calls } = fakeTransport();
+  const engine = createEngine(transport);
   const first = engine.solve(DEFAULT_SETUP);
   const second = engine.solve(DEFAULT_SETUP);
-  await assert.rejects(first, (e) => isSuperseded(e));
-  const [c1, c2] = w.calls();
-  assert.ok(w.sent.some((m) => m.type === "cancel" && m.id === c1.id), "worker told to drop the old call");
-  // A late reply to the superseded call is ignored.
-  w.emit({ id: c1.id, ok: true, result: reply({ ...RESULT, stable: false }) });
-  w.emit({ id: c2.id, ok: true, result: reply(RESULT) });
-  assert.equal((await second).stable, true);
+  await assert.rejects(first, (err) => isAbortError(err));
+  assert.equal(calls[0].signal.aborted, true);
+  assert.equal(calls[1].signal.aborted, false);
+  calls[1].answer({ ok: true, result: result(2) });
+  assert.equal((await second).modes[0].frequency, 2);
 });
 
-test("different channels do not supersede each other", async () => {
-  const w = new FakeWorker();
-  const engine = new EngineClient(new WorkerTransport(w));
-  const a = engine.solve(DEFAULT_SETUP, [], { channel: "main" });
-  const b = engine.solve(DEFAULT_SETUP, [], { channel: "sweep" });
-  const [c1, c2] = w.calls();
-  w.emit({ id: c2.id, ok: true, result: reply(RESULT) });
-  w.emit({ id: c1.id, ok: true, result: reply(RESULT) });
-  await Promise.all([a, b]);
+test("solves under different keys do not supersede each other", async () => {
+  const { transport, calls } = fakeTransport();
+  const engine = createEngine(transport);
+  const a = engine.solve(DEFAULT_SETUP, [], { key: "numbers" });
+  const b = engine.solve(DEFAULT_SETUP, ["curves"], { key: "plot" });
+  calls[0].answer({ ok: true, result: result(1) });
+  calls[1].answer({ ok: true, result: result(2) });
+  assert.equal((await a).modes[0].frequency, 1);
+  assert.equal((await b).modes[0].frequency, 2);
 });
 
-test("an external abort signal cancels the request", async () => {
-  const w = new FakeWorker();
-  const engine = new EngineClient(new WorkerTransport(w));
+test("an AbortSignal cancels a solve", async () => {
+  const { transport, calls } = fakeTransport();
+  const engine = createEngine(transport);
   const ctrl = new AbortController();
   const p = engine.solve(DEFAULT_SETUP, [], { signal: ctrl.signal });
-  ctrl.abort(new Error("user cancelled"));
-  await assert.rejects(p, /user cancelled/);
+  ctrl.abort();
+  await assert.rejects(p, (err) => isAbortError(err));
+  assert.equal(calls[0].signal.aborted, true);
 });
 
-test("load progress and ready are reported", () => {
-  const w = new FakeWorker();
-  const t = new WorkerTransport(w);
-  const seen: EngineStatus[] = [];
-  t.subscribe((s) => seen.push(s));
-  w.emit({ type: "progress", stage: "Loading NumPy…", fraction: 0.35 });
-  w.emit({ type: "ready", versions: { levtrap: "0.1.0" } });
-  assert.deepEqual(
-    seen.map((s) => s.state),
-    ["loading", "loading", "ready"],
-  );
-  assert.equal((seen[1] as { fraction: number }).fraction, 0.35);
+test("an already aborted signal never reaches the transport", async () => {
+  const { transport, calls } = fakeTransport();
+  const engine = createEngine(transport);
+  await assert.rejects(engine.solve(DEFAULT_SETUP, [], { signal: AbortSignal.abort() }), (err) => isAbortError(err));
+  assert.equal(calls.length, 0);
 });
 
-test("a fatal load error fails pending and later calls", async () => {
-  const w = new FakeWorker();
-  const engine = new EngineClient(new WorkerTransport(w));
+test("engine errors carry their kind and key path", async () => {
+  const { transport, calls } = fakeTransport();
+  const engine = createEngine(transport);
   const p = engine.solve(DEFAULT_SETUP);
-  w.emit({ type: "fatal", error: "network down" });
-  await assert.rejects(p, (e) => e instanceof EngineError && e.kind === "transport");
-  await assert.rejects(engine.solve(DEFAULT_SETUP), /network down/);
-});
-
-test("engine failures carry kind and key path", () => {
-  assert.throws(
-    () => parseReply(JSON.stringify({ ok: false, kind: "setup", path: "particle.radius", error: "is required" })),
-    (e) => e instanceof EngineError && e.kind === "setup" && e.path === "particle.radius",
-  );
-  assert.throws(
-    () => parseReply(JSON.stringify({ ok: false, kind: "unsupported", error: "paul fields are not computed yet" })),
-    (e) => e instanceof EngineError && e.kind === "unsupported",
-  );
-});
-
-test("HTTP transport posts {method, args} to the local devserver", async () => {
-  let body: { method: string; args: string[] } | null = null;
-  const fakeFetch = (async (_url: string, init: RequestInit) => {
-    body = JSON.parse(init.body as string);
-    return new Response(JSON.stringify({ ok: true, result: reply(RESULT) }));
-  }) as unknown as typeof fetch;
-  const t = new HttpTransport("http://127.0.0.1:8000/api", fakeFetch);
-  const engine = new EngineClient(t);
-  const r = await engine.solve(DEFAULT_SETUP);
-  assert.equal(r.modes.length, 3);
-  assert.equal(body!.method, "solve");
-  let status: EngineStatus | null = null;
-  t.subscribe((s) => (status = s));
-  assert.equal(status!.state, "ready");
-});
-
-test("backend choice from the page URL", () => {
-  assert.deepEqual(chooseBackend("", "https://x.io", "/levtrap/next"), {
-    kind: "pyodide",
-    url: "/levtrap/next/engine/worker.js",
+  calls[0].answer({ ok: false, kind: "setup", path: "particle.radius", error: "must be greater than 0" });
+  await assert.rejects(p, (err) => {
+    assert.ok(err instanceof EngineError);
+    assert.equal(err.kind, "setup");
+    assert.equal(err.path, "particle.radius");
+    assert.equal(err.message, "particle.radius: must be greater than 0");
+    return true;
   });
-  assert.deepEqual(chooseBackend("?backend=local", "http://127.0.0.1:8000", "/next"), {
-    kind: "local",
-    url: "http://127.0.0.1:8000/api",
-  });
-  assert.equal(chooseBackend("?backend=local", "http://localhost:3000", "", "http://127.0.0.1:8000/api").url,
-    "http://127.0.0.1:8000/api");
-  assert.equal(chooseBackend("?backend=local&api=http://h:1/api", "o", "").url, "http://h:1/api");
+});
+
+test("status follows the transport and notifies subscribers", () => {
+  const { transport, report } = fakeTransport();
+  const engine = createEngine(transport);
+  assert.equal(engine.status.state, "loading");
+  let calls = 0;
+  const off = engine.subscribe(() => calls++);
+  report({ state: "loading", stage: "Loading NumPy", fraction: 0.35 });
+  report({ state: "ready", versions: { backend: "pyodide" } });
+  assert.equal(calls, 2);
+  assert.equal(engine.status.state, "ready");
+  off();
+  report({ state: "failed", error: "x" });
+  assert.equal(calls, 2);
 });

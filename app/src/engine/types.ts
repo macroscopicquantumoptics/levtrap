@@ -1,72 +1,106 @@
-// Setup and Result, version 1: the contract between the screen and the engine.
-// Mirrors src/levtrap/setup.py and src/levtrap/solve.py (docs/ARCHITECTURE.md §4, §6).
-// Everything is SI; particle charge is in elementary charges.
+/**
+ * Setup and Result, version 1: the only contract between the screen and the
+ * engine (docs/ARCHITECTURE.md §4 and §6). Mirrors src/levtrap/setup.py and
+ * src/levtrap/solve.py. Plain JSON, SI units, charge in elementary charges.
+ *
+ * Optional keys are those `setup.parse` fills with a default; the engine
+ * accepts a setup that leaves them out.
+ */
 
 export type Vec3 = [number, number, number];
 
-export type Material = "SiO2" | (string & {});
+// ---------------------------------------------------------------------------
+// Setup (setup.py)
+// ---------------------------------------------------------------------------
+
 export type Gas = "N2" | "He" | "air";
-export type JonesVector = [[number, number], [number, number]];
-export type Polarisation = "x" | "y" | "circular+" | "circular-" | JonesVector;
 
 export interface Particle {
-  radius: number; // m
-  material?: Material | null; // fills n, k, density at the beam wavelength
+  /** m */
+  radius: number;
+  /** Name from levtrap.materials, e.g. "SiO2"; n, k and density default to it. */
+  material?: string | null;
   n?: number | null;
   k?: number | null;
-  density?: number | null; // kg/m³
-  charge?: number; // e
+  /** kg/m³ */
+  density?: number | null;
+  /** elementary charges */
+  charge?: number;
 }
 
 export interface Environment {
-  pressure?: number; // Pa
-  temperature?: number; // K
+  /** Pa, default 1e-4 */
+  pressure?: number;
+  /** K, default 300 */
+  temperature?: number;
   gas?: Gas;
+  /** default 1 */
   medium_index?: number;
 }
 
-/** Exactly one of NA, waist or angle_deg. */
-export type Focus =
-  | { kind?: "lens"; NA: number; waist?: never; angle_deg?: never }
-  | { kind?: "lens"; waist: number; NA?: never; angle_deg?: never }
-  | { kind?: "lens"; angle_deg: number; NA?: never; waist?: never };
+/** Give exactly one of NA, waist [m] or angle_deg. */
+export type Focus = { kind?: "lens" } & (
+  | { NA: number; waist?: never; angle_deg?: never }
+  | { waist: number; NA?: never; angle_deg?: never }
+  | { angle_deg: number; NA?: never; waist?: never }
+);
 
 export interface BeamMode {
   type?: "lg" | "hg";
+  /** LG: [p, l]; HG: [m, n] */
   indices?: [number, number];
 }
 
-export interface BeamField {
-  kind: "beam";
+/** Jones vector [[re, im], [re, im]] in the beam's own (x, y) frame. */
+export type Jones = [[number, number], [number, number]];
+export type Polarisation = "x" | "y" | "circular+" | "circular-" | Jones;
+
+interface FieldBase {
+  /** Unique within the trap; required to be referenced by `coherent_with`. */
   id?: string;
-  wavelength: number; // m
-  power: number; // W
+}
+
+export interface BeamField extends FieldBase {
+  kind: "beam";
+  /** m, in vacuum */
+  wavelength: number;
+  /** W */
+  power: number;
   focus: Focus;
   mode?: BeamMode;
   polarisation?: Polarisation;
-  direction?: Vec3; // propagation axis
-  position?: Vec3; // focus point, m
-  phase?: number; // rad
+  /** propagation axis, default [0, 0, 1] */
+  direction?: Vec3;
+  /** focus point [m], default origin */
+  position?: Vec3;
+  /** rad */
+  phase?: number;
+  /** id of another beam this one interferes with */
   coherent_with?: string | null;
 }
 
-export interface PaulField {
+export interface PaulField extends FieldBase {
   kind: "paul";
-  id?: string;
   geometry: "linear" | "ring";
-  rf_voltage: number; // V amplitude
-  rf_frequency: number; // Hz
-  dc_voltage?: number; // V
-  endcap_voltage?: number; // V
-  r0: number; // m
-  z0: number; // m
+  /** V, amplitude */
+  rf_voltage: number;
+  /** Hz */
+  rf_frequency: number;
+  /** V */
+  dc_voltage?: number;
+  /** V */
+  endcap_voltage?: number;
+  /** m */
+  r0: number;
+  /** m */
+  z0: number;
   geometry_factors?: { radial?: number; axial?: number };
 }
 
-export interface GravityField {
+export interface GravityField extends FieldBase {
   kind: "gravity";
-  id?: string;
-  g?: Vec3; // m/s²
+  /** m/s², default [0, -9.81, 0] (y is up) */
+  g?: Vec3;
 }
 
 export type Field = BeamField | PaulField | GravityField;
@@ -79,64 +113,71 @@ export interface Setup {
 }
 
 // ---------------------------------------------------------------------------
+// Result (solve.py)
+// ---------------------------------------------------------------------------
 
-export interface Mode {
-  /** Nearest lab axis, "x" | "y" | "z". */
-  name?: string;
-  axis: Vec3; // unit vector
-  frequency: number | null; // Hz; null where the stiffness is not positive
-  stiffness: number | null; // N/m
-  depth?: number | null; // J
+/** Extra blocks `solve` computes only on request (solve.WANTS). */
+export type Want = "curves";
+
+export interface TrapMode {
+  /** "x" | "y" | "z" while the solver works along the lab axes */
+  name: string;
+  /** unit vector */
+  axis: Vec3;
+  /** Hz; null where the stiffness is not positive */
+  frequency: number | null;
+  /** N/m */
+  stiffness: number | null;
+  /** J, to the nearest barrier along this axis */
+  depth: number | null;
 }
 
-export interface ModelEntry {
+export interface ModelInfo {
   quantity: string;
   model: string;
-  validity: "ok" | "marginal" | "invalid" | (string & {});
+  validity: string;
   notes: string[];
 }
 
 export interface Curve {
-  position: number[]; // m
-  force: number[]; // N
+  /** m */
+  position: number[];
+  /** N */
+  force: number[];
 }
 
 export interface Result {
   version: 1;
-  engine?: string;
+  /** levtrap version that computed it */
+  engine: string;
   stable: boolean;
+  /** m; null when there is no equilibrium */
   equilibrium: Vec3 | null;
-  modes: Mode[];
+  modes: TrapMode[];
+  /** the smallest depth over the modes; zero when not stable */
   depth: { J: number; K: number; kT: number };
-  particle?: { n: number; k: number; density: number; mass: number };
-  optical?: {
+  /** resolved from the material; mass in kg */
+  particle: { n: number; k: number; density: number; mass: number };
+  optical: {
     P_sca: number;
     P_abs: number;
-    power?: number;
-    Qext?: number;
+    power: number;
+    Qext: number;
     Qsca: number;
     Qabs: number;
-    size_parameter?: number;
-    Nmax?: { beam: number; particle: number };
+    size_parameter: number;
+    Nmax: number;
   };
-  paul?: Record<string, unknown>;
-  rates?: Record<string, unknown>;
-  pattern?: Record<string, unknown>;
-  curves?: Record<string, Curve>;
-  models: ModelEntry[];
+  models: ModelInfo[];
+  /** sentences, ready to show */
   warnings: string[];
-  time?: number; // s
+  /** s, engine wall time */
+  time: number;
+  curves?: { x: Curve; y: Curve; z: Curve };
 }
 
-/** Extra blocks to compute on request. */
-export type Want = "curves";
-
-/** How solve_json reports a failure. */
-export interface EngineFailure {
-  ok: false;
-  kind: "setup" | "unsupported" | "internal";
-  error: string;
-  path?: string;
-}
-
-export type SolveReply = { ok: true; result: Result } | EngineFailure;
+/** What `solve_json` returns. */
+export type SolveResponse =
+  | { ok: true; result: Result }
+  | { ok: false; kind: "setup"; path: string; error: string }
+  | { ok: false; kind: "unsupported" | "internal"; error: string };

@@ -1,3 +1,4 @@
+node_modules/
 .next/
 out/
 next-env.d.ts
@@ -5,4 +6,3 @@ next-env.d.ts
 public/wheels/
 test-results/
 playwright-report/
-screenshots/

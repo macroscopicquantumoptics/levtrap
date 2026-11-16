@@ -2,28 +2,34 @@
 
 See ``docs/ARCHITECTURE.md`` §4 (Setup) and §6 (Result).  Everything is SI.
 
-This first version covers what the OTT port already computes: one beam, or
-one coherent group of two beams, travelling along +z with the focus at the
-origin.  It calls :func:`levtrap.api.analyse` on the setup, so the numbers are
-those of the validated engine.  Other setups raise :class:`UnsupportedSetup`
-naming what is missing; the generic field solver replaces this path.
+The setup becomes a list of fields (:mod:`levtrap.fields`) and the generic
+solver (:mod:`levtrap.solver`) finds the equilibrium, modes and depth of
+their summed force.  Computed so far: one beam, or one coherent group of two
+beams, travelling along +z with the focus at the origin, plus gravity.  Other
+setups raise :class:`UnsupportedSetup` naming what is missing.
 """
 
 from __future__ import annotations
 
 import json
+import math
+import time
 from typing import Any, Iterable
+
+import numpy as np
 
 from . import __version__
 from .materials import get_material
+from .rates import rates_block
 from .setup import SetupError, parse, unknown_keys
 
 __all__ = ["solve", "solve_json", "check_supported", "resolve_particle", "UnsupportedSetup",
-           "RESULT_VERSION", "WANTS"]
+           "RESULT_VERSION", "WANTS", "pattern_result"]
 
 RESULT_VERSION = 1
-WANTS = ("curves",)
-AXES = {"x": [1.0, 0.0, 0.0], "y": [0.0, 1.0, 0.0], "z": [0.0, 0.0, 1.0]}
+WANTS = ("curves", "pattern")
+SCAN_RANGES = (1.5e-6, 1.5e-6, 3e-6)  # half-widths [m] searched for the equilibrium (x, y, z)
+SCAN_POINTS = 61
 
 
 class UnsupportedSetup(NotImplementedError):
@@ -33,10 +39,12 @@ class UnsupportedSetup(NotImplementedError):
 def check_supported(s: dict) -> None:
     """Raise :class:`UnsupportedSetup` unless this engine computes the parsed setup."""
     fields = s["trap"]["fields"]
-    others = sorted({f["kind"] for f in fields if f["kind"] != "beam"})
+    others = sorted({f["kind"] for f in fields if f["kind"] not in ("beam", "gravity")})
     if others:
         raise UnsupportedSetup(f"{', '.join(others)} fields are not computed yet")
-    beams = fields
+    beams = [f for f in fields if f["kind"] == "beam"]
+    if not beams:
+        raise UnsupportedSetup("a setup without a beam is not computed yet")
     if len(beams) > 2:
         raise UnsupportedSetup("more than two beams are not computed yet")
     for i, b in enumerate(beams):
@@ -57,7 +65,7 @@ def resolve_particle(s: dict) -> dict:
     """Fill the particle's missing n, k and density from its material at the
     beam wavelength (in place); returns the particle."""
     p = s["particle"]
-    wl = s["trap"]["fields"][0]["wavelength"]
+    wl = next(f for f in s["trap"]["fields"] if f["kind"] == "beam")["wavelength"]
     if p["material"] is not None and (p["n"] is None or p["k"] is None or p["density"] is None):
         m = get_material(p["material"], wl)
         if not m["valid"] and p["n"] is None:
@@ -76,7 +84,8 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     ----------
     setup : dict or JSON text, see :mod:`levtrap.setup`.
     want : extra blocks to compute, from :data:`WANTS`.  ``"curves"`` adds the
-        force along x, y and z through the equilibrium.
+        force along x, y and z through the equilibrium; ``"pattern"`` adds the
+        radiation pattern at the equilibrium (:func:`pattern_result`).
 
     Returns
     -------
@@ -84,18 +93,27 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
 
     * ``stable`` — a restoring force along all three axes.
     * ``equilibrium`` — [x, y, z] in m, or ``None``.
-    * ``modes`` — per axis: ``axis`` (unit vector), ``frequency`` [Hz],
-      ``stiffness`` [N/m], ``depth`` [J].  ``frequency`` is ``None`` where
-      the stiffness is not positive.
+    * ``modes`` — the three eigen-modes of the stiffness matrix: ``name``
+      (the lab axis each is closest to), ``axis`` (unit vector),
+      ``frequency`` [Hz], ``stiffness`` [N/m], ``depth`` [J] along that axis.
+      ``frequency`` is ``None`` where the stiffness is not positive.
     * ``depth`` — the smallest of the three, as ``J``, ``K`` and ``kT`` (at
       the environment temperature); zero when not stable.
     * ``particle`` — resolved ``n``, ``k``, ``density`` and ``mass`` [kg].
     * ``optical`` — scattered and absorbed power [W] at the equilibrium, and
       the plane-wave Mie efficiencies.
+    * ``rates`` — gas damping [1/s], and per mode the gas, recoil and total
+      reheating [phonons/s], Q, coherence time [s], coherent oscillations and
+      the pressure [Pa] where recoil equals gas heating (:mod:`levtrap.rates`).
     * ``models``, ``warnings`` — what was used and what to be careful about.
     """
-    from .api import analyse  # late import: api imports the whole engine
+    # late imports: api and the fields pull in the whole engine
+    from .api import build_beam, build_tmatrix
+    from .derived import KB, mie_efficiencies, sphere_mass
+    from .fields import GravityField, OpticalField, total_force
+    from .solver import find_trap
 
+    t0 = time.perf_counter()
     want = tuple(want)
     bad = [w for w in want if w not in WANTS]
     if bad:
@@ -105,44 +123,94 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     warnings = [f"{path}: unknown key, ignored" for path in unknown_keys(raw)]
     check_supported(s)
     p = resolve_particle(s)
-    r = analyse(s, detail=False)
-    warnings += r.get("notes", [])
+    env = s["environment"]
+    nm, temp = float(env["medium_index"]), float(env["temperature"])
+    mass = sphere_mass(float(p["radius"]), float(p["density"]))
 
-    z_eq = r["z_eq"]
-    depth = r.get("depth") or {}
-    modes = [dict(name=a, axis=AXES[a], frequency=r["freq"][a], stiffness=r["stiffness"][a],
-                  depth=depth.get(a))
-             for a in "xyz"]
-    if z_eq is None:
+    beams = [f for f in s["trap"]["fields"] if f["kind"] == "beam"]
+    optical_setup = dict(s, trap=dict(fields=beams))
+    beam, P = build_beam(optical_setup)
+    T, n_p = build_tmatrix(optical_setup)
+    optical = OpticalField(beam, T, nm)
+    fields = [optical] + [GravityField(mass, f["g"]) for f in s["trap"]["fields"] if f["kind"] == "gravity"]
+
+    trap = find_trap(fields, mass, ranges=SCAN_RANGES, points=SCAN_POINTS)
+    warnings += trap.warnings
+    r_eq = trap.equilibrium
+    if r_eq is None:
         warnings.append("No stable trap: the force along the beam axis (z) never restores the particle.")
-    elif not r["stable"]:
-        loose = [m["name"] for m in modes if m["stiffness"] is None or m["stiffness"] <= 0]
+    elif not trap.stable:
+        loose = [m["name"] for m in trap.modes if m["stiffness"] <= 0]
         warnings.append("No stable trap: the particle is pushed away along " + ", ".join(loose) + ".")
+    modes = [dict(name=m["name"], axis=[float(v) for v in m["axis"]], frequency=m["frequency"],
+                  stiffness=m["stiffness"], depth=m["depth"]) for m in trap.modes]
+    U = min(m["depth"] for m in trap.modes) if trap.stable else 0.0
 
+    wl = beams[0]["wavelength"]
+    eff = mie_efficiencies(float(p["radius"]), wl, n_p, nm)
+    sc = optical.scattering(r_eq if r_eq is not None else np.zeros(3))
     result: dict[str, Any] = dict(
         version=RESULT_VERSION,
         engine=__version__,
-        stable=bool(r["stable"]),
-        equilibrium=None if z_eq is None else [0.0, 0.0, z_eq],
+        stable=trap.stable,
+        equilibrium=None if r_eq is None else [float(v) for v in r_eq],
         modes=modes,
-        depth=dict(J=depth.get("U", 0.0), K=depth.get("K", 0.0), kT=depth.get("kT", 0.0)),
-        particle=dict(n=p["n"], k=p["k"], density=p["density"], mass=r["mass"]),
-        optical=dict(P_sca=r["at"]["P_sca"], P_abs=r["at"]["P_abs"], power=r["power"],
-                     Qext=r["mie"]["Qext"], Qsca=r["mie"]["Qsca"], Qabs=r["mie"]["Qabs"],
-                     size_parameter=r["mie"]["x"], Nmax=r["Nmax"]),
+        depth=dict(J=U, K=U / KB, kT=U / (KB * temp)),
+        particle=dict(n=p["n"], k=p["k"], density=p["density"], mass=mass),
+        optical=dict(P_sca=sc["P_sca"], P_abs=sc["P_abs"], power=P,
+                     Qext=eff["Qext"], Qsca=eff["Qsca"], Qabs=eff["Qabs"],
+                     size_parameter=eff["x"], Nmax=dict(beam=beam.Nmax, particle=T.Nmax[0])),
         models=[dict(quantity="modes", model="mie", validity="ok", notes=[]),
                 dict(quantity="optical", model="mie", validity="ok", notes=[])],
         warnings=warnings,
-        time=r["time"],
     )
+    q = eff["Qsca_multipoles"]
+    rates, rate_models = rates_block(s, modes=modes, mass=mass, P_sca=sc["P_sca"], P_abs=sc["P_abs"],
+                                     ed_fraction=q["ED"] / eff["Qsca"] if eff["Qsca"] > 0 else None)
+    result["rates"] = rates
+    result["models"] += rate_models
     if "curves" in want:
-        ln = r["lines"]
-        result["curves"] = dict(
-            x=dict(position=ln["x"], force=ln["Fx"][0]),
-            y=dict(position=ln["y"], force=ln["Fy"][1]),
-            z=dict(position=ln["z"], force=ln["Fz"][2]),
-        )
+        centre = r_eq if r_eq is not None else np.zeros(3)
+        result["curves"] = {}
+        for j, name in enumerate("xyz"):
+            ss = np.linspace(-SCAN_RANGES[j], SCAN_RANGES[j], SCAN_POINTS)
+            line = np.tile(centre, (SCAN_POINTS, 1))
+            line[:, j] += ss
+            result["curves"][name] = dict(position=(centre[j] + ss).tolist(),
+                                          force=total_force(fields, line)[:, j].tolist())
+    if "pattern" in want:
+        result["pattern"] = pattern_result(s, r_eq if r_eq is not None else np.zeros(3))
+        result["models"].append(dict(quantity="pattern", model="mie", validity="ok", notes=[]))
+        if r_eq is None:
+            result["warnings"].append("Radiation pattern taken with the particle at the focus "
+                                      "(there is no equilibrium).")
+    result["time"] = time.perf_counter() - t0
     return result
+
+
+def pattern_result(s: dict, r) -> dict:
+    """``pattern`` block (see :func:`levtrap.pattern.pattern_block`) for the
+    particle at r = [x, y, z] [m] in the beams of a parsed, resolved setup.
+
+    ``trap_NA`` is the numerical aperture of the first beam's focusing optic
+    (``n_medium sin(convergence angle)``): the cone a backward detector
+    through the trapping lens collects.
+    """
+    from .api import _beam_angle, build_beam, build_tmatrix
+    from .pattern import pattern_block
+
+    beams = [f for f in s["trap"]["fields"] if f["kind"] == "beam"]
+    optical_setup = dict(s, trap=dict(fields=beams))
+    beam, _ = build_beam(optical_setup)
+    T, _ = build_tmatrix(optical_setup)
+    nm = float(s["environment"]["medium_index"])
+    b0 = beams[0]
+    m = [int(v) for v in b0["mode"]["indices"]]
+    order = (2 * m[0] + abs(m[1])) if b0["mode"]["type"] == "lg" else (m[0] + m[1])
+    angle = _beam_angle(b0["focus"], float(b0["wavelength"]), nm, order)
+    r = np.asarray(r, dtype=float)
+    ref = beam.translate_xyz(r) if np.any(r != 0) else beam
+    return pattern_block(ref, T, n_medium=nm, trap_NA=nm * math.sin(angle))
 
 
 def solve_json(setup_json: str, want_json: str = "[]") -> str:
