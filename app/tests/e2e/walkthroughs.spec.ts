@@ -30,10 +30,12 @@ for (const v of VARIANTS) {
   };
 
   test.describe(v.name, () => {
+    // the page starts at its size and theme: nothing is resized during a test
+    test.use({ viewport: VIEWS[v.view], colorScheme: v.scheme });
+
     test("what are my trap frequencies at 200 mW?", async ({ page }) => {
       // a first visit: a working tweezer with its numbers, and the choice of trap over it
-      await page.setViewportSize(VIEWS[v.view]);
-      await page.emulateMedia({ colorScheme: v.scheme, reducedMotion: "reduce" });
+      await page.emulateMedia({ reducedMotion: "reduce" });
       await page.goto(local());
       await expect(page.getByTestId("presets")).toBeVisible();
       await expect(page.getByTestId("preset-tweezer")).toContainText("open now");

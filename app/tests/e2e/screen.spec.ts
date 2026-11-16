@@ -1,6 +1,6 @@
 /** The screen's rules (docs/ARCHITECTURE.md §7, app/DESIGN.md), one test each. */
 import { expect, test } from "@playwright/test";
-import { collectErrors, expectNoSidewaysScroll, frequencies, open, partButton, selectPart, setField, settled, shot } from "./helpers";
+import { collectErrors, expectNoSidewaysScroll, frequencies, open, partButton, selectPart, setField, settled, shot, VIEWS } from "./helpers";
 
 const TWEEZER = ["227 kHz", "285 kHz", "96.8 kHz"];
 
@@ -234,16 +234,20 @@ test("clicking a thing in the drawing selects it, clicking the table deselects",
   await expect(page.getByTestId("inspector")).toHaveCount(0);
 });
 
-test("at 375 px nothing scrolls sideways", async ({ page }) => {
-  for (const preset of ["tweezer", "counter", "paul-linear", "paul-ring"]) {
-    await open(page, `preset=${preset}`, "phone");
-    await expectNoSidewaysScroll(page);
-    await selectPart(page, "particle");
-    await expectNoSidewaysScroll(page);
-    await page.getByTestId("inspector").getByRole("button", { name: "Close settings" }).click();
-    await page.getByTestId("more").isEnabled().then(async (enabled) => enabled && page.getByTestId("more").click());
-    await page.getByTestId("tab-forces").click();
-    await expectNoSidewaysScroll(page);
-  }
-  await shot(page, "drawer-phone-light");
+test.describe("at 375 px", () => {
+  test.use({ viewport: VIEWS.phone });
+
+  test("nothing scrolls sideways", async ({ page }) => {
+    for (const preset of ["tweezer", "counter", "paul-linear", "paul-ring"]) {
+      await open(page, `preset=${preset}`, "phone");
+      await expectNoSidewaysScroll(page);
+      await selectPart(page, "particle");
+      await expectNoSidewaysScroll(page);
+      await page.getByTestId("inspector").getByRole("button", { name: "Close settings" }).click();
+      await page.getByTestId("more").isEnabled().then(async (enabled) => enabled && page.getByTestId("more").click());
+      await page.getByTestId("tab-forces").click();
+      await expectNoSidewaysScroll(page);
+    }
+    await shot(page, "drawer-phone-light");
+  });
 });

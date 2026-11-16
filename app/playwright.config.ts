@@ -18,11 +18,11 @@ export default defineConfig({
   reporter: process.env.CI ? [["list"], ["github"]] : "list",
   use: {
     baseURL: `http://127.0.0.1:${PORT}${BASE}/`,
-    viewport: { width: 1100, height: 640 },
+    viewport: { width: 1280, height: 800 },
     trace: "off",
     launchOptions: process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {},
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1100, height: 640 } } }],
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } } }],
   webServer: [
     {
       command: `${python} ../scripts/devserver.py ${API_PORT}`,

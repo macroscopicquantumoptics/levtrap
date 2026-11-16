@@ -12,8 +12,15 @@ export const VIEWS = {
 export type View = keyof typeof VIEWS;
 export type Scheme = "light" | "dark";
 
+/**
+ * Open the page. A test should start at its size (the config's default is
+ * the desktop one; `test.use({ viewport })` for another): resizing a page
+ * just before a screenshot races with the browser's compositor.
+ */
 export async function open(page: Page, query: string, view: View = "desktop", scheme: Scheme = "light") {
-  await page.setViewportSize(VIEWS[view]);
+  const size = VIEWS[view];
+  const now = page.viewportSize();
+  if (!now || now.width !== size.width || now.height !== size.height) await page.setViewportSize(size);
   await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
   await page.goto(local(query));
   await expect(page.getByTestId("screen")).toBeVisible();
@@ -38,9 +45,17 @@ export function partButton(page: Page, id: string) {
 /** Screenshots go to the (untracked) test output; `npm run shots` copies them to design/ for review. */
 const SHOTS = process.env.SCREENSHOT_DIR ?? "test-results/screenshots";
 
-/** A screenshot for the design review, once the fonts are in. */
+/**
+ * A screenshot for the design review. The browser can only copy a frame it
+ * has painted, so wait for the fonts and then for two frames of the page as
+ * it is now; asking earlier fails now and then with "Unable to capture
+ * screenshot".
+ */
 export async function shot(page: Page, name: string) {
-  await page.evaluate(() => document.fonts.ready);
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done())));
+  });
   await page.screenshot({ path: `${SHOTS}/${name}.png` });
 }
 
