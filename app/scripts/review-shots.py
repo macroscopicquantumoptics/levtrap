@@ -3,8 +3,8 @@
     npm run test:e2e          writes test-results/screenshots/*.png
     npm run shots             this script (needs Pillow: pip install pillow)
 
-The copies are 256-colour PNGs, about a third of the size, so that a round of
-design review does not put megabytes into the repository.
+The copies are lossless WebP: the same pixels at about half the size, so a
+round of design review puts less into the repository.
 """
 
 import pathlib
@@ -20,14 +20,12 @@ shots = sorted(src.glob("*.png"))
 if not shots:
     sys.exit(f"no screenshots in {src}; run `npm run test:e2e` first")
 dst.mkdir(parents=True, exist_ok=True)
-for old in dst.glob("*.png"):
+for old in [*dst.glob("*.webp"), *dst.glob("*.png")]:
     old.unlink()
 before = after = 0
 for shot in shots:
-    image = Image.open(shot).convert("RGB")
-    small = image.quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.FLOYDSTEINBERG)
-    out = dst / shot.name
-    small.save(out, "PNG", optimize=True)
+    out = dst / (shot.stem + ".webp")
+    Image.open(shot).convert("RGB").save(out, "WEBP", lossless=True, method=6)
     before += shot.stat().st_size
     after += out.stat().st_size
 print(f"{len(shots)} screenshots -> {dst.relative_to(app)}  ({before / 1e6:.1f} MB -> {after / 1e6:.1f} MB)")

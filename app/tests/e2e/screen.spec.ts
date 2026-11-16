@@ -72,6 +72,26 @@ test("the plots drawer opens on demand", async ({ page }) => {
   await expect(page.getByTestId("drawer")).toHaveCount(0);
 });
 
+test("while a result is computed the old numbers stay, dimmed", async ({ page }) => {
+  // hold the engine's answer back for a moment
+  await page.route("**/api", async (route) => {
+    await new Promise((r) => setTimeout(r, 900));
+    await route.continue();
+  });
+  await open(page, "preset=tweezer");
+  await selectPart(page, "field:0");
+  await setField(page, "beam0-power", "100 mW");
+  const results = page.getByTestId("results");
+  await expect(results).toHaveAttribute("aria-busy", "true");
+  await expect(page.getByTestId("busy")).toHaveText("Computing");
+  expect(await frequencies(page)).toEqual(TWEEZER); // still the 200 mW numbers, never blank
+  await expect(page.getByTestId("freq-x").locator("xpath=..")).toBeVisible();
+  await shot(page, "recomputing-desktop-light");
+  await settled(page);
+  expect(await frequencies(page)).toEqual(["161 kHz", "201 kHz", "68.5 kHz"]);
+  await expect(page.getByTestId("busy")).toHaveCount(0);
+});
+
 test("an unstable trap is a sentence in the strip", async ({ page }) => {
   await open(page, "preset=tweezer");
   await selectPart(page, "lens:0");
