@@ -5,8 +5,9 @@ See ``docs/ARCHITECTURE.md`` §4 (Setup) and §6 (Result).  Everything is SI.
 The setup becomes a list of fields (:mod:`levtrap.fields`) and the generic
 solver (:mod:`levtrap.solver`) finds the equilibrium, modes and depth of
 their summed force.  Computed so far: one beam, or one coherent group of two
-beams, travelling along +z with the focus at the origin, plus gravity.  Other
-setups raise :class:`UnsupportedSetup` naming what is missing.
+beams, travelling along +z with the focus at the origin, plus gravity; or a
+Paul trap (:mod:`levtrap.fields.paul`) plus gravity.  Other setups raise
+:class:`UnsupportedSetup` naming what is missing.
 """
 
 from __future__ import annotations
@@ -39,12 +40,19 @@ class UnsupportedSetup(NotImplementedError):
 def check_supported(s: dict) -> None:
     """Raise :class:`UnsupportedSetup` unless this engine computes the parsed setup."""
     fields = s["trap"]["fields"]
-    others = sorted({f["kind"] for f in fields if f["kind"] not in ("beam", "gravity")})
+    others = sorted({f["kind"] for f in fields if f["kind"] not in ("beam", "gravity", "paul")})
     if others:
         raise UnsupportedSetup(f"{', '.join(others)} fields are not computed yet")
     beams = [f for f in fields if f["kind"] == "beam"]
-    if not beams:
-        raise UnsupportedSetup("a setup without a beam is not computed yet")
+    pauls = [f for f in fields if f["kind"] == "paul"]
+    if beams and pauls:
+        raise UnsupportedSetup("hybrid traps (beam + Paul trap) are not computed yet")
+    if len(pauls) > 1:
+        raise UnsupportedSetup("more than one Paul trap is not computed yet")
+    if not beams and not pauls:
+        raise UnsupportedSetup("a setup without a beam or a Paul trap does not trap")
+    if pauls:
+        return
     if len(beams) > 2:
         raise UnsupportedSetup("more than two beams are not computed yet")
     for i, b in enumerate(beams):
@@ -63,9 +71,15 @@ def check_supported(s: dict) -> None:
 
 def resolve_particle(s: dict) -> dict:
     """Fill the particle's missing n, k and density from its material at the
-    beam wavelength (in place); returns the particle."""
+    beam wavelength (in place); returns the particle.  Without a beam only the
+    density is needed and taken from the material."""
     p = s["particle"]
-    wl = next(f for f in s["trap"]["fields"] if f["kind"] == "beam")["wavelength"]
+    beam = next((f for f in s["trap"]["fields"] if f["kind"] == "beam"), None)
+    if beam is None:
+        if p["density"] is None:
+            p["density"] = get_material(p["material"], 1.064e-6)["density"]
+        return p
+    wl = beam["wavelength"]
     if p["material"] is not None and (p["n"] is None or p["k"] is None or p["density"] is None):
         m = get_material(p["material"], wl)
         if not m["valid"] and p["n"] is None:
@@ -102,6 +116,11 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     * ``particle`` — resolved ``n``, ``k``, ``density`` and ``mass`` [kg].
     * ``optical`` — scattered and absorbed power [W] at the equilibrium, and
       the plane-wave Mie efficiencies.
+    * ``paul`` — for a Paul trap: Mathieu ``a`` and ``q`` per axis, the
+      ``secular`` frequencies [Hz] (``pseudopotential`` and ``exact``),
+      ``stable`` (every axis in the first stability region) and the
+      ``micromotion`` amplitude [m] per axis at the equilibrium.  ``optical``
+      and ``rates`` are ``None`` for a trap without light.
     * ``rates`` — gas damping [1/s], and per mode the gas, recoil and total
       reheating [phonons/s], Q, coherence time [s], coherent oscillations and
       the pressure [Pa] where recoil equals gas heating (:mod:`levtrap.rates`).
@@ -110,7 +129,7 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     # late imports: api and the fields pull in the whole engine
     from .api import build_beam, build_tmatrix
     from .derived import KB, mie_efficiencies, sphere_mass
-    from .fields import GravityField, OpticalField, total_force
+    from .fields import GravityField, OpticalField
     from .solver import find_trap
 
     t0 = time.perf_counter()
@@ -128,11 +147,15 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     mass = sphere_mass(float(p["radius"]), float(p["density"]))
 
     beams = [f for f in s["trap"]["fields"] if f["kind"] == "beam"]
+    gravity = [GravityField(mass, f["g"]) for f in s["trap"]["fields"] if f["kind"] == "gravity"]
+    paul_setup = next((f for f in s["trap"]["fields"] if f["kind"] == "paul"), None)
+    if paul_setup is not None:
+        return _solve_paul(s, paul_setup, gravity, mass, p, warnings, want, t0)
     optical_setup = dict(s, trap=dict(fields=beams))
     beam, P = build_beam(optical_setup)
     T, n_p = build_tmatrix(optical_setup)
     optical = OpticalField(beam, T, nm)
-    fields = [optical] + [GravityField(mass, f["g"]) for f in s["trap"]["fields"] if f["kind"] == "gravity"]
+    fields = [optical] + gravity
 
     trap = find_trap(fields, mass, ranges=SCAN_RANGES, points=SCAN_POINTS)
     warnings += trap.warnings
@@ -170,20 +193,87 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     result["rates"] = rates
     result["models"] += rate_models
     if "curves" in want:
-        centre = r_eq if r_eq is not None else np.zeros(3)
-        result["curves"] = {}
-        for j, name in enumerate("xyz"):
-            ss = np.linspace(-SCAN_RANGES[j], SCAN_RANGES[j], SCAN_POINTS)
-            line = np.tile(centre, (SCAN_POINTS, 1))
-            line[:, j] += ss
-            result["curves"][name] = dict(position=(centre[j] + ss).tolist(),
-                                          force=total_force(fields, line)[:, j].tolist())
+        result["curves"] = _curves(fields, r_eq if r_eq is not None else np.zeros(3), SCAN_RANGES, SCAN_POINTS)
     if "pattern" in want:
         result["pattern"] = pattern_result(s, r_eq if r_eq is not None else np.zeros(3))
         result["models"].append(dict(quantity="pattern", model="mie", validity="ok", notes=[]))
         if r_eq is None:
             result["warnings"].append("Radiation pattern taken with the particle at the focus "
                                       "(there is no equilibrium).")
+    result["time"] = time.perf_counter() - t0
+    return result
+
+
+def _curves(fields, centre, ranges, points) -> dict:
+    """Force cuts along x, y, z through ``centre``: the ``curves`` block."""
+    from .fields import total_force
+    out = {}
+    for j, name in enumerate("xyz"):
+        ss = np.linspace(-ranges[j], ranges[j], points)
+        line = np.tile(centre, (points, 1))
+        line[:, j] += ss
+        out[name] = dict(position=(centre[j] + ss).tolist(), force=total_force(fields, line)[:, j].tolist())
+    return out
+
+
+def _solve_paul(s, f, gravity, mass, p, warnings, want, t0) -> dict:
+    """Paul trap (plus gravity): see :mod:`levtrap.fields.paul`."""
+    from .derived import KB
+    from .fields.paul import E_CHARGE, PaulField
+    from .solver import find_trap
+
+    bad = [w for w in want if w != "curves"]
+    if bad:
+        raise UnsupportedSetup(f"{bad[0]} needs a beam; a Paul trap alone has no light")
+    temp = float(s["environment"]["temperature"])
+    paul = PaulField(f, float(p["charge"]) * E_CHARGE, mass)
+    sec = paul.secular()
+    model = paul.model()
+    fields = [paul] + gravity
+    ranges = (paul.r0, paul.r0, paul.z0)
+    trap = find_trap(fields, mass, ranges=ranges, points=SCAN_POINTS)
+    warnings += trap.warnings + model.notes
+    r_eq = trap.equilibrium
+    unstable = [ax for ax, ok in sec["stable"].items() if not ok]
+    if unstable:
+        warnings.append("No stable trap: outside the first Mathieu stability region along "
+                        + ", ".join(unstable) + ".")
+    elif r_eq is None:
+        warnings.append("No stable trap: the Paul trap does not confine the particle here.")
+    elif not trap.stable:
+        loose = [m["name"] for m in trap.modes if m["stiffness"] <= 0]
+        warnings.append("No stable trap: the particle is pushed away along " + ", ".join(loose) + ".")
+    stable = bool(trap.stable and not unstable)
+
+    use_exact = model.name == "mathieu"
+    modes = []
+    for m in trap.modes:
+        freq, k = m["frequency"], m["stiffness"]
+        aligned = max(abs(v) for v in m["axis"]) > 1 - 1e-9
+        if use_exact and aligned and sec["exact"].get(m["name"]) is not None:
+            freq = sec["exact"][m["name"]]
+            k = mass * (2 * math.pi * freq) ** 2
+        modes.append(dict(name=m["name"], axis=[float(v) for v in m["axis"]], frequency=freq,
+                          stiffness=k, depth=m["depth"]))
+    U = min(m["depth"] for m in modes) if stable else 0.0
+    result: dict[str, Any] = dict(
+        version=RESULT_VERSION,
+        engine=__version__,
+        stable=stable,
+        equilibrium=None if r_eq is None else [float(v) for v in r_eq],
+        modes=modes,
+        depth=dict(J=U, K=U / KB, kT=U / (KB * temp)),
+        particle=dict(n=p["n"], k=p["k"], density=p["density"], mass=mass, charge=p["charge"]),
+        optical=None,
+        paul=dict(a=sec["a"], q=sec["q"], stable=sec["all_stable"],
+                  secular=dict(pseudopotential=sec["pseudopotential"], exact=sec["exact"]),
+                  micromotion=paul.micromotion(r_eq) if r_eq is not None else None),
+        rates=None,
+        models=[dict(quantity="modes", **model.as_dict())],
+        warnings=warnings,
+    )
+    if "curves" in want:
+        result["curves"] = _curves(fields, r_eq if r_eq is not None else np.zeros(3), ranges, SCAN_POINTS)
     result["time"] = time.perf_counter() - t0
     return result
 

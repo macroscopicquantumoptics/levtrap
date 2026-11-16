@@ -87,7 +87,10 @@ Rules:
 * A setup file saved by any released version keeps opening in every later
   one. Migrations live in `setup.py`, one function per version step.
 * Unknown keys are kept and reported, not dropped.
-* Lab frame: z is the optical axis of the first beam, y is up.
+* Lab frame: z is the optical axis of the first beam, y is up. A Paul trap
+  is centred at the origin; a linear trap's axis is z.
+* Paul trap a and q follow Leibfried et al., RMP 75, 281 (2003) (see
+  `src/levtrap/fields/paul.py` for the per-geometry formulas).
 
 ## 5. Field interface
 
@@ -129,7 +132,7 @@ Models per field:
   "modes": [{"axis": [1,0,0], "frequency": 1.5e5, "stiffness": 1e-6, "depth": 3e-19}, …],
   "depth": {"J": 3e-19, "K": 2.2e4, "kT": 72},
   "optical": {"P_sca": …, "P_abs": …, "Qsca": …, "Qabs": …},
-  "paul": {"q": {...}, "a": {...}, "stable": true, "secular": {...}},
+  "paul": {"q": {...}, "a": {...}, "stable": true, "secular": {...}, "micromotion": [...]},
   "rates": {"gas_damping": …, "recoil_heating": [...], "reheating_phonons_per_s": [...]},
   "pattern": {...},                       // on request
   "curves": {...},                        // on request: force cuts, potential, map
