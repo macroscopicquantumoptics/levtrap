@@ -1,0 +1,140 @@
+/**
+ * What the results strip shows for a setup: a result and where it came from,
+ * or a sentence saying why there is none. Every number comes from the
+ * engine; nothing is made up for a setup it cannot compute.
+ */
+import { EngineError } from "../engine/client.ts";
+import type { BeamField, Result, Setup, TrapMode } from "../engine/types.ts";
+import { formatNumber, formatSI } from "../lib/format.ts";
+import { directionOf, partForPath, partsOf, positionOf, type PartId } from "./model.ts";
+import { presetForSetup } from "./presets.ts";
+import { RECORDED } from "./recorded.ts";
+
+/** "preset": the engine's result recorded for a preset; "engine": computed just now. */
+export type Origin = "engine" | "preset";
+
+export type Notice =
+  /** the engine cannot compute this setup yet; `ticket` is the issue that adds it */
+  | { kind: "pending"; text: string; ticket?: number }
+  /** the setup is invalid; `part` is the thing to fix */
+  | { kind: "invalid"; text: string; part: PartId | null }
+  | { kind: "failed"; text: string };
+
+export interface Answer {
+  result: Result | null;
+  origin: Origin | null;
+  notice: Notice | null;
+}
+
+export const NO_ANSWER: Answer = { result: null, origin: null, notice: null };
+
+const ISSUES = "https://github.com/macroscopicquantumoptics/levtrap/issues/";
+export const issueUrl = (n: number) => `${ISSUES}${n}`;
+
+const sentence = (text: string) => (/[.!?]$/.test(text) ? text : `${text}.`);
+
+/** Why the engine refuses a setup today, and the ticket that changes it. */
+export function pending(setup: Setup, engineMessage?: string): Notice {
+  const fields = setup.trap.fields;
+  const beams = fields.filter((f): f is BeamField => f.kind === "beam");
+  const pauls = fields.filter((f) => f.kind === "paul");
+  if (pauls.length && beams.length) return { kind: "pending", text: "Not computed yet: a Paul trap together with a beam.", ticket: 12 };
+  if (pauls.length > 1) return { kind: "pending", text: "Not computed yet: more than one Paul trap." };
+  if (beams.some((b) => directionOf(b).join() !== "0,0,1" || positionOf(b).some((c) => c !== 0))) {
+    return { kind: "pending", text: "Not computed yet: beams that do not travel along +z through the origin.", ticket: 10 };
+  }
+  if (beams.length === 2) return { kind: "pending", text: "Not computed yet: two beams that do not interfere.", ticket: 10 };
+  if (beams.length > 2) return { kind: "pending", text: "Not computed yet: more than two beams.", ticket: 10 };
+  if (!beams.length && !pauls.length) return { kind: "pending", text: "Nothing holds the particle: add a beam or a Paul trap." };
+  return { kind: "pending", text: sentence(`Not computed yet: ${(engineMessage ?? "this setup").replace(/^[\w.[\]]+: /, "")}`) };
+}
+
+/**
+ * The answer that needs no engine: the recorded result of a preset, or the
+ * "not computed yet" sentence of a preset the engine refuses. null: ask the
+ * engine. `recorded: false` always asks the engine (the tests of the engine
+ * path use it).
+ */
+export function instantAnswer(setup: Setup, recorded = true): Answer | null {
+  const preset = presetForSetup(setup);
+  if (!preset) return null;
+  if (preset.pending) return { result: null, origin: null, notice: pending(setup) };
+  const result = recorded ? RECORDED[preset.id] : undefined;
+  return result ? { result, origin: "preset", notice: null } : null;
+}
+
+/** The answer for a solve that was refused or failed. */
+export function answerFromError(err: unknown, setup: Setup): Answer {
+  if (err instanceof EngineError) {
+    if (err.kind === "unsupported") return { result: null, origin: null, notice: pending(setup, err.message) };
+    if (err.kind === "setup") {
+      const part = partForPath(err.path);
+      const name = partsOf(setup).find((p) => p.id === part)?.name;
+      const message = err.path ? err.message.slice(err.path.length + 2) : err.message;
+      // "must be at least 0" needs its key in front; a full sentence does not
+      const key = /^(must|is) /.test(message) ? `${err.path?.split(".").pop()?.replace(/_/g, " ")} ` : "";
+      const text = name ? `${name}: ${key}${message}` : err.message;
+      return { result: null, origin: null, notice: { kind: "invalid", text: sentence(text), part } };
+    }
+  }
+  const text = err instanceof Error ? err.message : String(err);
+  return { result: null, origin: null, notice: { kind: "failed", text: sentence(`The engine failed: ${text}`) } };
+}
+
+/**
+ * A mode's frequency as the strip shows it. For a Paul trap the engine keeps
+ * the pseudopotential value on an axis outside the stability region; that is
+ * not a trap frequency, so it reads as none.
+ */
+export function shownFrequency(result: Result, mode: TrapMode): number | null {
+  const exact = result.paul?.secular.exact as Record<string, number | null> | undefined;
+  if (exact && mode.name in exact && exact[mode.name] === null) return null;
+  return mode.frequency;
+}
+
+export interface Verdict {
+  tone: "ok" | "bad" | "none";
+  /** the headline sentence */
+  text: string;
+  /** further sentences from the engine */
+  more: string[];
+}
+
+const listAxes = (axes: string[]) => (axes.length > 1 ? `${axes.slice(0, -1).join(", ")} and ${axes[axes.length - 1]}` : axes[0]);
+
+/** The stability verdict as sentences. */
+export function verdict(answer: Answer, setup: Setup): Verdict {
+  const { result, notice } = answer;
+  if (!result) return { tone: "none", text: notice?.text ?? "No result yet.", more: [] };
+  const warnings = result.warnings.filter((w) => !w.startsWith("No stable trap")).map(sentence);
+  if (!result.stable) {
+    const why = result.warnings.find((w) => w.startsWith("No stable trap")) ?? "No stable trap.";
+    return { tone: "bad", text: sentence(why), more: warnings };
+  }
+  const details: string[] = [];
+  if (result.paul) {
+    const q = Object.entries(result.paul.q).map(([axis, v]) => [axis, Math.abs(v)] as const);
+    const largest = Math.max(...q.map(([, v]) => v));
+    const axes = q.filter(([, v]) => v > 0.999 * largest).map(([axis]) => axis);
+    if (largest > 0) details.push(`Mathieu q = ${formatNumber(largest, 2)} on ${listAxes(axes)}.`);
+  }
+  const eq = result.equilibrium;
+  const beam = setup.trap.fields.find((f): f is BeamField => f.kind === "beam");
+  if (eq && beam) {
+    const d = directionOf(beam);
+    const p = positionOf(beam);
+    const along = eq.reduce((sum, c, i) => sum + (c - p[i]) * d[i], 0) / (Math.hypot(...d) || 1);
+    details.push(
+      Math.abs(along) >= 5e-10
+        ? `The particle rests ${formatSI(Math.abs(along), "m")} ${along > 0 ? "downstream of" : "upstream of"} the focus.`
+        : "The particle rests at the focus.",
+    );
+  } else if (eq) {
+    const offset = Math.hypot(...eq);
+    if (offset >= 5e-10) {
+      const where = eq[1] < -0.9 * offset ? "below" : eq[1] > 0.9 * offset ? "above" : "from";
+      details.push(`The particle rests ${formatSI(offset, "m")} ${where} the trap centre.`);
+    }
+  }
+  return { tone: "ok", text: ["Stable trap.", ...details].join(" "), more: warnings };
+}
