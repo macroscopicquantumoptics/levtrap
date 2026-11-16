@@ -19,6 +19,8 @@ test("units as typed give SI values", () => {
   close(value("5 kHz", "frequency"), 5000);
   close(value("2.2 g/cm3", "density"), 2200);
   close(value("−50 e", "charge"), -50);
+  close(value("1 π", "phase"), Math.PI);
+  close(value("180°", "phase"), Math.PI);
 });
 
 test("without a unit the field's unit applies", () => {

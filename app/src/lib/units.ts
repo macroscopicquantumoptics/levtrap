@@ -14,6 +14,7 @@ export type Quantity =
   | "density"
   | "charge"
   | "angle"
+  | "phase"
   | "acceleration"
   | "number";
 
@@ -62,6 +63,11 @@ export const UNITS: Record<Quantity, UnitDef[]> = {
   angle: [
     { symbol: "°", factor: 1, aliases: ["deg", "degrees"] },
     { symbol: "rad", factor: 180 / Math.PI },
+  ],
+  phase: [
+    { symbol: "rad", factor: 1 },
+    { symbol: "π rad", factor: Math.PI, aliases: ["π", "pi", "pi rad"] },
+    { symbol: "°", factor: Math.PI / 180, aliases: ["deg", "degrees"] },
   ],
   acceleration: [{ symbol: "m/s²", factor: 1, aliases: ["m/s2", "m/s^2"] }],
   number: [],

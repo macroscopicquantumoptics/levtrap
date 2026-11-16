@@ -40,5 +40,5 @@ jobs:
         if: always()
         with:
           name: app-screenshots
-          path: app/tests/screenshots/
+          path: app/test-results/screenshots/
           if-no-files-found: ignore

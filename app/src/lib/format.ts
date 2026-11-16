@@ -67,6 +67,28 @@ export function formatNumber(x: number | null | undefined, sig = 3, trim = false
   return fixedSig(Number(x.toPrecision(sig)), sig, trim);
 }
 
+const SUPERSCRIPT = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+
+/**
+ * For values that span many orders of magnitude (rates, pressures):
+ * 137305 -> "1.37 × 10⁵", 3.3e-6 -> "3.30 × 10⁻⁶", 42.5 -> "42.5".
+ */
+export function formatSci(x: number | null | undefined, sig = 3): string {
+  if (x == null || !Number.isFinite(x)) return "—";
+  if (x === 0) return "0";
+  const abs = Math.abs(x);
+  if (abs >= 1e-2 && abs < 1e4) return fixedSig(Number(x.toPrecision(sig)), sig, false);
+  const [m, e] = x.toExponential(sig - 1).split("e");
+  const power = Number(e);
+  const digits = String(Math.abs(power)).replace(/\d/g, (d) => SUPERSCRIPT[Number(d)]);
+  return `${minus(m)} × 10${power < 0 ? "⁻" : ""}${digits}`;
+}
+
+/** A mass in grams with an SI prefix: 9.215e-18 kg -> "9.22 fg". */
+export function formatMass(kg: number | null | undefined, sig = 3): string {
+  return formatSI(kg == null ? kg : kg * 1e3, "g", sig);
+}
+
 /** 152_340 -> "152 kHz"; 3 significant figures; "—" for null or non-finite. */
 export function formatFrequency(hz: number | null | undefined): string {
   return formatSI(hz, "Hz");

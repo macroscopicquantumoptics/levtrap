@@ -108,7 +108,7 @@ export function beamShape(beam: BeamField, nMedium: number, view: View, box: Box
   const len = Math.hypot(au, av) || 1;
   // room along the beam on screen, and across it
   const along = 0.4 * (Math.abs(au / len) * w + Math.abs(av / len) * h);
-  const across = 0.36 * (Math.abs(av / len) * w + Math.abs(au / len) * h);
+  const across = 0.3 * (Math.abs(av / len) * w + Math.abs(au / len) * h);
   const w0px = w0 * view.scale;
   const tan = Math.tan(theta);
   const reach = across > w0px ? Math.sqrt(across * across - w0px * w0px) / tan : 0;

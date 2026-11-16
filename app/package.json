@@ -14,7 +14,8 @@
     "test": "node --test \"src/**/*.test.ts\"",
     "wheel": "node scripts/stage-wheel.mjs",
     "record": "node scripts/record-presets.ts",
-    "test:e2e": "BASE_PATH=/levtrap/next next build && playwright test --trace off"
+    "test:e2e": "BASE_PATH=/levtrap/next next build && playwright test --trace off",
+    "shots": "python3 scripts/review-shots.py"
   },
   "dependencies": {
     "next": "16.4.6",

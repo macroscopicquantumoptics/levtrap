@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatFrequency, formatNumber, formatSI, siParts } from "./format.ts";
+import { formatFrequency, formatMass, formatNumber, formatSci, formatSI, siParts } from "./format.ts";
 
 test("frequencies get an SI prefix and three significant figures", () => {
   assert.equal(formatFrequency(152_340), "152 kHz");
@@ -51,4 +51,19 @@ test("bare numbers", () => {
 test("missing values show a dash", () => {
   assert.deepEqual(siParts(null, "Hz"), { value: "—", unit: "Hz" });
   assert.equal(formatSI(Number.NaN, "Hz"), "—");
+});
+
+test("scientific notation for values that span orders of magnitude", () => {
+  assert.equal(formatSci(137_305), "1.37 × 10⁵");
+  assert.equal(formatSci(3.3322e-6), "3.33 × 10⁻⁶");
+  assert.equal(formatSci(42.5), "42.5");
+  assert.equal(formatSci(0.0338), "0.0338");
+  assert.equal(formatSci(-2.5e12, 2), "−2.5 × 10¹²");
+  assert.equal(formatSci(0), "0");
+  assert.equal(formatSci(null), "—");
+});
+
+test("masses read in grams", () => {
+  assert.equal(formatMass(9.215338e-18), "9.22 fg");
+  assert.equal(formatMass(null), "—");
 });

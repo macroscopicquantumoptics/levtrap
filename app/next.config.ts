@@ -16,6 +16,8 @@ const nextConfig: NextConfig = {
   basePath,
   env: { NEXT_PUBLIC_BASE_PATH: basePath },
   images: { unoptimized: true },
+  // The screen has controls in every corner; the dev badge would sit on one of them.
+  devIndicators: false,
 };
 
 export default nextConfig;
