@@ -12,6 +12,7 @@ setups raise :class:`UnsupportedSetup` naming what is missing.
 from __future__ import annotations
 
 import json
+import math
 import time
 from typing import Any, Iterable
 
@@ -19,13 +20,14 @@ import numpy as np
 
 from . import __version__
 from .materials import get_material
+from .rates import rates_block
 from .setup import SetupError, parse, unknown_keys
 
 __all__ = ["solve", "solve_json", "check_supported", "resolve_particle", "UnsupportedSetup",
-           "RESULT_VERSION", "WANTS"]
+           "RESULT_VERSION", "WANTS", "pattern_result"]
 
 RESULT_VERSION = 1
-WANTS = ("curves",)
+WANTS = ("curves", "pattern")
 SCAN_RANGES = (1.5e-6, 1.5e-6, 3e-6)  # half-widths [m] searched for the equilibrium (x, y, z)
 SCAN_POINTS = 61
 
@@ -82,7 +84,8 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     ----------
     setup : dict or JSON text, see :mod:`levtrap.setup`.
     want : extra blocks to compute, from :data:`WANTS`.  ``"curves"`` adds the
-        force along x, y and z through the equilibrium.
+        force along x, y and z through the equilibrium; ``"pattern"`` adds the
+        radiation pattern at the equilibrium (:func:`pattern_result`).
 
     Returns
     -------
@@ -99,6 +102,9 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     * ``particle`` — resolved ``n``, ``k``, ``density`` and ``mass`` [kg].
     * ``optical`` — scattered and absorbed power [W] at the equilibrium, and
       the plane-wave Mie efficiencies.
+    * ``rates`` — gas damping [1/s], and per mode the gas, recoil and total
+      reheating [phonons/s], Q, coherence time [s], coherent oscillations and
+      the pressure [Pa] where recoil equals gas heating (:mod:`levtrap.rates`).
     * ``models``, ``warnings`` — what was used and what to be careful about.
     """
     # late imports: api and the fields pull in the whole engine
@@ -158,6 +164,11 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
                 dict(quantity="optical", model="mie", validity="ok", notes=[])],
         warnings=warnings,
     )
+    q = eff["Qsca_multipoles"]
+    rates, rate_models = rates_block(s, modes=modes, mass=mass, P_sca=sc["P_sca"], P_abs=sc["P_abs"],
+                                     ed_fraction=q["ED"] / eff["Qsca"] if eff["Qsca"] > 0 else None)
+    result["rates"] = rates
+    result["models"] += rate_models
     if "curves" in want:
         centre = r_eq if r_eq is not None else np.zeros(3)
         result["curves"] = {}
@@ -167,8 +178,39 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
             line[:, j] += ss
             result["curves"][name] = dict(position=(centre[j] + ss).tolist(),
                                           force=total_force(fields, line)[:, j].tolist())
+    if "pattern" in want:
+        result["pattern"] = pattern_result(s, r_eq if r_eq is not None else np.zeros(3))
+        result["models"].append(dict(quantity="pattern", model="mie", validity="ok", notes=[]))
+        if r_eq is None:
+            result["warnings"].append("Radiation pattern taken with the particle at the focus "
+                                      "(there is no equilibrium).")
     result["time"] = time.perf_counter() - t0
     return result
+
+
+def pattern_result(s: dict, r) -> dict:
+    """``pattern`` block (see :func:`levtrap.pattern.pattern_block`) for the
+    particle at r = [x, y, z] [m] in the beams of a parsed, resolved setup.
+
+    ``trap_NA`` is the numerical aperture of the first beam's focusing optic
+    (``n_medium sin(convergence angle)``): the cone a backward detector
+    through the trapping lens collects.
+    """
+    from .api import _beam_angle, build_beam, build_tmatrix
+    from .pattern import pattern_block
+
+    beams = [f for f in s["trap"]["fields"] if f["kind"] == "beam"]
+    optical_setup = dict(s, trap=dict(fields=beams))
+    beam, _ = build_beam(optical_setup)
+    T, _ = build_tmatrix(optical_setup)
+    nm = float(s["environment"]["medium_index"])
+    b0 = beams[0]
+    m = [int(v) for v in b0["mode"]["indices"]]
+    order = (2 * m[0] + abs(m[1])) if b0["mode"]["type"] == "lg" else (m[0] + m[1])
+    angle = _beam_angle(b0["focus"], float(b0["wavelength"]), nm, order)
+    r = np.asarray(r, dtype=float)
+    ref = beam.translate_xyz(r) if np.any(r != 0) else beam
+    return pattern_block(ref, T, n_medium=nm, trap_NA=nm * math.sin(angle))
 
 
 def solve_json(setup_json: str, want_json: str = "[]") -> str:

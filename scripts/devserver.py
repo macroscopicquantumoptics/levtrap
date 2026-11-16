@@ -2,6 +2,10 @@
 Python (no Pyodide/CDN needed).  Open http://localhost:8000/?backend=local
 
     python scripts/devserver.py [port]
+
+The new app (app/, served by `next dev` or any static server) calls the same
+POST /api from another origin with ?backend=local, so the API answers CORS
+requests.  It listens on 127.0.0.1 only.
 """
 
 import json
@@ -18,6 +22,18 @@ from levtrap import api  # noqa: E402
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=os.path.join(ROOT, "web"), **kw)
+
+    def end_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        super().end_headers()
+
+    def do_OPTIONS(self):  # noqa: N802  (CORS preflight from app/)
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
+        self.send_header("Access-Control-Max-Age", "600")
+        self.end_headers()
 
     def do_POST(self):  # noqa: N802
         if self.path != "/api":
