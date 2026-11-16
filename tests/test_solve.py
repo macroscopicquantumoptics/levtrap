@@ -1,4 +1,4 @@
-"""solve(): the OTT benchmark through the Setup/Result contract, and agreement with api.analyse."""
+"""solve(): the OTT benchmark through the Setup/Result contract and the generic solver,\nagreement with api.analyse, and gravity."""
 
 import copy
 import json
@@ -48,19 +48,44 @@ def test_result_shape(ott):
 
 
 def test_matches_analyse():
-    """solve() reports exactly the numbers of api.analyse (the web page's path)."""
+    """The generic solver reproduces the validated on-axis path (api.analyse):
+    equilibrium and frequencies within 0.1 %.  The depth is integrated on a
+    line through the equilibrium rather than through the focus, which is
+    closer to the converged value; it agrees within 1 %."""
     r = solve(DEFAULT_SETUP, want=["curves"])
     ref = api.analyse(*api.prepare(dict(setup=DEFAULT_SETUP)), detail=False)
     assert r["stable"] == ref["stable"]
-    assert r["equilibrium"][2] == ref["z_eq"]
+    assert r["equilibrium"][2] == pytest.approx(ref["z_eq"], rel=1e-3)
     for m in r["modes"]:
-        assert m["frequency"] == ref["freq"][m["name"]]
-        assert m["stiffness"] == ref["stiffness"][m["name"]]
-    assert r["depth"]["kT"] == ref["depth"]["kT"]
-    assert r["optical"]["P_sca"] == ref["at"]["P_sca"]
+        assert m["frequency"] == pytest.approx(ref["freq"][m["name"]], rel=1e-3)
+        assert m["stiffness"] == pytest.approx(ref["stiffness"][m["name"]], rel=2e-3)
+        assert m["depth"] == pytest.approx(ref["depth"][m["name"]], rel=1e-2)
+    assert r["depth"]["kT"] == pytest.approx(ref["depth"]["kT"], rel=1e-2)
+    assert r["optical"]["P_sca"] == pytest.approx(ref["at"]["P_sca"], rel=1e-4)
     assert r["particle"]["mass"] == ref["mass"]
-    assert r["curves"]["z"]["force"] == ref["lines"]["Fz"][2]
-    assert len(r["curves"]["x"]["position"]) == len(r["curves"]["x"]["force"])
+    for a in "xyz":
+        c = r["curves"][a]
+        assert len(c["position"]) == len(c["force"])
+    # the z curve passes through the equilibrium with zero force
+    zc = r["curves"]["z"]
+    i = len(zc["position"]) // 2
+    assert zc["position"][i] == pytest.approx(r["equilibrium"][2])
+    assert abs(zc["force"][i]) < 1e-6 * max(abs(f) for f in zc["force"])
+
+
+def test_gravity_sags_a_tweezer_by_g_over_omega_squared():
+    """Gravity along -y shifts the equilibrium by g / Omega_y^2 (A2 acceptance, 2 %)."""
+    import math
+    s = copy.deepcopy(DEFAULT_SETUP)
+    s["trap"]["fields"][0]["power"] = 0.01  # weak trap: a sag of a few nm, still harmonic
+    r0 = solve(s)
+    s["trap"]["fields"].append({"kind": "gravity"})
+    r1 = solve(s)
+    assert r1["stable"]
+    f_y = {m["name"]: m["frequency"] for m in r0["modes"]}["y"]
+    sag = 9.81 / (2 * math.pi * f_y) ** 2
+    assert r1["equilibrium"][1] - r0["equilibrium"][1] == pytest.approx(-sag, rel=0.02)
+    assert r1["equilibrium"][0] == pytest.approx(r0["equilibrium"][0], abs=1e-12)
 
 
 def test_no_stable_trap_is_reported():
@@ -80,7 +105,9 @@ def test_unknown_keys_become_warnings():
 
 
 @pytest.mark.parametrize("change", [
-    lambda s: s["trap"]["fields"].append({"kind": "gravity"}),
+    lambda s: s["trap"]["fields"].append({"kind": "paul", "geometry": "ring", "rf_voltage": 100,
+                                          "rf_frequency": 1e3, "r0": 1e-3, "z0": 1e-3}) or
+              s["particle"].update(charge=100),
     lambda s: s["trap"]["fields"][0].update(direction=[0, 0, -1]),
     lambda s: s["trap"]["fields"][0].update(position=[0, 0, 1e-6]),
     lambda s: s["trap"]["fields"].append({**s["trap"]["fields"][0], "id": "beam2"}),
@@ -106,6 +133,6 @@ def test_json_wrapper_and_dispatch():
     bad = json.loads(solve_json(json.dumps({**DEFAULT_SETUP, "particle": {"radius": -1}})))
     assert bad == dict(ok=False, kind="setup", path="particle.radius", error=bad["error"])
     s = copy.deepcopy(DEFAULT_SETUP)
-    s["trap"]["fields"].append({"kind": "gravity"})
+    s["trap"]["fields"][0]["direction"] = [1, 0, 0]
     assert json.loads(solve_json(json.dumps(s)))["kind"] == "unsupported"
     assert json.loads(solve_json(json.dumps(DEFAULT_SETUP), '["nonsense"]'))["kind"] == "setup"
