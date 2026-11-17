@@ -9,7 +9,11 @@ test("every number explains itself", async ({ page }) => {
   await page.getByTestId("freq-x").click();
   const explain = page.getByTestId("explain");
   await expect(explain).toContainText("Trap frequency along x");
-  await expect(explain).toContainText("f = √(k / m) / 2π");
+  // the formula, typeset (KaTeX), with its plain-text form for screen readers
+  const formula = page.getByTestId("formula");
+  await expect(formula).toHaveAttribute("data-formula", "optical-frequency");
+  await expect(formula.locator(".katex-display")).toBeVisible();
+  await expect(formula.locator("[aria-label]").first()).toHaveAttribute("aria-label", "f = √(k / m) / 2π");
   await expect(explain).toContainText("18.8 µN/m");
   await expect(explain).toContainText("9.22 fg");
   await expect(explain).toContainText("Mie theory (T-matrix): exact for a homogeneous sphere of any size. Valid here.");
@@ -17,16 +21,44 @@ test("every number explains itself", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(explain).toHaveCount(0);
 
+  // the depth, in k_BT and in kelvin
+  await expect(page.getByTestId("depth-also")).toHaveText("116 kK");
   await page.getByTestId("depth").click();
   await expect(explain).toContainText("Trap depth");
   await expect(explain).toContainText("116 kK");
+});
+
+test("Copy puts the full SI value on the clipboard", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await open(page, "preset=tweezer");
+  await page.getByTestId("freq-z").click();
+  await page.getByTestId("copy-value").click();
+  await expect(page.getByTestId("copy-value")).toHaveText("Copied");
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("96842.81 Hz");
+});
+
+test("the numbers of the second row explain themselves too", async ({ page }) => {
+  await open(page, "preset=tweezer");
+  await page.getByTestId("more").click();
+  await page.getByTestId("more-absorbed").click();
+  const explain = page.getByTestId("explain");
+  await expect(explain).toContainText("Absorbed power");
+  await expect(explain).toContainText("14.0 aW");
+  await expect(page.getByTestId("formula")).toHaveAttribute("data-formula", "absorbed-power");
+  await page.keyboard.press("Escape");
+  await page.getByTestId("more-damping").click();
+  await expect(page.getByTestId("formula")).toHaveAttribute("data-formula", "gas-damping");
+  await expect(explain).toContainText("Beresnev, Chernyak & Fomyagin");
+  await expect(explain).toContainText("Knudsen-number interpolation");
+  await shot(page, "explain-damping-desktop-light");
 });
 
 test("a Paul-trap frequency is explained by a, q and the RF frequency", async ({ page }) => {
   await open(page, "preset=paul-linear");
   await page.getByTestId("freq-y").click();
   const explain = page.getByTestId("explain");
-  await expect(explain).toContainText("f = (f_RF / 2) · √(a + q² / 2)");
+  await expect(page.getByTestId("formula")).toHaveAttribute("data-formula", "paul-pseudopotential");
+  await expect(page.getByTestId("formula")).toContainText("Leibfried et al.");
   await expect(explain).toContainText("0.317");
   await expect(explain).toContainText("5 kHz");
   await expect(explain).toContainText("Pseudopotential approximation of the RF field");
@@ -90,7 +122,9 @@ test("an unstable trap is a sentence in the strip", async ({ page }) => {
   await setField(page, "lens0-NA", "0.3");
   await settled(page);
   const verdict = page.getByTestId("verdict");
-  await expect(verdict).toContainText("No stable trap: the force along the beam axis (z) never restores the particle.");
+  // along which axis, and the usual cause with what to change
+  await expect(verdict).toContainText("No stable trap along z: the force along the beam never pulls the particle back.");
+  await expect(page.getByTestId("verdict-hint")).toContainText("focus tighter (a larger NA), or add a counter-propagating beam");
   await expect(verdict).toHaveAttribute("data-tone", "bad");
   for (const axis of ["x", "y", "z"]) await expect(page.getByTestId(`freq-${axis}`)).toContainText("—");
   await expect(page.getByTestId("depth")).toContainText("—");
