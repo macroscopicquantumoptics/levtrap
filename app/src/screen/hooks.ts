@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { isAbortError, type Engine, type EngineStatus } from "../engine/client.ts";
-import type { Setup } from "../engine/types.ts";
+import type { Setup, Want } from "../engine/types.ts";
 import { answerFromError, instantAnswer, NO_ANSWER, type Answer } from "./answer.ts";
 import { canonical } from "./model.ts";
 
@@ -29,10 +29,13 @@ export interface Solving {
 /**
  * The answer for a setup: at once for a preset, from the engine otherwise.
  * The engine starts loading on mount, so it is ready by the first edit.
+ * `want` asks for extra blocks (a plot's data); with `enabled` false nothing
+ * is asked and the answer stays empty.
  */
-export function useAnswer(setup: Setup, engine: (() => Engine) | null, recorded = true): Solving {
-  const key = useMemo(() => canonical(setup), [setup]);
-  const instant = useMemo(() => instantAnswer(setup, recorded), [setup, recorded]);
+export function useAnswer(setup: Setup, engine: (() => Engine) | null, recorded = true, want: readonly Want[] = [], enabled = true): Solving {
+  const wanted = want.join(",");
+  const key = useMemo(() => `${wanted}|${canonical(setup)}`, [setup, wanted]);
+  const instant = useMemo(() => instantAnswer(setup, recorded, wanted ? (wanted.split(",") as Want[]) : []), [setup, recorded, wanted]);
   const [settled, setSettled] = useState<{ key: string; answer: Answer } | null>(null);
   const [last, setLast] = useState<Answer>(NO_ANSWER);
 
@@ -44,11 +47,11 @@ export function useAnswer(setup: Setup, engine: (() => Engine) | null, recorded 
   );
 
   useEffect(() => {
-    if (instant || !engine) return;
+    if (instant || !engine || !enabled) return;
     const ctrl = new AbortController();
     const timer = setTimeout(() => {
       engine()
-        .solve(setup, ["curves"], { signal: ctrl.signal })
+        .solve(setup, wanted ? (wanted.split(",") as Want[]) : [], { signal: ctrl.signal })
         .then(
           (result) => setSettled({ key, answer: { result, origin: "engine", notice: null } }),
           (err: unknown) => {
@@ -60,9 +63,9 @@ export function useAnswer(setup: Setup, engine: (() => Engine) | null, recorded 
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [key, setup, instant, engine]);
+  }, [key, setup, instant, engine, enabled, wanted]);
 
-  const current = instant ?? (engine ? (settled?.key === key ? settled.answer : null) : NO_ENGINE);
+  const current = !enabled ? NO_ANSWER : (instant ?? (engine ? (settled?.key === key ? settled.answer : null) : NO_ENGINE));
   // remember the latest answer, to keep showing it (dimmed) while the next one is computed
   if (current && current !== last) setLast(current);
   return { answer: current ?? last, pending: !current, status };

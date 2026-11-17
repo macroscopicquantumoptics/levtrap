@@ -131,6 +131,49 @@ Dark:
 
 ![Hybrid, dark](screens/scene-hybrid-desktop-dark.webp)
 
+## 5. The plots drawer (D5)
+
+Forces along each eigen-axis, and with the dipole approximation dashed.
+
+![Forces](screens/plot-forces-desktop-light.webp)
+
+![Forces with the dipole approximation](screens/plot-forces-dipole-desktop-light.webp)
+
+The potential in k_BT, with the harmonic trap of the same stiffness dashed.
+
+![Potential](screens/plot-potential-desktop-light.webp)
+
+A sweep of the beam's power: four solves, the three frequencies.
+
+![Sweep](screens/plot-sweep-desktop-light.webp)
+
+Where the scattered light goes, and how much a lens of each NA collects.
+
+![Radiation](screens/plot-radiation-desktop-light.webp)
+
+![Collection](screens/plot-collection-desktop-light.webp)
+
+Reheating against pressure: the setup's pressure marked, a dot where recoil
+and gas heat equally.
+
+![Heating](screens/plot-heating-desktop-light.webp)
+
+Dark:
+
+![Forces, dark](screens/plot-forces-desktop-dark.webp)
+
+![Potential, dark](screens/plot-potential-desktop-dark.webp)
+
+![Sweep, dark](screens/plot-sweep-desktop-dark.webp)
+
+![Radiation, dark](screens/plot-radiation-desktop-dark.webp)
+
+![Heating, dark](screens/plot-heating-desktop-dark.webp)
+
+At 375 px:
+
+<img width="250" alt="Potential, phone" src="screens/plot-potential-phone-light.webp"> <img width="250" alt="Radiation, phone" src="screens/plot-radiation-phone-light.webp">
+
 ## 6. Presets, files and links (D6)
 
 The picker says where each preset's values come from: example values for
@@ -168,10 +211,6 @@ More: the numbers behind the headline ones.
 The Forces tab, with the hover readout.
 
 ![Forces](screens/forces-desktop-light.webp)
-
-The Heating tab.
-
-![Heating](screens/heating-desktop-light.webp)
 
 A tweezer at NA 0.3: no stable trap.
 

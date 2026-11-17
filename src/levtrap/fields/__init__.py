@@ -111,6 +111,16 @@ class OpticalField:
         f = forcetorque(self.beam, self.T, position=self._own(r).T)[0]
         return (np.asarray(f).reshape(3, -1).T @ self.R.T) * (self.n_medium / C)
 
+    def dipole_force(self, r, radius: float) -> np.ndarray:
+        """The same force in the dipole approximation (:mod:`levtrap.dipole`),
+        for a sphere of ``radius`` [m] with this field's T-matrix indices: the
+        comparison that shows where Mie theory matters. Lab positions (N, 3)
+        -> forces (N, 3) [N]."""
+        from ..dipole import dipole_force
+        m_rel = complex(self.T.k_particle / self.T.k_medium)
+        q = dipole_force(self.beam, radius, m_rel, self._own(r))
+        return (np.asarray(q).reshape(3, -1).T @ self.R.T) * self.beam.power * (self.n_medium / C)
+
     def scattering(self, r) -> dict:
         """Scattered and absorbed power [W] with the particle at r."""
         r = self._own(r)[0]

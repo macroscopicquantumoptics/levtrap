@@ -79,28 +79,20 @@ test("the plots drawer opens on demand", async ({ page }) => {
   await open(page, "preset=tweezer");
   await expect(page.getByTestId("drawer")).toHaveCount(0);
   await page.getByTestId("tab-forces").click();
-  const plot = page.getByTestId("force-plot");
+  const plot = page.getByTestId("plot-forces");
   await expect(plot).toBeVisible();
-  await expect(plot.locator("path[data-axis]")).toHaveCount(3);
+  await expect(plot.locator("path[data-series]")).toHaveCount(3);
   // the hover readout lists every series
-  const box = (await plot.boundingBox())!;
+  const box = (await page.getByTestId("plot-forces-chart").boundingBox())!;
   await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.6);
   await expect(page.getByTestId("plot-tooltip")).toContainText("along x");
   await expect(page.getByTestId("plot-tooltip")).toContainText("pN");
   await shot(page, "forces-desktop-light");
-  // the same values without hovering: the table
-  await page.getByTestId("plot-table-toggle").click();
-  await expect(page.getByTestId("plot-table").locator("tbody tr")).toHaveCount(61);
-
-  await page.getByTestId("tab-heating").click();
-  await expect(page.getByTestId("heating").locator("tbody tr")).toHaveCount(3);
-  await expect(page.getByTestId("heating")).toContainText("1e-6 mbar");
-  await shot(page, "heating-desktop-light");
-
-  await page.getByTestId("tab-potential").click();
-  await expect(page.getByTestId("drawer")).toContainText("Not built yet");
+  // the same values without hovering: the table, one row per sample and series
+  await page.getByTestId("plot-forces-table-toggle").click();
+  await expect(page.getByTestId("plot-forces-table").locator("tbody tr")).toHaveCount(3 * 61);
   // the open tab closes the drawer
-  await page.getByTestId("tab-potential").click();
+  await page.getByTestId("tab-forces").click();
   await expect(page.getByTestId("drawer")).toHaveCount(0);
 });
 

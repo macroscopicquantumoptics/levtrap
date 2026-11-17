@@ -32,6 +32,11 @@
   --axis-y: #1baf7a;
   --axis-z: #2a78d6;
 
+  /* Two series that are not axes (forward and backward light): validated as
+     a pair against each theme's surface, like the axes. */
+  --series-a: #2a78d6;
+  --series-b: #d0303f;
+
   /* The scene: the table the trap is drawn on, and what stands on it. */
   --scene: #e9ecf1;
   --scene-dot: #c9cfd9;
@@ -74,6 +79,9 @@
   --axis-x: #d95926;
   --axis-y: #199e70;
   --axis-z: #3987e5;
+
+  --series-a: #3987e5;
+  --series-b: #e5484d;
 
   --scene: #090c11;
   --scene-dot: #1e2530;
