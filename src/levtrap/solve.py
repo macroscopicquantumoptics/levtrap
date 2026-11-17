@@ -49,6 +49,12 @@ def check_supported(s: dict) -> None:
         raise UnsupportedSetup("more than one Paul trap is not computed yet")
     if not beams and not pauls:
         raise UnsupportedSetup("a setup without a beam or a Paul trap does not trap")
+    for i, b in enumerate(beams):
+        if b["focus"]["kind"] == "asphere":
+            if s["environment"]["medium_index"] != 1:
+                raise UnsupportedSetup("a beam focused by an asphere is computed in vacuum or a gas (medium index 1)")
+            if b["mode"]["type"] != "lg" or list(b["mode"]["indices"]) != [0, 0]:
+                raise UnsupportedSetup("an asphere is traced for a Gaussian beam (mode LG 0 0)")
     if pauls:
         return
     wl = {b["wavelength"] for b in beams}
@@ -200,7 +206,15 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     if paul_setup is not None and not any(float(b["power"]) > 0 for b in beams):
         # a beam without power exerts no force: this is the Paul trap alone
         return _solve_paul(s, paul_setup, gravity, mass, p, warnings, want, t0)
-    optical = optical_fields(s, _single_beam, lambda wl: _tmatrix(_particle_at(given, wl), wl, nm)[0])
+    # a beam focused by a real lens (E1): its field is about the lens's best focus P*, which a tilt or a
+    # decentre moves away from the beam's position (the focus of the aligned lens)
+    lensed = _place_aspheres(s)
+    beams = [f for f in s["trap"]["fields"] if f["kind"] == "beam"]
+
+    def unit_beam(b, n_medium):
+        return lensed[id(b)]["beam"] if id(b) in lensed else _single_beam(b, n_medium)
+
+    optical = optical_fields(s, unit_beam, lambda wl: _tmatrix(_particle_at(given, wl), wl, nm)[0])
     paul = None
     if paul_setup is not None:
         from .fields.paul import E_CHARGE, PaulField
@@ -281,6 +295,8 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
 
         result["curves"] = _curves(fields, at, ranges, SCAN_POINTS, modes, dipole if "dipole" in want else None)
     if "pattern" in want:
+        if lensed:
+            raise UnsupportedSetup("the radiation pattern is not computed yet for a beam focused by an asphere")
         if len(optical) > 1 or not is_simple(beams):
             raise UnsupportedSetup("the radiation pattern is computed only for beams along +z "
                                    "through one focus that interfere")
@@ -289,8 +305,44 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
         if r_eq is None:
             result["warnings"].append("Radiation pattern taken with the particle at the focus "
                                       "(there is no equilibrium).")
+    if lensed:
+        result["lenses"] = _lens_block(s, lensed, modes)
+        result["models"].append(dict(quantity="lens", model="ray-trace", validity="ok",
+                                     notes=["Thorlabs 354330-C, Zemax prescription; far field projected on VSWFs"]))
     result["time"] = time.perf_counter() - t0
     return result
+
+
+def _place_aspheres(s: dict) -> dict:
+    """For each beam focused by a real lens: move its ``position`` to the lens's
+    best focus (in place, on the parsed copy) and keep the lens's beam and
+    numbers, by ``id`` of the beam's dict."""
+    from .api import asphere_focus
+    from .optics import beam_rotation
+    out = {}
+    for i, f in enumerate(s["trap"]["fields"]):
+        if f["kind"] != "beam" or f["focus"]["kind"] != "asphere":
+            continue
+        a = asphere_focus(f)
+        R = beam_rotation(f["direction"])
+        shift = R @ a["offset"]
+        f["position"] = [float(v) for v in np.asarray(f["position"], dtype=float) + shift]
+        out[id(f)] = dict(a, index=i, shift=shift, direction=np.asarray(f["direction"], dtype=float))
+    return out
+
+
+def _lens_block(s: dict, lensed: dict, modes: list[dict]) -> list[dict]:
+    """The ``lenses`` block: per beam focused by a real lens, where the focus
+    went, the light lost on the lens, and how far the trap's axis tilts."""
+    out = []
+    for entry in sorted(lensed.values(), key=lambda e: e["index"]):
+        d = entry["direction"] / np.linalg.norm(entry["direction"])
+        # the trap axis: the mode most nearly along the beam
+        axial = max(modes, key=lambda m: abs(float(np.dot(m["axis"], d))), default=None)
+        tilt = None if axial is None else float(np.arccos(min(1.0, abs(float(np.dot(axial["axis"], d))))) * 1e3)
+        out.append(dict(field=entry["index"], focus_shift=[float(v) for v in entry["shift"]],
+                        trap_axis_tilt_mrad=tilt, **entry["info"]))
+    return out
 
 
 def _curves(fields, centre, ranges, points, modes=(), dipole=None) -> dict:

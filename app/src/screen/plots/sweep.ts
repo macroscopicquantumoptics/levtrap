@@ -55,6 +55,30 @@ export function sweepParams(setup: Setup): SweepParam[] {
         log: false,
         check: positive,
       });
+      const focus = f.focus;
+      if (focus.kind === "asphere") {
+        // a real lens: its beam diameter and its tilts (E1)
+        const lensName = name(`lens:${index}`);
+        const asphere = (patch: Record<string, unknown>) => (s: Setup) => {
+          const b = s.trap.fields[index] as BeamField;
+          return withField<BeamField>(s, index, { focus: { ...(b.focus as typeof focus), ...patch } });
+        };
+        const tilt = (s: Setup) => ((s.trap.fields[index] as BeamField).focus as typeof focus).tilt_deg ?? [0, 0];
+        const within20 = (v: number) => (Math.abs(v) <= 20 ? null : "At most 20° either way.");
+        out.push({
+          id: `lens${index}-beam_diameter`,
+          label: `${lensName} · beam diameter`,
+          quantity: "length",
+          unit: "mm",
+          get: (s) => ((s.trap.fields[index] as BeamField).focus as typeof focus).beam_diameter,
+          set: (s, v) => asphere({ beam_diameter: v })(s),
+          log: false,
+          check: (v) => (v > 0 && v <= 0.02 ? null : "Between 0 and 20 mm."),
+        });
+        out.push({ id: `lens${index}-tilt_x`, label: `${lensName} · tilt about x`, quantity: "angle", unit: "°", get: (s) => tilt(s)[0], set: (s, v) => asphere({ tilt_deg: [v, tilt(s)[1]] })(s), log: false, check: within20 });
+        out.push({ id: `lens${index}-tilt_y`, label: `${lensName} · tilt about y`, quantity: "angle", unit: "°", get: (s) => tilt(s)[1], set: (s, v) => asphere({ tilt_deg: [tilt(s)[0], v] })(s), log: false, check: within20 });
+        return;
+      }
       out.push({
         id: `lens${index}-NA`,
         label: `${name(`lens:${index}`)} · NA`,
@@ -181,6 +205,7 @@ export function sweepValues(from: number, to: number, n: number, log: boolean): 
 /** A starting range around the current value: ×½ to ×2 (×1/10 to ×10 in log). */
 export function defaultRange(param: SweepParam, setup: Setup): [number, number] {
   const v = param.get(setup);
+  if (/-tilt_[xy]$/.test(param.id)) return [-1, 1];
   if (param.id.endsWith("-NA")) return [Math.max(0.1, v - 0.5), Math.min(0.95 * environmentOf(setup).medium_index, v + 0.15)];
   if (v === 0) return [0, 10];
   return param.log ? [v / 10, v * 10] : [v / 2, v * 2];

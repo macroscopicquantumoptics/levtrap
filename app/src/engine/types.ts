@@ -38,12 +38,31 @@ export interface Environment {
   medium_index?: number;
 }
 
-/** Give exactly one of NA, waist [m] or angle_deg. */
-export type Focus = { kind?: "lens" } & (
+/** An ideal lens: give exactly one of NA, waist [m] or angle_deg. */
+export type IdealFocus = { kind?: "lens" } & (
   | { NA: number; waist?: never; angle_deg?: never }
   | { waist: number; NA?: never; angle_deg?: never }
   | { angle_deg: number; NA?: never; waist?: never }
 );
+
+/**
+ * A real lens, ray traced (levtrap.lens): the beam is collimated,
+ * `beam_diameter` [m] across on the lens (1/e² intensity). The beam's
+ * `position` is where the aligned lens focuses; a tilt [deg, about x and y,
+ * about the lens's centre] or a decentre [m] moves the focus.
+ */
+export interface AsphereFocus {
+  kind: "asphere";
+  lens?: "354330-C";
+  beam_diameter: number;
+  tilt_deg?: [number, number];
+  decentre?: [number, number];
+  NA?: never;
+  waist?: never;
+  angle_deg?: never;
+}
+
+export type Focus = IdealFocus | AsphereFocus;
 
 export interface BeamMode {
   type?: "lg" | "hg";
@@ -254,6 +273,28 @@ export interface PaulResult {
   micromotion: Vec3 | null;
 }
 
+/** What a real lens does to its beam (solve._lens_block). */
+export interface LensResult {
+  /** index into trap.fields */
+  field: number;
+  lens: string;
+  /** m, lab frame: where the best focus went, from the aligned lens's */
+  focus_shift: Vec3;
+  /** mrad: angle between the trap's axial mode and the beam */
+  trap_axis_tilt_mrad: number | null;
+  /** fraction of the beam's power through the lens */
+  transmitted: number;
+  clipping_loss: number;
+  /** rms wavefront error about the best focus, in waves */
+  rms_waves: number;
+  rms_waves_untilted: number;
+  n_glass: number;
+  /** m, of the aligned lens */
+  back_focal_length: number;
+  /** mrad, the light's mean direction in the beam's frame (x, y) */
+  pointing_mrad: [number, number];
+}
+
 /** One field's share at the equilibrium (solve.breakdown). */
 export interface FieldShare {
   kind: "beam" | "paul" | "gravity";
@@ -293,6 +334,8 @@ export interface Result {
   } | null;
   /** present for a Paul trap */
   paul?: PaulResult | null;
+  /** per beam focused by a real lens (focus.kind "asphere") */
+  lenses?: LensResult[];
   /** each field's force and stiffness at the equilibrium; absent without one */
   breakdown?: FieldShare[];
   /** null when the trap has no beam */

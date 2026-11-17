@@ -7,6 +7,7 @@
  * the right, y up, and lengths in the picture plane are true to the scale bar.
  */
 import type { BeamField, Focus, Setup, Vec3 } from "../../engine/types.ts";
+import { asphereHalfAngle, LENSES } from "../../engine/lenses.ts";
 import { formatSI } from "../../lib/format.ts";
 import { directionOf, environmentOf } from "../model.ts";
 
@@ -71,14 +72,15 @@ export const TO_VIEWER: Vec3 = unit([-1, RECEDE, RECEDE]);
  * tan θ = λ / (π n W) of the fundamental mode.
  */
 export function coneHalfAngle(focus: Focus, wavelength: number, nMedium = 1): number {
+  if (focus.kind === "asphere") return asphereHalfAngle(LENSES[focus.lens ?? "354330-C"], focus.beam_diameter);
   if (focus.NA != null) return Math.asin(Math.min(1, focus.NA / nMedium));
   if (focus.angle_deg != null) return (focus.angle_deg * Math.PI) / 180;
-  return Math.atan(wavelength / (Math.PI * nMedium * focus.waist));
+  return Math.atan(wavelength / (Math.PI * nMedium * focus.waist!));
 }
 
 /** Waist radius drawn at the focus [m]: the given waist, or the paraxial one for the cone angle. */
 export function waistRadius(focus: Focus, wavelength: number, nMedium = 1): number {
-  if (focus.waist != null) return focus.waist;
+  if (focus.kind !== "asphere" && focus.waist != null) return focus.waist;
   return wavelength / (Math.PI * nMedium * Math.tan(coneHalfAngle(focus, wavelength, nMedium)));
 }
 

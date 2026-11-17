@@ -189,3 +189,69 @@ export function viewDirection(view: ViewName, setup: Setup): Vec3 {
   const raised = unit([flat[0], flat[1] + 0.58, flat[2]]);
   return Math.abs(dot(raised, UP)) > 0.999 ? unit([raised[0] + 1e-3, raised[1], raised[2]]) : raised;
 }
+
+// --- a real lens (focus.kind "asphere") ------------------------------------------
+
+/** levtrap.optics.beam_rotation: the smallest rotation taking +z to `d`; −z is 180° about x. 3×3, row-major. */
+export function beamRotation(direction: Vec3): number[][] {
+  const d = unit(direction);
+  const c = d[2];
+  if (c > 1 - 1e-12) return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  if (c < -1 + 1e-12) return [[1, 0, 0], [0, -1, 0], [0, 0, -1]];
+  const axis = cross([0, 0, 1], d);
+  const s = norm(axis);
+  const k = [axis[0] / s, axis[1] / s, axis[2] / s];
+  const K = [
+    [0, -k[2], k[1]],
+    [k[2], 0, -k[0]],
+    [-k[1], k[0], 0],
+  ];
+  const KK = K.map((row, i) => row.map((_, j) => K[i][0] * K[0][j] + K[i][1] * K[1][j] + K[i][2] * K[2][j]));
+  return [0, 1, 2].map((i) => [0, 1, 2].map((j) => (i === j ? 1 : 0) + s * K[i][j] + (1 - c) * KK[i][j]));
+}
+
+const matVec = (M: number[][], v: Vec3): Vec3 => [0, 1, 2].map((i) => M[i][0] * v[0] + M[i][1] * v[1] + M[i][2] * v[2]) as Vec3;
+
+/** levtrap.lens._rot: about x by tx, then about y by ty [deg]. */
+export function tiltRotation(tx: number, ty: number): number[][] {
+  const [a, b] = [(tx * Math.PI) / 180, (ty * Math.PI) / 180];
+  const Rx = [
+    [1, 0, 0],
+    [0, Math.cos(a), -Math.sin(a)],
+    [0, Math.sin(a), Math.cos(a)],
+  ];
+  const Ry = [
+    [Math.cos(b), 0, Math.sin(b)],
+    [0, 1, 0],
+    [-Math.sin(b), 0, Math.cos(b)],
+  ];
+  return [0, 1, 2].map((i) => [0, 1, 2].map((j) => Ry[i][0] * Rx[0][j] + Ry[i][1] * Rx[1][j] + Ry[i][2] * Rx[2][j]));
+}
+
+export interface LensPlacement {
+  /** back focal length of the aligned lens [m]: the S2 vertex is this far before the aligned focus */
+  bfl: number;
+  /** centre thickness [m] */
+  thickness: number;
+  tilt: [number, number];
+  /** [m] */
+  decentre: [number, number];
+}
+
+/**
+ * Where a point of the lens goes in the lab [m]. `p` is in the lens's own
+ * frame (levtrap.lens.trace: S1 vertex at the origin, the axis along +z);
+ * the lens is tilted about its centre and decentred as the engine traces it,
+ * then placed so the aligned lens focuses at the beam's position, along its
+ * direction.
+ */
+export function lensToLab(p: Vec3, beam: { direction: Vec3; position: Vec3 }, lens: LensPlacement): Vec3 {
+  const t = lens.thickness;
+  const pivot: Vec3 = [0, 0, t / 2];
+  const R = tiltRotation(lens.tilt[0], lens.tilt[1]);
+  const q = matVec(R, [p[0] - pivot[0], p[1] - pivot[1], p[2] - pivot[2]]);
+  // the beam's own frame: origin at the aligned focus, S1 vertex at z = −(bfl + t)
+  const own: Vec3 = [q[0] + pivot[0] + lens.decentre[0], q[1] + pivot[1] + lens.decentre[1], q[2] + pivot[2] - (lens.bfl + t)];
+  const lab = matVec(beamRotation(beam.direction), own);
+  return [lab[0] + beam.position[0], lab[1] + beam.position[1], lab[2] + beam.position[2]];
+}

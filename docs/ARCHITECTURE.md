@@ -69,7 +69,9 @@ Rules:
                   "temperature": 300, "gas": "N2", "medium_index": 1.0},
   "trap": {"fields": [
     {"kind": "beam", "wavelength": 1.064e-6, "power": 0.1,
-     "focus": {"kind": "lens", "NA": 0.8},            // later: "parabolic_mirror", "asphere"
+     "focus": {"kind": "lens", "NA": 0.8},            // or {"kind": "asphere", "lens": "354330-C",
+                                                      //  "beam_diameter": 2.5e-3, "tilt_deg": [0, 0],
+                                                      //  "decentre": [0, 0]} (E1); later: "parabolic_mirror"
      "mode": {"type": "lg", "indices": [0, 0]},
      "polarisation": "x",
      "direction": [0, 0, 1], "position": [0, 0, 0],   // propagation axis, focus point [m]

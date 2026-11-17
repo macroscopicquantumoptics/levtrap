@@ -115,9 +115,31 @@ function environment(e: Json, path: string): Json {
   };
 }
 
+/** Real lenses a beam can be focused by (setup.LENSES). */
+export const LENSES = ["354330-C"] as const;
+
+function vec2(v: unknown, path: string, maxAbs: number): [number, number] {
+  if (!Array.isArray(v) || v.length !== 2) throw new SetupError(path, "must be a list of two numbers");
+  return v.map((c, i) => num(c, `${path}[${i}]`, { min: -maxAbs, max: maxAbs })) as [number, number];
+}
+
+/** setup._asphere: a ray-traced lens, the beam's diameter on it, its tilt [deg] and decentre [m]. */
+function asphere(f: Json, path: string): Json {
+  const out: Json = { ...f };
+  const extra = ["NA", "waist", "angle_deg"].filter((k) => f[k] !== null && f[k] !== undefined);
+  if (extra.length) throw new SetupError(`${path}.${extra[0]}`, "is set by the lens and the beam diameter for an asphere; remove it");
+  out.lens = choice(get(f, "lens", path, LENSES[0]), `${path}.lens`, LENSES);
+  out.beam_diameter = num(get(f, "beam_diameter", path), `${path}.beam_diameter`, { exclusiveMin: 0, max: 0.02 });
+  out.tilt_deg = vec2(get(f, "tilt_deg", path, [0, 0]), `${path}.tilt_deg`, 20);
+  out.decentre = vec2(get(f, "decentre", path, [0, 0]), `${path}.decentre`, 2.5e-3);
+  for (const key of ["NA", "waist", "angle_deg"]) delete out[key];
+  return out;
+}
+
 function focus(f: Json, path: string): Json {
   const out: Json = { ...f };
-  out.kind = choice(get(f, "kind", path, "lens"), `${path}.kind`, ["lens"]);
+  out.kind = choice(get(f, "kind", path, "lens"), `${path}.kind`, ["lens", "asphere"]);
+  if (out.kind === "asphere") return asphere(f, path);
   const given = ["NA", "waist", "angle_deg"].filter((k) => f[k] !== null && f[k] !== undefined);
   if (given.length !== 1) throw new SetupError(path, "give exactly one of NA, waist or angle_deg");
   const key = given[0];

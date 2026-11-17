@@ -14,10 +14,11 @@ import type { BeamField, FieldShare, GravityField, PaulField, Vec3 } from "../..
 import { environmentOf, gravityOf, partsOf, type Part, type PartId } from "../model.ts";
 import { beamRadius, scaleBar, unit } from "../scene/geometry.ts";
 import { lightColor } from "../scene/light.ts";
-import { beamGeometry, electrodeExtent, fitScene, lensDistance, toWorld, viewDirection, WORLD, type Fit, type ViewName } from "../scene/space.ts";
+import { LENSES } from "../../engine/lenses.ts";
+import { beamGeometry, electrodeExtent, fitScene, lensDistance, toWorld, viewDirection, WORLD, type Fit, type LensPlacement, type ViewName } from "../scene/space.ts";
 import type { SceneProps } from "../Scene.tsx";
 import { usePalette } from "./palette.ts";
-import { Beam, ForceArrows, PaulTrap, Particle, TrapAxes, type Picking } from "./parts.tsx";
+import { AsphereLens, Beam, ForceArrows, PaulTrap, Particle, TrapAxes, type Picking } from "./parts.tsx";
 import base from "../Scene.module.css";
 import styles from "./Scene3D.module.css";
 
@@ -88,9 +89,32 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
     .filter((b): b is { f: BeamField; index: number } => b.f.kind === "beam")
     .map(({ f, index }) => {
       const g = beamGeometry(f, n);
-      return { beam: f, index, g, lens: lensDistance(g.w0, g.theta, fit.halfView) };
+      if (f.focus.kind !== "asphere") return { beam: f, index, g, lens: lensDistance(g.w0, g.theta, fit.halfView), asphere: null };
+      // a real lens: drawn where it is; the light goes to where it focuses (the result's shift)
+      const data = LENSES[f.focus.lens ?? "354330-C"];
+      const done = result?.lenses?.find((l) => l.field === index);
+      const shift: Vec3 = done?.focus_shift ?? [0, 0, 0];
+      const placement: LensPlacement = {
+        bfl: done?.back_focal_length ?? data.bfl,
+        thickness: data.thickness,
+        tilt: f.focus.tilt_deg ?? [0, 0],
+        decentre: f.focus.decentre ?? [0, 0],
+      };
+      const focus: Vec3 = [g.focus[0] + shift[0], g.focus[1] + shift[1], g.focus[2] + shift[2]];
+      return {
+        beam: f,
+        index,
+        g: { ...g, focus },
+        lens: placement.bfl,
+        asphere: { data, placement, at: { direction: g.direction, position: g.focus } },
+      };
     });
   const pauls = fields.map((f, index) => ({ f, index })).filter((p): p is { f: PaulField; index: number } => p.f.kind === "paul");
+  // how far from the target anything is drawn [m]: the camera's depth must hold it all (a real lens stands mm away)
+  const extent = Math.max(
+    fit.halfView,
+    ...beams.filter((b) => b.asphere).map((b) => b.asphere!.placement.bfl + b.asphere!.placement.thickness + b.asphere!.data.s1.sd * 1e-3 + Math.hypot(...b.g.focus)),
+  );
 
   const trueRadius = setup.particle.radius;
   const enlarged = !overlays.trueSize && trueRadius * pxPerMetre < MIN_PARTICLE_PX;
@@ -218,16 +242,22 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
           onSelect(null);
         }}
       >
-        <CameraRig setup={setup} fit={fit} fitKey={fitKey} view={view} offset={{ x: centre.x - width / 2, y: centre.y - height / 2 }} onCamera={setCamera} />
+        <CameraRig setup={setup} fit={fit} fitKey={fitKey} view={view} extent={extent} offset={{ x: centre.x - width / 2, y: centre.y - height / 2 }} onCamera={setCamera} />
         <hemisphereLight args={["#ffffff", "#8090a0", 1.6]} />
         <directionalLight position={[-3, 5, -2]} intensity={2.2} />
         <directionalLight position={[4, -1, 3]} intensity={0.6} />
         {pauls.map(({ f, index }) => (
           <PaulTrap key={index} id={`field:${index}`} paul={f} palette={palette} picking={picking} />
         ))}
-        {beams.map(({ beam, index, g, lens }) => (
+        {beams.map(({ index, asphere }) =>
+          asphere ? (
+            <AsphereLens key={`lens-${index}`} id={`lens:${index}`} data={asphere.data} placement={asphere.placement} beam={asphere.at} palette={palette} picking={picking} />
+          ) : null,
+        )}
+        {beams.map(({ beam, index, g, lens, asphere }) => (
           <Beam
             key={index}
+            symbol={!asphere}
             id={`field:${index}`}
             lensId={`lens:${index}`}
             geometry={g}
@@ -302,12 +332,20 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
       {labels && (
         <div className={base.labels}>
           {spots.map((s) => {
-            // a part out of the room (zoomed or turned away) has no label
-            if (s.anchor[0] < left - 8 || s.anchor[0] > right + 8 || s.anchor[1] < top - 8 || s.anchor[1] > bottom + 8) return null;
+            // a part out of the room (zoomed or turned away) has no label; but a lens keeps
+            // its label at the room's edge, towards it (a real lens stands millimetres away)
+            const away = s.anchor[0] < left - 8 || s.anchor[0] > right + 8 || s.anchor[1] < top - 8 || s.anchor[1] > bottom + 8;
+            if (away && s.part.kind !== "lens") return null;
+            let [sx, sy] = [s.x, s.y];
+            if (away) {
+              const [dx, dy] = [s.anchor[0] - centre.x, s.anchor[1] - centre.y];
+              const t = Math.min(dx ? Math.abs((dx > 0 ? right - 70 : left + 70) - centre.x) / Math.abs(dx) : Infinity, dy ? Math.abs((dy > 0 ? bottom - 24 : top + 24) - centre.y) / Math.abs(dy) : Infinity, 1);
+              [sx, sy] = [centre.x + dx * t, centre.y + dy * t];
+            }
             const text = `${s.part.name} ${s.part.summary}`;
             const half = Math.min(150, 12 + 3.4 * text.length);
-            const x = Math.min(Math.max(s.x, left + half), right - half);
-            const y = Math.min(Math.max(s.y, top + 14), bottom - 14);
+            const x = Math.min(Math.max(sx, left + half), right - half);
+            const y = Math.min(Math.max(sy, top + 14), bottom - 14);
             return (
               <button
                 key={s.part.id}
@@ -316,6 +354,7 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
                 style={{ left: x, top: y }}
                 data-part={s.part.id}
                 data-kind={s.part.kind}
+                data-away={away || undefined}
                 data-anchor={`${s.anchor[0].toFixed(1)},${s.anchor[1].toFixed(1)}`}
                 data-selected={selected === s.part.id || undefined}
                 data-hover={hover?.id === s.part.id || undefined}
@@ -360,21 +399,23 @@ interface RigProps {
   fit: Fit;
   /** the view is fitted again when this changes */
   fitKey: string;
+  /** m: the farthest anything drawn is from the target */
+  extent: number;
   view: { name: ViewName; tick: number };
   /** px from the canvas centre to where the trap centre is drawn */
   offset: { x: number; y: number };
   onCamera(state: CameraState): void;
 }
 
-function CameraRig({ setup, fit, fitKey, view, offset, onCamera }: RigProps) {
+function CameraRig({ setup, fit, fitKey, view, extent, offset, onCamera }: RigProps) {
   const camera = useThree((s) => s.camera) as OrthographicCamera;
   const gl = useThree((s) => s.gl);
   const size = useThree((s) => s.size);
   const invalidate = useThree((s) => s.invalidate);
   const controls = useRef<OrbitControls | null>(null);
   const frame = useRef(0);
-  const latest = useRef({ setup, fit, view });
-  latest.current = { setup, fit, view };
+  const latest = useRef({ setup, fit, view, extent });
+  latest.current = { setup, fit, view, extent };
 
   const report = useCallback(() => {
     cancelAnimationFrame(frame.current);
@@ -423,10 +464,10 @@ function CameraRig({ setup, fit, fitKey, view, offset, onCamera }: RigProps) {
 
   // fit: on a new setup scale, and on Fit / Along / Side
   useLayoutEffect(() => {
-    const { setup: s, fit: f, view: v } = latest.current;
+    const { setup: s, fit: f, view: v, extent: e } = latest.current;
     const dir = viewDirection(v.name, s);
     const target = new Vector3(...toWorld(f.target));
-    const distance = 40 * f.halfView * WORLD;
+    const distance = 40 * Math.max(f.halfView, e) * WORLD;
     camera.up.set(0, 1, 0);
     camera.position.copy(target).addScaledVector(new Vector3(...dir), distance);
     camera.near = distance * 1e-3;

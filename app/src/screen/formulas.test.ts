@@ -4,6 +4,7 @@ import katex from "katex";
 import { explainDepth, explainFrequency, secondaryNumbers, type Explanation } from "./explain.ts";
 import { FORMULAS, type FormulaId } from "./formulas.ts";
 import { PRESETS } from "./presets.ts";
+import { ASPHERE_RESULT, ASPHERE_SETUP } from "./asphere.fixture.ts";
 import { RECORDED } from "./recorded.ts";
 
 const typeset = (tex: string, displayMode = true) => katex.renderToString(tex, { throwOnError: true, strict: "error", displayMode, output: "htmlAndMathml" });
@@ -19,6 +20,8 @@ function allExplanations(): { preset: string; e: Explanation }[] {
     add(explainDepth(result, preset.setup));
     secondaryNumbers(result, preset.setup).forEach((s) => add(s.explain()));
   }
+  // and a beam focused by a real lens (E1), as the engine computes it
+  secondaryNumbers(ASPHERE_RESULT, ASPHERE_SETUP).forEach((s) => out.push({ preset: "asphere", e: s.explain() }));
   return out;
 }
 

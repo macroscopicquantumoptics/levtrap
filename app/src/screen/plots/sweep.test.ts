@@ -72,3 +72,18 @@ test("unstable runs reach halfway to their stable neighbours", () => {
   ]);
   assert.deepEqual(unstableRuns([0, 1], [true, true]), []);
 });
+
+test("a real lens sweeps its beam diameter and tilts, not an NA", async () => {
+  const { ASPHERE_SETUP } = await import("../asphere.fixture.ts");
+  const params = sweepParams(ASPHERE_SETUP);
+  const ids = params.map((p) => p.id);
+  assert.ok(ids.includes("lens0-beam_diameter") && ids.includes("lens0-tilt_y"));
+  assert.ok(!ids.includes("lens0-NA"));
+  const tilt = params.find((p) => p.id === "lens0-tilt_y")!;
+  assert.equal(tilt.get(ASPHERE_SETUP), 0.3);
+  const t = tilt.set(ASPHERE_SETUP, 0.5);
+  const focus = (t.trap.fields[0] as BeamField).focus;
+  assert.equal(focus.kind, "asphere");
+  assert.deepEqual(focus.kind === "asphere" && focus.tilt_deg, [0, 0.5]);
+  assert.deepEqual(defaultRange(tilt, ASPHERE_SETUP), [-1, 1]);
+});
