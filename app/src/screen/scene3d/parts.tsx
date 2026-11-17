@@ -34,7 +34,8 @@ import type { FieldShare, PaulField, TrapMode, Vec3 } from "../../engine/types.t
 import type { PartId } from "../model.ts";
 import { beamRadius } from "../scene/geometry.ts";
 import { lightColor } from "../scene/light.ts";
-import { beamProfile, type BeamGeometry, electrodes, type Electrode, toWorld, WORLD } from "../scene/space.ts";
+import { sag, type LensData } from "../../engine/lenses.ts";
+import { beamProfile, type BeamGeometry, electrodes, type Electrode, lensToLab, type LensPlacement, toWorld, WORLD } from "../scene/space.ts";
 import type { Palette } from "./palette.ts";
 
 /** What a drawable needs to answer the pointer. */
@@ -122,9 +123,11 @@ export interface BeamProps {
   picking: Picking;
   /** px per scene unit, for the dashes of the optical axis */
   pxPerUnit: number;
+  /** draw the symbolic lens (an ideal lens); a real lens is drawn by AsphereLens */
+  symbol?: boolean;
 }
 
-export function Beam({ id, lensId, geometry: g, wavelength, lens: L, run, palette, picking, pxPerUnit }: BeamProps) {
+export function Beam({ id, lensId, geometry: g, wavelength, lens: L, run, palette, picking, pxPerUnit, symbol = true }: BeamProps) {
   const color = palette.color(lightColor(wavelength));
   const dark = palette.theme === "dark";
 
@@ -188,7 +191,7 @@ export function Beam({ id, lensId, geometry: g, wavelength, lens: L, run, palett
     <group position={focus} quaternion={q}>
       <primitive object={axis} />
       <mesh geometry={mesh} material={material} renderOrder={2} {...handlers(id, 0, picking)} />
-      <Lens id={lensId} at={-L} radius={1.12 * beamRadius(-L, g.w0, g.theta)} palette={palette} picking={picking} />
+      {symbol && <Lens id={lensId} at={-L} radius={1.12 * beamRadius(-L, g.w0, g.theta)} palette={palette} picking={picking} />}
     </group>
   );
 }
@@ -214,6 +217,57 @@ function Lens({ id, at, radius, palette, picking }: { id: PartId; at: number; ra
         transparent
         opacity={0.3 + 0.2 * state}
         roughness={0.15}
+        metalness={0}
+        depthWrite={false}
+        emissive={palette.color("select")}
+        emissiveIntensity={0.55 * state}
+        side={DoubleSide}
+      />
+    </mesh>
+  );
+}
+
+/**
+ * A real lens (focus.kind "asphere"): its two even-aspheric surfaces from the
+ * prescription, at its true size and distance, tilted and decentred as the
+ * engine traces it (scene/space.ts lensToLab).
+ */
+export function AsphereLens({ id, data, placement, beam, palette, picking }: { id: PartId; data: LensData; placement: LensPlacement; beam: { direction: Vec3; position: Vec3 }; palette: Palette; picking: Picking }) {
+  // rebuilt only when the lens or where it stands changes (the objects are made afresh each render)
+  const where = JSON.stringify([placement, beam]);
+  const geometry = useMemo(() => {
+    const [place, at] = JSON.parse(where) as [LensPlacement, { direction: Vec3; position: Vec3 }];
+    const t = data.thickness * 1e3; // mm
+    const points: Vector2[] = [];
+    const n = 32;
+    for (let i = 0; i <= n; i += 1) {
+      const r = (data.s1.sd * i) / n;
+      points.push(new Vector2(r, sag(data.s1, r)));
+    }
+    for (let i = n; i >= 0; i -= 1) {
+      const r = (data.s2.sd * i) / n;
+      // the flange from the front surface's rim to the back surface's
+      if (i === n) points.push(new Vector2(data.s1.sd, t + sag(data.s2, r)));
+      points.push(new Vector2(r, t + sag(data.s2, r)));
+    }
+    const lathe = new LatheGeometry(points, 64);
+    // lathe (x, y, z), axis y, in mm -> the lens's own frame in m (axis z) -> the lab, in scene units
+    const pos = lathe.getAttribute("position");
+    for (let i = 0; i < pos.count; i += 1) {
+      const lab = lensToLab([pos.getX(i) * 1e-3, pos.getZ(i) * 1e-3, pos.getY(i) * 1e-3], at, place);
+      pos.setXYZ(i, lab[0] * WORLD, lab[1] * WORLD, lab[2] * WORLD);
+    }
+    lathe.computeVertexNormals();
+    return lathe;
+  }, [data, where]);
+  const state = picking.selected === id ? 1 : picking.hover === id ? 0.5 : 0;
+  return (
+    <mesh geometry={geometry} renderOrder={3} {...handlers(id, 1, picking)} data-lens="asphere">
+      <meshStandardMaterial
+        color={palette.color("glass")}
+        transparent
+        opacity={0.38 + 0.2 * state}
+        roughness={0.12}
         metalness={0}
         depthWrite={false}
         emissive={palette.color("select")}

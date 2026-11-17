@@ -142,3 +142,36 @@ test("the three views: oblique, down the beam, and from the side", () => {
   near(norm(v), 1);
   assert.ok(v[1] < -0.999 && Math.abs(v[1]) < 1);
 });
+
+test("a real lens is placed as the engine traces it", async () => {
+  const { beamRotation, lensToLab, tiltRotation } = await import("./space.ts");
+  const lens = { bfl: 1.76e-3, thickness: 3.214e-3, tilt: [0, 0] as [number, number], decentre: [0, 0] as [number, number] };
+  const beam = { direction: [0, 0, 1] as [number, number, number], position: [1e-6, 2e-6, 3e-6] as [number, number, number] };
+  // aligned: the S2 vertex is the back focal length before the focus, the S1 vertex the thickness before that
+  const s2 = lensToLab([0, 0, lens.thickness], beam, lens);
+  near(s2[2], 3e-6 - 1.76e-3, 1e-12);
+  near(s2[0], 1e-6, 1e-12);
+  const s1 = lensToLab([0, 0, 0], beam, lens);
+  near(s1[2], 3e-6 - 1.76e-3 - 3.214e-3, 1e-12);
+  // tilted about its centre: the centre stays, the vertices move sideways
+  const tilted = { ...lens, tilt: [0, 1] as [number, number] };
+  const centre = lensToLab([0, 0, lens.thickness / 2], beam, tilted);
+  near(centre[0], 1e-6, 1e-12);
+  near(centre[2], 3e-6 - 1.76e-3 - lens.thickness / 2, 1e-12);
+  const v = lensToLab([0, 0, lens.thickness], beam, tilted);
+  near(v[0] - 1e-6, (lens.thickness / 2) * Math.sin(Math.PI / 180), 1e-9);
+  // decentred: the whole lens moves across the beam
+  const off = lensToLab([0, 0, 0], beam, { ...lens, decentre: [2e-4, 0] });
+  near(off[0], 1e-6 + 2e-4, 1e-12);
+  // a beam along −z: the lens sits on the other side, its x the lab's x
+  const back = lensToLab([1e-3, 0, lens.thickness], { ...beam, direction: [0, 0, -1] }, lens);
+  near(back[2], 3e-6 + 1.76e-3, 1e-12);
+  near(back[0], 1e-6 + 1e-3, 1e-12);
+  // rotations are rotations
+  for (const R of [beamRotation([1, 2, 3]), tiltRotation(3, -5)]) {
+    for (let i = 0; i < 3; i += 1) near(Math.hypot(...R[i]), 1, 1e-12);
+  }
+  const d = beamRotation([1, 2, 3]);
+  const z = [d[0][2], d[1][2], d[2][2]];
+  near(z[0] * Math.sqrt(14), 1, 1e-12);
+});

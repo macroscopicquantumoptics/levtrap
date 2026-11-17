@@ -43,6 +43,13 @@ export function resultRows(result: Result): Row[] {
     for (const axis of ["x", "y", "z"] as const) add("Mathieu q", axis, result.paul.q[axis], "");
     (result.paul.micromotion ?? [null, null, null]).forEach((a, i) => add("micromotion amplitude", "xyz"[i], a, "m"));
   }
+  for (const lens of result.lenses ?? []) {
+    const m = modelOf(result, "lens");
+    lens.focus_shift.forEach((c, i) => add(`focus shift by lens ${lens.field + 1}`, "xyz"[i], c, "m", m));
+    add(`clipping loss of lens ${lens.field + 1}`, "", lens.clipping_loss, "", m);
+    add(`wavefront error behind lens ${lens.field + 1}`, "", lens.rms_waves, "waves rms", m);
+    add(`trap axis tilt by lens ${lens.field + 1}`, "", lens.trap_axis_tilt_mrad, "mrad");
+  }
   if (result.rates) {
     add("gas damping", "", result.rates.gas_damping, "1/s", modelOf(result, "gas_damping"));
     const recoil = modelOf(result, "recoil_heating");

@@ -96,3 +96,17 @@ test("the second row: every number of a tweezer and of a Paul trap, explained", 
   const A = Math.abs(r.paul!.q.y * r.equilibrium![1]) / 2;
   assert.ok(Math.abs(A - r.paul!.micromotion![1]) < 1e-6 * A);
 });
+
+test("a real lens adds what it does to the focus: moved, clipped, the trap axis tilted", async () => {
+  const { ASPHERE_RESULT, ASPHERE_SETUP } = await import("./asphere.fixture.ts");
+  const rows = secondaryNumbers(ASPHERE_RESULT, ASPHERE_SETUP);
+  const row = (id: string) => rows.find((r) => r.id === id)!;
+  const lens = ASPHERE_RESULT.lenses![0];
+  // a tilt about y moves the focus along x (which way depends on how full the aperture is)
+  assert.ok(Math.abs(lens.focus_shift[0]) > 1e-7 && Math.abs(lens.focus_shift[1]) < 1e-12, "along x");
+  assert.equal(row("lens0-focus").label, "Focus moved by the lens");
+  assert.equal(row("lens0-focus").explain().formula, "lens-focus-shift");
+  assert.match(row("lens0-clipping").value, / %$/);
+  assert.equal(row("lens0-axis").explain().formula, "trap-axis-tilt");
+  assert.match(row("lens0-axis").value, /mrad$/);
+});

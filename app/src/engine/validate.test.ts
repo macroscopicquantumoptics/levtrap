@@ -64,6 +64,15 @@ const CASES: Case[] = [
   ["paul no r0", edit((s) => { s.particle.charge = 3; s.trap.fields.push({ ...paul, r0: undefined }); })],
   ["paul geometry factor", edit((s) => { s.particle.charge = 3; s.trap.fields.push({ ...paul, geometry_factors: { axial: 0 } }); })],
   ["gravity short", edit((s) => s.trap.fields.push({ kind: "gravity", g: [0, -9.81] }))],
+  ["asphere", edit((s) => (s.trap.fields[0].focus = { kind: "asphere", beam_diameter: 2.5e-3, tilt_deg: [0.1, -0.2], decentre: [1e-4, 0] }))],
+  ["asphere defaults", edit((s) => (s.trap.fields[0].focus = { kind: "asphere", beam_diameter: 2e-3 }))],
+  ["asphere with NA", edit((s) => (s.trap.fields[0].focus = { kind: "asphere", beam_diameter: 2e-3, NA: 0.5 }))],
+  ["asphere no diameter", edit((s) => (s.trap.fields[0].focus = { kind: "asphere" }))],
+  ["asphere unknown lens", edit((s) => (s.trap.fields[0].focus = { kind: "asphere", lens: "AC254", beam_diameter: 2e-3 }))],
+  ["asphere tilt too far", edit((s) => (s.trap.fields[0].focus = { kind: "asphere", beam_diameter: 2e-3, tilt_deg: [0, -25] }))],
+  ["asphere tilt short", edit((s) => (s.trap.fields[0].focus = { kind: "asphere", beam_diameter: 2e-3, tilt_deg: [1] }))],
+  ["asphere decentre", edit((s) => (s.trap.fields[0].focus = { kind: "asphere", beam_diameter: 2e-3, decentre: [0, 0.01] }))],
+  ["focus kind", edit((s) => (s.trap.fields[0].focus = { kind: "mirror", NA: 0.5 }))],
 ];
 
 const CODE = `

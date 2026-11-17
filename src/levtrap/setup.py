@@ -26,6 +26,8 @@ VERSION = 1
 
 GASES = ("N2", "He", "air")
 POLARISATIONS = ("x", "y", "circular+", "circular-")
+#: Real lenses a beam can be focused by (``focus.kind = "asphere"``, :mod:`levtrap.lens`).
+LENSES = ("354330-C",)
 
 
 class SetupError(ValueError):
@@ -119,9 +121,36 @@ def _environment(e: dict, path: str) -> dict:
     return out
 
 
+def _vec2(v: Any, path: str, *, max_abs: float) -> list[float]:
+    if not isinstance(v, (list, tuple)) or len(v) != 2:
+        raise SetupError(path, "must be a list of two numbers")
+    return [_num(c, f"{path}[{i}]", min=-max_abs, max=max_abs) for i, c in enumerate(v)]
+
+
+def _asphere(f: dict, path: str) -> dict:
+    """A real lens (ray traced, :func:`levtrap.lens.focused_beam`): the beam
+    is collimated, ``beam_diameter`` [m] across (1/e^2 intensity) on the
+    lens; ``tilt_deg`` [deg] about x and y, about the lens's centre;
+    ``decentre`` [m] along x and y. The beam's ``position`` is where the
+    untilted, centred lens focuses."""
+    out = dict(f)
+    extra = [k for k in ("NA", "waist", "angle_deg") if f.get(k) is not None]
+    if extra:
+        raise SetupError(f"{path}.{extra[0]}", "is set by the lens and the beam diameter for an asphere; remove it")
+    out["lens"] = _choice(_get(f, "lens", path, LENSES[0]), f"{path}.lens", LENSES)
+    out["beam_diameter"] = _num(_get(f, "beam_diameter", path), f"{path}.beam_diameter", exclusive_min=0, max=0.02)
+    out["tilt_deg"] = _vec2(_get(f, "tilt_deg", path, [0.0, 0.0]), f"{path}.tilt_deg", max_abs=20)
+    out["decentre"] = _vec2(_get(f, "decentre", path, [0.0, 0.0]), f"{path}.decentre", max_abs=2.5e-3)
+    for key in ("NA", "waist", "angle_deg"):
+        out.pop(key, None)
+    return out
+
+
 def _focus(f: dict, path: str) -> dict:
     out = dict(f)
-    out["kind"] = _choice(_get(f, "kind", path, "lens"), f"{path}.kind", ("lens",))
+    out["kind"] = _choice(_get(f, "kind", path, "lens"), f"{path}.kind", ("lens", "asphere"))
+    if out["kind"] == "asphere":
+        return _asphere(f, path)
     given = [k for k in ("NA", "waist", "angle_deg") if f.get(k) is not None]
     if len(given) != 1:
         raise SetupError(path, "give exactly one of NA, waist or angle_deg")
@@ -285,7 +314,7 @@ _KNOWN = {
     "trap": {"fields"},
     "beam": {"kind", "id", "wavelength", "power", "focus", "mode", "polarisation", "direction",
              "position", "phase", "coherent_with"},
-    "focus": {"kind", "NA", "waist", "angle_deg"},
+    "focus": {"kind", "NA", "waist", "angle_deg", "lens", "beam_diameter", "tilt_deg", "decentre"},
     "mode": {"type", "indices"},
     "paul": {"kind", "id", "geometry", "rf_voltage", "rf_frequency", "dc_voltage", "endcap_voltage",
              "r0", "z0", "geometry_factors"},

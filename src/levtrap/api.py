@@ -503,6 +503,33 @@ def _lens_beam(lens_req: dict, wl: float):
     return lr
 
 
+def asphere_focus(b: dict) -> dict:
+    """A beam field focused by a real lens (``focus.kind = "asphere"``):
+    its unit-power beam about the best focus P* of the lens as set (tilted,
+    decentred), where P* is relative to the best focus of the same lens
+    untilted and centred (the beam's ``position``), and what the lens does.
+
+    Returns ``beam`` (a :class:`Bsc` in the beam's own frame, about P*, for 1 W
+    on the lens: its power is the fraction transmitted), ``offset`` [m] (P*
+    in the beam's own frame) and ``info`` (the ``lenses`` block of a Result
+    for this beam, before the lab-frame entries are added).
+    """
+    focus = b["focus"]
+    wl = float(b["wavelength"])
+    lens_req = dict(diameter_mm=float(focus["beam_diameter"]) * 1e3, tilt_x_deg=float(focus["tilt_deg"][0]),
+                    tilt_y_deg=float(focus["tilt_deg"][1]), decenter_x_mm=float(focus["decentre"][0]) * 1e3,
+                    decenter_y_mm=float(focus["decentre"][1]) * 1e3, pivot="centre",
+                    polarisation=b["polarisation"])
+    ref_req = dict(lens_req, tilt_x_deg=0.0, tilt_y_deg=0.0, decenter_x_mm=0.0, decenter_y_mm=0.0)
+    lr, lr0 = _lens_beam(lens_req, wl), _lens_beam(ref_req, wl)
+    offset = (np.asarray(lr.focus_mm) - np.asarray(lr0.focus_mm)) * 1e-3
+    info = dict(lens=focus["lens"], transmitted=float(lr.transmitted), clipping_loss=float(1 - lr.transmitted),
+                rms_waves=float(lr.rms_waves), rms_waves_untilted=float(lr0.rms_waves), n_glass=float(lr.n_glass),
+                back_focal_length=float(lr0.focus_mm[2] - 3.214106073867) * 1e-3,
+                pointing_mrad=[float(lr.centroid_dir[0] * 1e3), float(lr.centroid_dir[1] * 1e3)])
+    return dict(beam=lr.beam * math.sqrt(lr.transmitted), offset=offset, info=info)
+
+
 def _lens_trap(req: dict, lens_req: dict, detail: bool, r_start=None):
     """Trap analysis for the beam behind the (tilted) lens.  Positions are
     relative to the best focus P* of that beam; the caller adds P*."""

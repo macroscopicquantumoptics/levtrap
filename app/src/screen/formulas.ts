@@ -85,6 +85,20 @@ export const FORMULAS = {
     tex: tex`\frac{\gamma(p)\, k_\mathrm{B} T}{\hbar \Omega_i} = \Gamma_{\mathrm{recoil},i}`,
     text: "the pressure p where gas heating γ(p) k_B T / (ħ Ω) equals recoil heating",
   },
+  "lens-focus-shift": {
+    tex: tex`\Delta\mathbf{r} = \mathbf{P}^{*}_{\text{as set}} - \mathbf{P}^{*}_{\text{aligned}}, \qquad \mathbf{P}^{*} = \arg\min_{\mathbf{P}}\, \operatorname{Var}_{I}\, W(\mathbf{u}; \mathbf{P})`,
+    text: "Δr = P*(as set) − P*(aligned), P* the point that minimises the intensity-weighted variance of the wavefront error W",
+    source: "ray trace of the Thorlabs Zemax prescription (levtrap.lens)",
+  },
+  "lens-clipping": {
+    tex: tex`L = 1 - \frac{\sum_{\text{rays through}} I}{\sum_{\text{all rays}} I}`,
+    text: "L = 1 − (power of the rays that pass both surfaces) / (power of the beam)",
+    source: "ray trace of the Thorlabs Zemax prescription (levtrap.lens)",
+  },
+  "trap-axis-tilt": {
+    tex: tex`\alpha = \arccos \left| \hat{\mathbf{e}}_{\text{axial}} \cdot \hat{\mathbf{d}} \right|`,
+    text: "α = arccos |e_axial · d|, between the trap's axial mode and the beam's direction",
+  },
 } satisfies Record<string, Formula>;
 
 export type FormulaId = keyof typeof FORMULAS;
