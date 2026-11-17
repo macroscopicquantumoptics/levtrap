@@ -148,3 +148,7 @@
     border-radius: 12px;
   }
 }
+
+.source {
+  color: var(--text-faint);
+}
