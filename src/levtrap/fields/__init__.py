@@ -113,6 +113,8 @@ class OpticalField:
 
     def scattering(self, r) -> dict:
         """Scattered and absorbed power [W] with the particle at r."""
+        if self.beam.power == 0:
+            return dict(P_sca=0.0, P_abs=0.0)
         r = self._own(r)[0]
         b = self.beam.translate_xyz(r) if np.any(r != 0) else self.beam
         sbeam, _ = b.scatter(self.T)

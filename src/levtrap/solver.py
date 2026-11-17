@@ -114,7 +114,8 @@ def _clean_axis(v: np.ndarray) -> np.ndarray:
 
 
 def find_trap(fields, mass: float, *, centre=(0.0, 0.0, 0.0), ranges=(1.5e-6, 1.5e-6, 3e-6),
-              points: int = 61, depth_points: int | None = None) -> Trap:
+              points: int = 61, depth_points: int | None = None,
+              length_scale: float | None = None) -> Trap:
     """Equilibrium, modes and depth of the summed force of ``fields``.
 
     ``ranges`` are the half-widths [m] of the scan along x, y, z around
@@ -123,11 +124,15 @@ def find_trap(fields, mass: float, *, centre=(0.0, 0.0, 0.0), ranges=(1.5e-6, 1.
     ``stiffness`` [N/m], ``frequency`` [Hz] (``None`` unless the stiffness
     is positive), ``depth`` [J] and ``bounded`` (False: the barrier lies
     beyond the scan and the depth is a lower bound).
+
+    ``length_scale`` [m] overrides the smallest field length scale that sets
+    the difference step and the Newton step limit (to search a mm-scale
+    region for a field whose own scale is a wavelength).
     """
     centre = np.asarray(centre, dtype=float)
     ranges = np.asarray(ranges, dtype=float)
     depth_points = points if depth_points is None else depth_points
-    L = _scale(fields)
+    L = _scale(fields) if length_scale is None else float(length_scale)
     h = L / 200
     out = Trap(stable=False, converged=False, equilibrium=None, K=None)
 

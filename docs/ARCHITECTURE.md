@@ -133,6 +133,7 @@ Models per field:
   "depth": {"J": 3e-19, "K": 2.2e4, "kT": 72},
   "optical": {"P_sca": …, "P_abs": …, "Qsca": …, "Qabs": …},
   "paul": {"q": {...}, "a": {...}, "stable": true, "secular": {...}, "micromotion": [...]},
+  "breakdown": [{"kind": "beam", "fields": [0], "force": [...], "stiffness": {"x": …}}, …],  // hybrid traps
   "rates": {"gas_damping": …, "recoil_heating": [...], "reheating_phonons_per_s": [...]},
   "pattern": {...},                       // on request
   "curves": {...},                        // on request: force cuts, potential, map
