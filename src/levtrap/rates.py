@@ -324,6 +324,13 @@ def rates_block(s: dict, *, modes: list[dict], mass: float, P_sca: float, P_abs:
         validity = "approximate"
         recoil_notes.append(f"electric dipole carries {100 * ed_fraction:.0f}% of the scattered power; "
                             "the dipole pattern is approximate (Mie pattern pending)")
+    d0 = np.asarray(beams[0]["direction"], float)
+    d0 = d0 / np.linalg.norm(d0)
+    if any(abs(abs(float(np.asarray(b["direction"], float) @ d0)) / np.linalg.norm(b["direction"]) - 1) > 1e-9
+           for b in beams[1:]):
+        validity = "approximate"
+        recoil_notes.append("beams along different axes: recoil from the beam photons taken along "
+                            "the first beam, scattered pattern from each beam's own polarisation")
     if not same_pol:
         validity = "approximate"
         recoil_notes.append("beams of different polarisation: patterns averaged by power, interference ignored")

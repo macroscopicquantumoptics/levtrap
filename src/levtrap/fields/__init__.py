@@ -86,24 +86,34 @@ class OpticalField:
     ``beam`` is a :class:`levtrap.bsc.Bsc` whose coefficients are scaled so
     that ``beam.power`` is the power in watts; then F [N] = Q n_medium / c
     with Q from :func:`levtrap.force.forcetorque` (see :mod:`levtrap.derived`).
+
+    ``beam`` is given in its own frame. ``rotation`` R (3x3) and ``origin``
+    p [m] place that frame in the lab: a lab point r is R^T (r - p) in the
+    beam's frame, and a force F' computed there is R F' in the lab. The
+    identity and the origin (the defaults) leave the beam where it is.
     """
 
     kind = "beam"
 
-    def __init__(self, beam, tmatrix, n_medium: float):
+    def __init__(self, beam, tmatrix, n_medium: float, rotation=None, origin=None):
         self.beam = beam
         self.T = tmatrix
         self.n_medium = float(n_medium)
         self.length_scale = 2 * np.pi / beam.k_medium  # wavelength in the medium [m]
+        self.R = np.eye(3) if rotation is None else np.asarray(rotation, dtype=float)
+        self.origin = np.zeros(3) if origin is None else np.asarray(origin, dtype=float)
+
+    def _own(self, r) -> np.ndarray:
+        """Lab positions (N, 3) -> positions in the beam's frame (N, 3)."""
+        return (_positions(r) - self.origin) @ self.R
 
     def force(self, r) -> np.ndarray:
-        r = _positions(r)
-        f = forcetorque(self.beam, self.T, position=r.T)[0]
-        return np.asarray(f).reshape(3, -1).T * (self.n_medium / C)
+        f = forcetorque(self.beam, self.T, position=self._own(r).T)[0]
+        return (np.asarray(f).reshape(3, -1).T @ self.R.T) * (self.n_medium / C)
 
     def scattering(self, r) -> dict:
         """Scattered and absorbed power [W] with the particle at r."""
-        r = np.asarray(r, dtype=float)
+        r = self._own(r)[0]
         b = self.beam.translate_xyz(r) if np.any(r != 0) else self.beam
         sbeam, _ = b.scatter(self.T)
         pb = power_balance(b, sbeam)

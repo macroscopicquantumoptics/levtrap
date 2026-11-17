@@ -23,7 +23,7 @@ Request schema (``compute`` / ``sweep`` / ``field3d``)::
       }
     }
 
-The setup must be one this engine computes (see :func:`levtrap.solve.check_supported`):
+The setup must be one this page computes (see :func:`levtrap.solve.check_simple`):
 one beam, or two coherent beams, along +z with the focus at the origin.  With
 two beams the sum of their ``power`` entries is the power of the coherent
 superposition; the entries set the ratio of the components.
@@ -117,13 +117,13 @@ def prepare(req: dict | str) -> tuple[dict, dict]:
     particle's n, k and density are filled in from the material if not given.
     """
     from .setup import parse
-    from .solve import check_supported, resolve_particle
+    from .solve import check_simple, resolve_particle
     if isinstance(req, str):
         req = json.loads(req)
     if not isinstance(req, dict) or "setup" not in req:
         raise ValueError('the request must be {"setup": …, "options": …}')
     s = parse(req["setup"])
-    check_supported(s)
+    check_simple(s)
     resolve_particle(s)
     return s, dict(req.get("options") or {})
 
