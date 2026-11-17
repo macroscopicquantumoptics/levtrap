@@ -155,11 +155,11 @@
       },
       "trap_type": "single beam focused by a parabolic mirror, silica nanoparticle, feedback cooled in 3D",
       "skeleton": {"particle": {"material": "SiO2"}, "trap": {"fields": [{"kind": "beam", "focus": {"kind": "parabolic_mirror"}}]}},
-      "schema_support": "future",
-      "schema_gaps": ["trap.fields[0].focus.kind = 'parabolic_mirror' (ARCHITECTURE.md section 4 lists it as a later focus kind; milestone E)"],
-      "needed": ["wavelength", "power", "mirror focal length and aperture (or effective NA)", "particle radius", "pressure"],
+      "schema_support": "current",
+      "schema_gaps": [],
+      "needed": ["wavelength", "power", "mirror focal length, rim and hole radii", "beam diameter on the mirror", "particle radius", "pressure"],
       "expected_quantities": ["trap frequencies along x, y, z", "feedback-cooled temperatures (not modelled)", "quality factor estimate (not modelled)"],
-      "agreement_note": "A parabolic mirror focuses with an apodisation unlike an aplanatic lens and with a large solid angle; until a parabolic-mirror focus exists, any lens stand-in should be expected to miss the frequencies by tens of percent. This entry is for milestone E."
+      "agreement_note": "A parabolic mirror focuses with an apodisation unlike an aplanatic lens and with a large solid angle; a lens stand-in should be expected to miss the frequencies by tens of percent. focus.kind 'parabolic_mirror' (E3, levtrap.mirror) now models it; the comparison waits for the paper's parameters and frequencies to be read and recorded."
     }
   ]
 }

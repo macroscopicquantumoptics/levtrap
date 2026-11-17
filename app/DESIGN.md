@@ -111,6 +111,12 @@ for it).
   aligned focus), tilted and decentred as set, and the light converges to
   where the ray trace puts the focus. Zoomed in on the focus it is out of
   view; its label then waits at the edge of the view, towards it.
+* **A parabolic mirror** (E3) is drawn at its true size about the focus:
+  the paraboloid between its hole and its rim, faint (a deep mirror stands
+  all round the trap, which must stay in view through it), its rim and hole
+  outlined; the outline carries the selection. The light is drawn as the
+  cone of the beam's 1/e² edge on the mirror (at most 80°); the collimated
+  input coming down around the focus is not drawn.
 * **The light** is a volume: its brightness follows the intensity on the
   axis (1/w²), fades out past the focus, and fades upstream of the lens.
   Its colour is the wavelength's own when visible; infrared is the theme's
@@ -163,7 +169,9 @@ next. The reason each one is visible is in the last column.
 
 | Input | Where | Why visible |
 |---|---|---|
-| Type | visible | Ideal lens, or the ray-traced asphere Thorlabs 354330-C (E1; offered in a gas or vacuum, for a Gaussian beam). The parabolic mirror (E3) will appear here. |
+| Type | visible | Ideal lens, the ray-traced asphere Thorlabs 354330-C (E1) or a parabolic mirror (E3); the last two are offered in a gas or vacuum, for a Gaussian beam. The part is then called Mirror. |
+| Focal length, rim radius, beam diameter | visible: Mirror | They set the angles the light comes from (the rim's note says how far round, and whether the mirror is deep) and how much of the beam it catches. |
+| Hole radius | Advanced: Mirror | Most mirrors have none or a small one; the note says which angles it removes. |
 | NA and waist w₀ | visible, linked | Two descriptions of one focus: typing one updates the other (the waist through the mode's order). The setup keeps the one typed last. They set the trap's geometry, and with it every frequency. |
 | Half-angle | Advanced, linked | The third description of the same focus. |
 

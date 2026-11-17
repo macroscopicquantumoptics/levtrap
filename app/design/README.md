@@ -197,6 +197,19 @@ converging from its back surface to the focus.
 
 ![The asphere in the scene](screens/asphere-scene-desktop-light.webp)
 
+## 8. A parabolic mirror (E3)
+
+The lens set to a deep parabolic mirror (f 3 mm, 18 mm across, a 0.5 mm
+hole), filled by a 10 mm beam: the inspector says how much light reaches the
+focus and from which angles.
+
+![The parabolic mirror](screens/mirror-inspector-desktop-light.webp)
+
+Zoomed out to millimetres from the side: the paraboloid about the focus, its
+rim 3.75 mm above it.
+
+![The mirror in the scene](screens/mirror-scene-desktop-light.webp)
+
 ## Other states
 
 A number explaining itself: the formula, the values that went in, the model

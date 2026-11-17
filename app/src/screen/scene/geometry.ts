@@ -8,6 +8,7 @@
  */
 import type { BeamField, Focus, Setup, Vec3 } from "../../engine/types.ts";
 import { asphereHalfAngle, LENSES } from "../../engine/lenses.ts";
+import { mirrorHalfAngle } from "../../engine/mirrors.ts";
 import { formatSI } from "../../lib/format.ts";
 import { directionOf, environmentOf } from "../model.ts";
 
@@ -73,6 +74,7 @@ export const TO_VIEWER: Vec3 = unit([-1, RECEDE, RECEDE]);
  */
 export function coneHalfAngle(focus: Focus, wavelength: number, nMedium = 1): number {
   if (focus.kind === "asphere") return asphereHalfAngle(LENSES[focus.lens ?? "354330-C"], focus.beam_diameter);
+  if (focus.kind === "parabolic_mirror") return mirrorHalfAngle(focus);
   if (focus.NA != null) return Math.asin(Math.min(1, focus.NA / nMedium));
   if (focus.angle_deg != null) return (focus.angle_deg * Math.PI) / 180;
   return Math.atan(wavelength / (Math.PI * nMedium * focus.waist!));
@@ -80,7 +82,7 @@ export function coneHalfAngle(focus: Focus, wavelength: number, nMedium = 1): nu
 
 /** Waist radius drawn at the focus [m]: the given waist, or the paraxial one for the cone angle. */
 export function waistRadius(focus: Focus, wavelength: number, nMedium = 1): number {
-  if (focus.kind !== "asphere" && focus.waist != null) return focus.waist;
+  if (focus.kind !== "asphere" && focus.kind !== "parabolic_mirror" && focus.waist != null) return focus.waist;
   return wavelength / (Math.PI * nMedium * Math.tan(coneHalfAngle(focus, wavelength, nMedium)));
 }
 

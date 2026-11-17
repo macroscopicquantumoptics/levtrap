@@ -62,7 +62,25 @@ export interface AsphereFocus {
   angle_deg?: never;
 }
 
-export type Focus = IdealFocus | AsphereFocus;
+/**
+ * A parabolic mirror (levtrap.mirror): the collimated beam, `beam_diameter`
+ * [m] across (1/e² intensity), is reflected to the focus, the beam's
+ * `position`. Lengths in m; a rim beyond twice the focal length is above the
+ * focal plane (a deep mirror, light from beyond 90°). The beam's `direction`
+ * points from the mirror's vertex through the focus.
+ */
+export interface MirrorFocus {
+  kind: "parabolic_mirror";
+  focal_length: number;
+  rim_radius: number;
+  hole_radius?: number;
+  beam_diameter: number;
+  NA?: never;
+  waist?: never;
+  angle_deg?: never;
+}
+
+export type Focus = IdealFocus | AsphereFocus | MirrorFocus;
 
 export interface BeamMode {
   type?: "lg" | "hg";
@@ -295,6 +313,21 @@ export interface LensResult {
   pointing_mrad: [number, number];
 }
 
+/** What a parabolic mirror does to its beam (api.mirror_focus). */
+export interface MirrorResult {
+  /** index into trap.fields */
+  field: number;
+  /** fraction of the input beam's power reflected to the focus (inside the rim, outside the hole) */
+  reflected: number;
+  clipping_loss: number;
+  /** deg from the axis behind the focus, as seen from the focus */
+  rim_angle_deg: number;
+  hole_angle_deg: number;
+  /** the rim is above the focal plane */
+  deep: boolean;
+  Nmax: number;
+}
+
 /** One field's share at the equilibrium (solve.breakdown). */
 export interface FieldShare {
   kind: "beam" | "paul" | "gravity";
@@ -336,6 +369,8 @@ export interface Result {
   paul?: PaulResult | null;
   /** per beam focused by a real lens (focus.kind "asphere") */
   lenses?: LensResult[];
+  /** per beam focused by a parabolic mirror */
+  mirrors?: MirrorResult[];
   /** each field's force and stiffness at the equilibrium; absent without one */
   breakdown?: FieldShare[];
   /** null when the trap has no beam */

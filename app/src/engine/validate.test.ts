@@ -72,6 +72,12 @@ const CASES: Case[] = [
   ["asphere tilt too far", edit((s) => (s.trap.fields[0].focus = { kind: "asphere", beam_diameter: 2e-3, tilt_deg: [0, -25] }))],
   ["asphere tilt short", edit((s) => (s.trap.fields[0].focus = { kind: "asphere", beam_diameter: 2e-3, tilt_deg: [1] }))],
   ["asphere decentre", edit((s) => (s.trap.fields[0].focus = { kind: "asphere", beam_diameter: 2e-3, decentre: [0, 0.01] }))],
+  ["mirror", edit((s) => (s.trap.fields[0].focus = { kind: "parabolic_mirror", focal_length: 3e-3, rim_radius: 9e-3, hole_radius: 5e-4, beam_diameter: 1e-2 }))],
+  ["mirror defaults", edit((s) => (s.trap.fields[0].focus = { kind: "parabolic_mirror", focal_length: 3e-3, rim_radius: 9e-3, beam_diameter: 1e-2 }))],
+  ["mirror with waist", edit((s) => (s.trap.fields[0].focus = { kind: "parabolic_mirror", focal_length: 3e-3, rim_radius: 9e-3, beam_diameter: 1e-2, waist: 1e-6 }))],
+  ["mirror hole past rim", edit((s) => (s.trap.fields[0].focus = { kind: "parabolic_mirror", focal_length: 3e-3, rim_radius: 9e-3, hole_radius: 9e-3, beam_diameter: 1e-2 }))],
+  ["mirror no rim", edit((s) => (s.trap.fields[0].focus = { kind: "parabolic_mirror", focal_length: 3e-3, beam_diameter: 1e-2 }))],
+  ["mirror too long", edit((s) => (s.trap.fields[0].focus = { kind: "parabolic_mirror", focal_length: 0.5, rim_radius: 9e-3, beam_diameter: 1e-2 }))],
   ["focus kind", edit((s) => (s.trap.fields[0].focus = { kind: "mirror", NA: 0.5 }))],
 ];
 

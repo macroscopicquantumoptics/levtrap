@@ -50,6 +50,12 @@ export function resultRows(result: Result): Row[] {
     add(`wavefront error behind lens ${lens.field + 1}`, "", lens.rms_waves, "waves rms", m);
     add(`trap axis tilt by lens ${lens.field + 1}`, "", lens.trap_axis_tilt_mrad, "mrad");
   }
+  for (const mirror of result.mirrors ?? []) {
+    const m = modelOf(result, "mirror");
+    add(`reflected by mirror ${mirror.field + 1}`, "", mirror.reflected, "", m);
+    add(`rim angle of mirror ${mirror.field + 1}`, "", mirror.rim_angle_deg, "deg", m);
+    add(`hole angle of mirror ${mirror.field + 1}`, "", mirror.hole_angle_deg, "deg", m);
+  }
   if (result.rates) {
     add("gas damping", "", result.rates.gas_damping, "1/s", modelOf(result, "gas_damping"));
     const recoil = modelOf(result, "recoil_heating");

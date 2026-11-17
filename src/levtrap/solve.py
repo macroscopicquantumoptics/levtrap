@@ -50,11 +50,12 @@ def check_supported(s: dict) -> None:
     if not beams and not pauls:
         raise UnsupportedSetup("a setup without a beam or a Paul trap does not trap")
     for i, b in enumerate(beams):
-        if b["focus"]["kind"] == "asphere":
+        optic = {"asphere": "an asphere", "parabolic_mirror": "a parabolic mirror"}.get(b["focus"]["kind"])
+        if optic:
             if s["environment"]["medium_index"] != 1:
-                raise UnsupportedSetup("a beam focused by an asphere is computed in vacuum or a gas (medium index 1)")
+                raise UnsupportedSetup(f"a beam focused by {optic} is computed in vacuum or a gas (medium index 1)")
             if b["mode"]["type"] != "lg" or list(b["mode"]["indices"]) != [0, 0]:
-                raise UnsupportedSetup("an asphere is traced for a Gaussian beam (mode LG 0 0)")
+                raise UnsupportedSetup(f"{optic} is computed for a Gaussian beam (mode LG 0 0)")
     if pauls:
         return
     wl = {b["wavelength"] for b in beams}
@@ -209,10 +210,15 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     # a beam focused by a real lens (E1): its field is about the lens's best focus P*, which a tilt or a
     # decentre moves away from the beam's position (the focus of the aligned lens)
     lensed = _place_aspheres(s)
+    mirrored = _mirrors(s)
     beams = [f for f in s["trap"]["fields"] if f["kind"] == "beam"]
 
     def unit_beam(b, n_medium):
-        return lensed[id(b)]["beam"] if id(b) in lensed else _single_beam(b, n_medium)
+        if id(b) in lensed:
+            return lensed[id(b)]["beam"]
+        if id(b) in mirrored:
+            return mirrored[id(b)]["beam"]
+        return _single_beam(b, n_medium)
 
     optical = optical_fields(s, unit_beam, lambda wl: _tmatrix(_particle_at(given, wl), wl, nm)[0])
     paul = None
@@ -295,8 +301,9 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
 
         result["curves"] = _curves(fields, at, ranges, SCAN_POINTS, modes, dipole if "dipole" in want else None)
     if "pattern" in want:
-        if lensed:
-            raise UnsupportedSetup("the radiation pattern is not computed yet for a beam focused by an asphere")
+        if lensed or mirrored:
+            raise UnsupportedSetup("the radiation pattern is not computed yet for a beam focused by an asphere "
+                                   "or a parabolic mirror")
         if len(optical) > 1 or not is_simple(beams):
             raise UnsupportedSetup("the radiation pattern is computed only for beams along +z "
                                    "through one focus that interfere")
@@ -305,12 +312,27 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
         if r_eq is None:
             result["warnings"].append("Radiation pattern taken with the particle at the focus "
                                       "(there is no equilibrium).")
+    if mirrored:
+        result["mirrors"] = [dict(field=e["index"], **e["info"]) for e in sorted(mirrored.values(), key=lambda e: e["index"])]
+        result["models"].append(dict(quantity="mirror", model="paraboloid far field", validity="ok",
+                                     notes=["geometric optics on the mirror; far field projected on VSWFs"]))
     if lensed:
         result["lenses"] = _lens_block(s, lensed, modes)
         result["models"].append(dict(quantity="lens", model="ray-trace", validity="ok",
                                      notes=["Thorlabs 354330-C, Zemax prescription; far field projected on VSWFs"]))
     result["time"] = time.perf_counter() - t0
     return result
+
+
+def _mirrors(s: dict) -> dict:
+    """For each beam focused by a parabolic mirror: the mirror's beam (about
+    the focus, the beam's position) and its numbers, by ``id`` of the beam's dict."""
+    from .api import mirror_focus
+    out = {}
+    for i, f in enumerate(s["trap"]["fields"]):
+        if f["kind"] == "beam" and f["focus"]["kind"] == "parabolic_mirror":
+            out[id(f)] = dict(mirror_focus(f), index=i)
+    return out
 
 
 def _place_aspheres(s: dict) -> dict:

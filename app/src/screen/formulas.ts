@@ -99,6 +99,16 @@ export const FORMULAS = {
     tex: tex`\alpha = \arccos \left| \hat{\mathbf{e}}_{\text{axial}} \cdot \hat{\mathbf{d}} \right|`,
     text: "α = arccos |e_axial · d|, between the trap's axial mode and the beam's direction",
   },
+  "mirror-reflected": {
+    tex: tex`\frac{P_\text{focus}}{P_\text{beam}} = e^{-2\rho_\mathrm{h}^2 / w^2} - e^{-2R^2 / w^2}`,
+    text: "P(focus) / P(beam) = exp(−2 ρh² / w²) − exp(−2 R² / w²): the Gaussian beam's power between the hole and the rim",
+    source: "geometric optics on the paraboloid (levtrap.mirror; Lieb & Meixner, Opt. Express 8, 458 (2001))",
+  },
+  "mirror-rim-angle": {
+    tex: tex`\alpha_\mathrm{rim} = 2 \arctan \frac{R}{2f}, \qquad \rho = 2f \tan\frac{\alpha}{2}`,
+    text: "α_rim = 2 arctan(R / 2f), from ρ = 2f tan(α/2) on the paraboloid; above 90° when R > 2f",
+    source: "the paraboloid z = ρ² / 4f − f about its focus (levtrap.mirror)",
+  },
 } satisfies Record<string, Formula>;
 
 export type FormulaId = keyof typeof FORMULAS;
