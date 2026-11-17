@@ -15,10 +15,11 @@ import { environmentOf, gravityOf, partsOf, type Part, type PartId } from "../mo
 import { beamRadius, scaleBar, unit } from "../scene/geometry.ts";
 import { lightColor } from "../scene/light.ts";
 import { LENSES } from "../../engine/lenses.ts";
+import { mirrorSag } from "../../engine/mirrors.ts";
 import { beamGeometry, electrodeExtent, fitScene, lensDistance, toWorld, viewDirection, WORLD, type Fit, type LensPlacement, type ViewName } from "../scene/space.ts";
 import type { SceneProps } from "../Scene.tsx";
 import { usePalette } from "./palette.ts";
-import { AsphereLens, Beam, ForceArrows, PaulTrap, Particle, TrapAxes, type Picking } from "./parts.tsx";
+import { AsphereLens, Beam, ParabolicMirror, ForceArrows, PaulTrap, Particle, TrapAxes, type Picking } from "./parts.tsx";
 import base from "../Scene.module.css";
 import styles from "./Scene3D.module.css";
 
@@ -89,7 +90,11 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
     .filter((b): b is { f: BeamField; index: number } => b.f.kind === "beam")
     .map(({ f, index }) => {
       const g = beamGeometry(f, n);
-      if (f.focus.kind !== "asphere") return { beam: f, index, g, lens: lensDistance(g.w0, g.theta, fit.halfView), asphere: null };
+      if (f.focus.kind === "parabolic_mirror") {
+        // a parabolic mirror: drawn about the focus at its true size; the light comes from its vertex side
+        return { beam: f, index, g, lens: f.focus.focal_length, asphere: null, mirror: { focus: f.focus, at: { direction: g.direction, position: g.focus } } };
+      }
+      if (f.focus.kind !== "asphere") return { beam: f, index, g, lens: lensDistance(g.w0, g.theta, fit.halfView), asphere: null, mirror: null };
       // a real lens: drawn where it is; the light goes to where it focuses (the result's shift)
       const data = LENSES[f.focus.lens ?? "354330-C"];
       const done = result?.lenses?.find((l) => l.field === index);
@@ -107,6 +112,7 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
         g: { ...g, focus },
         lens: placement.bfl,
         asphere: { data, placement, at: { direction: g.direction, position: g.focus } },
+        mirror: null,
       };
     });
   const pauls = fields.map((f, index) => ({ f, index })).filter((p): p is { f: PaulField; index: number } => p.f.kind === "paul");
@@ -114,6 +120,7 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
   const extent = Math.max(
     fit.halfView,
     ...beams.filter((b) => b.asphere).map((b) => b.asphere!.placement.bfl + b.asphere!.placement.thickness + b.asphere!.data.s1.sd * 1e-3 + Math.hypot(...b.g.focus)),
+    ...beams.filter((b) => b.mirror).map((b) => Math.hypot(b.mirror!.focus.rim_radius, b.mirror!.focus.focal_length + Math.abs(mirrorSag(b.mirror!.focus, b.mirror!.focus.rim_radius))) + Math.hypot(...b.g.focus)),
   );
 
   const trueRadius = setup.particle.radius;
@@ -249,15 +256,17 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
         {pauls.map(({ f, index }) => (
           <PaulTrap key={index} id={`field:${index}`} paul={f} palette={palette} picking={picking} />
         ))}
-        {beams.map(({ index, asphere }) =>
+        {beams.map(({ index, asphere, mirror }) =>
           asphere ? (
             <AsphereLens key={`lens-${index}`} id={`lens:${index}`} data={asphere.data} placement={asphere.placement} beam={asphere.at} palette={palette} picking={picking} />
+          ) : mirror ? (
+            <ParabolicMirror key={`lens-${index}`} id={`lens:${index}`} focus={mirror.focus} beam={mirror.at} palette={palette} picking={picking} />
           ) : null,
         )}
-        {beams.map(({ beam, index, g, lens, asphere }) => (
+        {beams.map(({ beam, index, g, lens, asphere, mirror }) => (
           <Beam
             key={index}
-            symbol={!asphere}
+            symbol={!asphere && !mirror}
             id={`field:${index}`}
             lensId={`lens:${index}`}
             geometry={g}
@@ -355,6 +364,7 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
                 data-part={s.part.id}
                 data-kind={s.part.kind}
                 data-away={away || undefined}
+                title={text}
                 data-anchor={`${s.anchor[0].toFixed(1)},${s.anchor[1].toFixed(1)}`}
                 data-selected={selected === s.part.id || undefined}
                 data-hover={hover?.id === s.part.id || undefined}

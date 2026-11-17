@@ -87,3 +87,19 @@ test("a real lens sweeps its beam diameter and tilts, not an NA", async () => {
   assert.deepEqual(focus.kind === "asphere" && focus.tilt_deg, [0, 0.5]);
   assert.deepEqual(defaultRange(tilt, ASPHERE_SETUP), [-1, 1]);
 });
+
+test("a parabolic mirror sweeps its beam, size and hole", async () => {
+  const { MIRROR_SETUP } = await import("../mirror.fixture.ts");
+  const params = sweepParams(MIRROR_SETUP);
+  const ids = params.map((p) => p.id);
+  assert.deepEqual(
+    ids.filter((id) => id.startsWith("lens0")),
+    ["lens0-beam_diameter", "lens0-focal_length", "lens0-rim_radius", "lens0-hole_radius"],
+  );
+  const hole = params.find((p) => p.id === "lens0-hole_radius")!;
+  assert.equal(hole.get(MIRROR_SETUP), 5e-4);
+  const t = hole.set(MIRROR_SETUP, 1e-3);
+  const focus = (t.trap.fields[0] as BeamField).focus;
+  assert.equal(focus.kind === "parabolic_mirror" && focus.hole_radius, 1e-3);
+  assert.deepEqual(defaultRange(hole, MIRROR_SETUP), [0, 4.5e-3]);
+});

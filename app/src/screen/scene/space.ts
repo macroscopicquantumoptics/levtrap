@@ -255,3 +255,11 @@ export function lensToLab(p: Vec3, beam: { direction: Vec3; position: Vec3 }, le
   const lab = matVec(beamRotation(beam.direction), own);
   return [lab[0] + beam.position[0], lab[1] + beam.position[1], lab[2] + beam.position[2]];
 }
+
+// --- a parabolic mirror (focus.kind "parabolic_mirror") ---------------------------
+
+/** A point of the beam's own frame (focus at the origin, the beam along +z) in the lab [m]. */
+export function beamToLab(p: Vec3, beam: { direction: Vec3; position: Vec3 }): Vec3 {
+  const lab = matVec(beamRotation(beam.direction), p);
+  return [lab[0] + beam.position[0], lab[1] + beam.position[1], lab[2] + beam.position[2]];
+}

@@ -56,6 +56,24 @@ export function sweepParams(setup: Setup): SweepParam[] {
         check: positive,
       });
       const focus = f.focus;
+      if (focus.kind === "parabolic_mirror") {
+        // a parabolic mirror (E3): its size, its hole and the beam on it
+        const mirrorName = name(`lens:${index}`);
+        type M = typeof focus;
+        const of = (s: Setup) => (s.trap.fields[index] as BeamField).focus as M;
+        const mirror = (key: "beam_diameter" | "focal_length" | "rim_radius" | "hole_radius", label: string): SweepParam => ({
+          id: `lens${index}-${key}`,
+          label: `${mirrorName} · ${label}`,
+          quantity: "length",
+          unit: "mm",
+          get: (s) => of(s)[key] ?? 0,
+          set: (s, v) => withField<BeamField>(s, index, { focus: { ...of(s), [key]: v } }),
+          log: false,
+          check: key === "hole_radius" ? (v) => (v >= 0 ? null : "Must be 0 or more.") : (v) => (v > 0 && v <= 0.1 ? null : "Between 0 and 100 mm."),
+        });
+        out.push(mirror("beam_diameter", "beam diameter"), mirror("focal_length", "focal length"), mirror("rim_radius", "rim radius"), mirror("hole_radius", "hole radius"));
+        return;
+      }
       if (focus.kind === "asphere") {
         // a real lens: its beam diameter and its tilts (E1)
         const lensName = name(`lens:${index}`);
@@ -206,6 +224,10 @@ export function sweepValues(from: number, to: number, n: number, log: boolean): 
 export function defaultRange(param: SweepParam, setup: Setup): [number, number] {
   const v = param.get(setup);
   if (/-tilt_[xy]$/.test(param.id)) return [-1, 1];
+  if (param.id.endsWith("-hole_radius")) {
+    const focus = (setup.trap.fields[Number(/^lens(\d+)/.exec(param.id)![1])] as BeamField).focus;
+    return [0, focus.kind === "parabolic_mirror" ? focus.rim_radius / 2 : 1e-3];
+  }
   if (param.id.endsWith("-NA")) return [Math.max(0.1, v - 0.5), Math.min(0.95 * environmentOf(setup).medium_index, v + 0.15)];
   if (v === 0) return [0, 10];
   return param.log ? [v / 10, v * 10] : [v / 2, v * 2];

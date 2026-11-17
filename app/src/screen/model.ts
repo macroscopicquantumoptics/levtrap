@@ -41,6 +41,10 @@ export const gravityOf = (g: GravityField): Vec3 => g.g ?? DEFAULT_G;
 export const environmentOf = (s: Setup): Required<Environment> => ({ ...DEFAULT_ENVIRONMENT, ...s.environment });
 
 export function focusSummary(focus: Focus): string {
+  if (focus.kind === "parabolic_mirror") {
+    const hole = focus.hole_radius ? [`hole ${formatSI(2 * focus.hole_radius, "m", 3, true)}`] : [];
+    return [`f ${formatSI(focus.focal_length, "m", 3, true)}`, `Ø ${formatSI(2 * focus.rim_radius, "m", 3, true)}`, ...hole, `${formatSI(focus.beam_diameter, "m", 3, true)} beam`].join(" · ");
+  }
   if (focus.kind === "asphere") {
     const [tx, ty] = focus.tilt_deg ?? [0, 0];
     const [dx, dy] = focus.decentre ?? [0, 0];
@@ -101,7 +105,8 @@ export function partsOf(setup: Setup): Part[] {
         summary: `${wavelengthText(f.wavelength)} · ${formatSI(f.power, "W", 3, true)}${mode}`,
         index,
       });
-      parts.push({ id: `lens:${index}`, kind: "lens", name: numbered("beam", "Lens", beams), summary: focusSummary(f.focus), index });
+      const optic = f.focus.kind === "parabolic_mirror" ? "Mirror" : "Lens";
+      parts.push({ id: `lens:${index}`, kind: "lens", name: numbered("beam", optic, beams), summary: focusSummary(f.focus), index });
     } else if (f.kind === "paul") {
       pauls += 1;
       parts.push({

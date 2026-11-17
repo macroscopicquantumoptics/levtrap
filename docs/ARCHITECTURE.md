@@ -71,7 +71,9 @@ Rules:
     {"kind": "beam", "wavelength": 1.064e-6, "power": 0.1,
      "focus": {"kind": "lens", "NA": 0.8},            // or {"kind": "asphere", "lens": "354330-C",
                                                       //  "beam_diameter": 2.5e-3, "tilt_deg": [0, 0],
-                                                      //  "decentre": [0, 0]} (E1); later: "parabolic_mirror"
+                                                      //  "decentre": [0, 0]} (E1); or {"kind": "parabolic_mirror",
+                                                      //  "focal_length": 3e-3, "rim_radius": 9e-3, "hole_radius": 0,
+                                                      //  "beam_diameter": 10e-3} (E3, levtrap.mirror)
      "mode": {"type": "lg", "indices": [0, 0]},
      "polarisation": "x",
      "direction": [0, 0, 1], "position": [0, 0, 0],   // propagation axis, focus point [m]
@@ -136,6 +138,9 @@ Models per field:
   "optical": {"P_sca": …, "P_abs": …, "Qsca": …, "Qabs": …},
   "paul": {"q": {...}, "a": {...}, "stable": true, "secular": {...}, "micromotion": [...]},
   "rates": {"gas_damping": …, "recoil_heating": [...], "reheating_phonons_per_s": [...]},
+  "lenses": [{"field": 0, "focus_shift": [...], "clipping_loss": …, …}],     // per beam through an asphere (E1)
+  "mirrors": [{"field": 0, "reflected": 0.98, "rim_angle_deg": 112.6,     // per beam from a parabolic mirror (E3)
+               "hole_angle_deg": 9.5, "deep": true, "clipping_loss": …, "Nmax": 25}],
   "pattern": {...},                       // on request
   "curves": {...},                        // on request: force cuts, potential, map
   "models": [{"quantity": "modes", "model": "mie", "validity": "ok", "notes": []}],
