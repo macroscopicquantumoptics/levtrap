@@ -105,8 +105,9 @@ def test_unknown_keys_become_warnings():
 
 
 @pytest.mark.parametrize("change", [
-    lambda s: s["trap"]["fields"].append({"kind": "paul", "geometry": "ring", "rf_voltage": 100,
-                                          "rf_frequency": 1e3, "r0": 1e-3, "z0": 1e-3}) or
+    # two Paul traps
+    lambda s: s["trap"]["fields"].extend([{"kind": "paul", "geometry": "ring", "rf_voltage": 100,
+                                           "rf_frequency": 1e3, "r0": 1e-3, "z0": 1e-3}] * 2) or
               s["particle"].update(charge=100),
     # n and k given by hand hold at one wavelength only
     lambda s: s["particle"].update(material=None, n=1.45, k=0.0, density=2200.0) or
@@ -148,7 +149,7 @@ def test_json_wrapper_and_dispatch():
     assert bad == dict(ok=False, kind="setup", path="particle.radius", error=bad["error"])
     s = copy.deepcopy(DEFAULT_SETUP)
     s["particle"]["charge"] = 30
-    s["trap"]["fields"].append({"kind": "paul", "geometry": "ring", "rf_voltage": 100,
-                                "rf_frequency": 1e3, "r0": 1e-3, "z0": 1e-3})
+    s["trap"]["fields"] += [{"kind": "paul", "geometry": "ring", "rf_voltage": 100,
+                             "rf_frequency": 1e3, "r0": 1e-3, "z0": 1e-3}] * 2
     assert json.loads(solve_json(json.dumps(s)))["kind"] == "unsupported"
     assert json.loads(solve_json(json.dumps(DEFAULT_SETUP), '["nonsense"]'))["kind"] == "setup"

@@ -207,12 +207,33 @@ export interface PaulResult {
   a: PerAxis<number>;
   /** Mathieu q per axis (signed) */
   q: PerAxis<number>;
-  /** every axis lies in the first stability region */
+  /** every axis is stable (with light: the RF drives no parametric resonance) */
   stable: boolean;
-  /** secular frequencies [Hz]; `exact` is null on an axis outside the stability region */
-  secular: { pseudopotential: PerAxis<number | null>; exact: PerAxis<number | null> };
+  /**
+   * Secular frequencies [Hz] of the Paul trap alone; `exact` is null on an
+   * axis outside the stability region. With light, `with_light` holds the
+   * exact frequency of the hybrid trap (null: a parametric resonance), and
+   * `a_effective` the Mathieu a the light's static force adds up to.
+   */
+  secular: {
+    pseudopotential: PerAxis<number | null>;
+    exact: PerAxis<number | null>;
+    with_light?: Partial<PerAxis<number | null>>;
+  };
+  a_effective?: Partial<PerAxis<number>>;
   /** micromotion amplitude at the equilibrium [m]; null without an equilibrium */
   micromotion: Vec3 | null;
+}
+
+/** One field's share at the equilibrium (solve.breakdown). */
+export interface FieldShare {
+  kind: "beam" | "paul" | "gravity";
+  /** indices into trap.fields (a coherent group of beams is one share) */
+  fields: number[];
+  /** N */
+  force: Vec3;
+  /** N/m, along each mode's axis, by mode name */
+  stiffness: Record<string, number>;
 }
 
 export interface Result {
@@ -243,6 +264,8 @@ export interface Result {
   } | null;
   /** present for a Paul trap */
   paul?: PaulResult | null;
+  /** each field's force and stiffness at the equilibrium; absent without one */
+  breakdown?: FieldShare[];
   /** null when the trap has no beam */
   rates?: Rates | null;
   models: ModelInfo[];
