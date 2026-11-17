@@ -26,7 +26,7 @@ jobs:
         run: |
           pip install -e ".[test]" build
           pytest -q
-      - name: Build wheel and stage site
+      - name: Build the wheel, and stage the old site (served at /classic/ until web/ is retired)
         run: |
           python -m build --wheel --outdir dist
           mkdir -p web/wheels
@@ -55,25 +55,32 @@ jobs:
           name: ui-screenshot
           path: ui_check.png
           if-no-files-found: ignore
-      - name: Build the new app (app/) for /next/
+      - name: Build the app (app/) for the site's root
         working-directory: app
         env:
-          BASE_PATH: /${{ github.event.repository.name }}/next
+          BASE_PATH: /${{ github.event.repository.name }}
         run: |
           npm ci
           mkdir -p public/wheels
           cp ../web/wheels/* public/wheels/
           npm run build
-      - name: Browser check of the new app (Pyodide worker)
+          # the old site's addresses lead to the app: next/ and lens.html (E2, docs/PARITY.md)
+          node scripts/redirects.ts out "$BASE_PATH"
+      - name: Browser check of the app (Pyodide worker)
         working-directory: app
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}
         run: |
           npx playwright install --with-deps chromium
           E2E_PYODIDE=1 npx playwright test --trace off
-      - name: Stage the new app next to the current site
-        run: cp -r app/out web/next
+      - name: Assemble the site (the app at the root, the old site at /classic/ until web/ is retired)
+        run: |
+          mkdir -p site
+          cp -r app/out/. site/
+          cp -r web site/classic
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: web
+          path: site
 
   deploy:
     needs: build

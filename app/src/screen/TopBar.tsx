@@ -134,11 +134,11 @@ export function TopBar({ name, canUndo, canRedo, onUndo, onRedo, show, onShow, o
                 }}
               />
               <MenuRule />
-              <a className={ui.menuItem} role="menuitem" href="../">
+              <a className={ui.menuItem} role="menuitem" href="classic/" data-testid="file-classic">
                 <span className={ui.menuIcon} />
                 <span className={ui.menuText}>
-                  <span className={ui.menuTitle}>Go to the current site</span>
-                  <span className={ui.menuNote}>The version this one replaces</span>
+                  <span className={ui.menuTitle}>The classic site</span>
+                  <span className={ui.menuNote}>The version this one replaces, until it is retired</span>
                 </span>
               </a>
             </>

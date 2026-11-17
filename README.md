@@ -21,57 +21,37 @@ through [Pyodide](https://pyodide.org) and locally for research scripts.
   energy conservation via a volume integral of the internal field, the
   dipole limit, power scaling, symmetry and convergence. See `tests/` and
   the progress log in `PLAN.md`.
-* **Lens tilt page** (`lens.html`): ray trace of the Thorlabs 354330-C asphere
-  (prescription from the Thorlabs Zemax file), tilted and decentred. The
-  aberrated focus is fed into the same force engine, giving the focus shift,
-  the particle's new equilibrium, the 3×3 stiffness eigen-frequencies, the
-  trap-axis tilt and the clipping loss. Sweeps follow the particle and flag
-  jumps between equilibria. A 3D view shows the tilted lens, the traced rays
-  and a magnified focus with the particle.
+* **Optical, Paul and hybrid traps on one screen:** any number of beams
+  (direction, focus, mode, polarisation, interference), linear and ring Paul
+  traps, gravity. Every number explains itself; plots of the forces,
+  potential, sweeps, radiation pattern and heating; setups saved as files or
+  shared as links.
+* **A real lens:** a beam can be focused by the ray-traced Thorlabs
+  354330-C asphere (prescription from the Thorlabs Zemax file), tilted and
+  decentred: the focus shift, clipping loss and trap-axis tilt follow.
 * **Paper reproduction:** figures of arXiv:2607.09896 (dark trapping of
   WS₂): see [`docs/paper/`](docs/paper/README.md).
 
-> **levtrap 2 is being planned and built.** The design is in
-> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), the work is tracked in
-> [issue #6](https://github.com/macroscopicquantumoptics/levtrap/issues/6).
-> The new engine entry point is `levtrap.solve.solve(setup)`. The new
-> screen lives in `app/` and is deployed at `/next/` beside this site; its
-> design is in [`app/DESIGN.md`](app/DESIGN.md).
+> **levtrap 2.** The screen is `app/` (design in
+> [`app/DESIGN.md`](app/DESIGN.md)), served at the site's root; the engine's
+> entry point is `levtrap.solve.solve(setup)` (architecture in
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), work in
+> [issue #6](https://github.com/macroscopicquantumoptics/levtrap/issues/6)).
+> The old site (`web/`) is served at `/classic/` until it is retired; what
+> it did and where that went is in [`docs/PARITY.md`](docs/PARITY.md).
 
 ## Quick start — web
 
-Open the website and pick a preset. The first visit downloads ~25 MB
+Open the website and pick a trap. The first visit downloads ~25 MB
 (Python, NumPy, SciPy); later visits use the browser cache.
 
-To run the site locally from a clean clone:
+To run the screen locally from a clean clone, with the engine as native
+Python (fast, no Pyodide):
 
 ```bash
 git clone https://github.com/macroscopicquantumoptics/levtrap && cd levtrap
-pip install build
-python -m build --wheel --outdir web/wheels
-python - <<'EOF'
-import glob, json, os
-whl = os.path.basename(glob.glob("web/wheels/*.whl")[0])
-json.dump({"wheel": whl}, open("web/wheels/manifest.json", "w"))
-EOF
-python -m http.server -d web 8000      # open http://localhost:8000
-```
-
-If you want to work on the UI without Pyodide or internet access, use the
-native backend:
-
-```bash
 pip install -e .
-python scripts/devserver.py            # open http://localhost:8000/?backend=local
-```
-
-(Plotly is still loaded from the CDN.)
-
-### The new screen (`app/`)
-
-```bash
-pip install -e .
-python scripts/devserver.py            # the engine, as native Python, on :8000
+python scripts/devserver.py            # the engine on :8000
 ```
 
 ```bash
@@ -80,8 +60,11 @@ cd app && npm ci && npm run dev        # open http://localhost:3000/?backend=loc
 
 Without `?backend=local` the page runs the engine in the browser (Pyodide);
 for that, build the wheel and stage it with `npm run wheel` first. Checks:
-`npm run typecheck`, `npm run lint`, `npm test` (unit tests; they call the
+`npm run typecheck`, `npm run lint`, `npm test` (unit tests; some call the
 Python engine) and `npm run test:e2e` (builds, then drives a browser).
+
+The old site still runs from `web/` the old way (`python -m http.server -d
+web 8000` after staging a wheel in `web/wheels/`) until it is retired.
 
 ## Quick start — Python
 
@@ -104,9 +87,9 @@ print(r["stable"], r["equilibrium"], [m["frequency"] for m in r["modes"]], r["de
 ```
 
 The setup file is described in `docs/ARCHITECTURE.md` §4 and checked by
-`levtrap.setup`. The web page sends the same setup to `api.compute` as
-`{"setup": …, "options": …}`, where the options hold display settings
-(scan ranges, dipole overlay, multipole switches, dark focus).
+`levtrap.setup`. The screen sends the same setup to `levtrap.solve.solve_json`
+(in a Pyodide worker, or to `scripts/devserver.py`); File → Copy as Python
+gives the code for the setup on screen.
 
 Lower-level, OTT-style:
 
@@ -143,12 +126,12 @@ SI units. Internally the code uses OTT conventions:
 src/levtrap/   special.py vswf.py translate.py bsc.py tmatrix.py force.py
                traps.py derived.py dipole.py materials.py lens.py api.py
 tests/         ported OTT tests + analytic checks (pytest)
-web/           index.html app.js lens.html lens.js lens3d.js common.js
-               worker.js view3d.js style.css
-               (static site; Plotly, three.js and Pyodide from jsDelivr)
-app/           levtrap 2 screen: Next static export, React, TypeScript.
-               src/engine (typed engine client, Pyodide worker), src/screen
-               (the one screen), tests/e2e (Playwright), DESIGN.md
+app/           the screen: Next static export, React, TypeScript, three.js.
+               src/engine (typed engine client, Pyodide worker, setup
+               validation), src/screen (the one screen), tests/e2e
+               (Playwright), DESIGN.md
+web/           the old site, served at /classic/ until it is retired
+               (docs/PARITY.md)
 scripts/       devserver.py (native backend), pyodide_check.mjs, ui_check.js (CI)
 ci/workflows/  test.yml, app.yml, pages.yml — a copy of .github/workflows/
 examples/      paper_2607_09896.py
@@ -167,28 +150,39 @@ cp ci/workflows/*.yml .github/workflows/
 
 In **Settings → Pages**, **Source** is **GitHub Actions**. `pages.yml` runs
 on every push to `main`: it runs the tests, builds the wheel, checks it in
-Pyodide (OTT benchmark) and in a headless browser, builds `app/` and checks
-it the same way, and deploys `web/` with the new screen at `/next/`.
+Pyodide (OTT benchmark), builds `app/` for the site's root with the
+redirects of the old addresses (`/next/`, `lens.html`;
+`app/scripts/redirects.ts`), checks it in a headless browser with the
+engine in Pyodide, and deploys it with the old site at `/classic/`.
 `app.yml` checks `app/` on every push and pull request.
 
 ## Adding a feature
 
-1. **Physics first, in Python.** Add or extend a module in `src/levtrap/`.
-   Use only NumPy, SciPy and the standard library, so it keeps working in
-   Pyodide. If you port OTT code, cite the OTT file in the docstring and add
-   a `# OTT:` comment wherever you follow a quirk of the original.
-2. **Test it.** Add a pytest in `tests/` with a reference: an OTT test value,
-   an analytic result, or an independent implementation. Don't invent
-   reference numbers.
-3. **Expose it.** Add the result to `api.analyse` (SI units, plain lists and
-   floats) or add a new function to `api.handle`. Add a round-trip check to
-   `tests/test_api.py`.
-4. **Show it.** In `web/app.js`, read the new field in `render()`. Add a
-   tile, a trace or a plot, and add a "What am I looking at?" note in
-   `index.html`. Add an ⓘ explanation to `HELP` or `TILE_HELP` and a
-   glossary entry if a newcomer wouldn't know the term.
-5. **Check it.** Run `pytest -q` and `python scripts/devserver.py` for a
-   quick look. CI then runs the Pyodide and browser checks.
+A new kind of field (a trap, a force) or a new number goes through the
+same five places:
+
+1. **Physics first, in Python.** Add a field in `src/levtrap/fields/` (a
+   class with `force(r)` and `model()`, like `GravityField` or
+   `PaulField`) or a module beside the others. Use only NumPy, SciPy and the
+   standard library, so it keeps working in Pyodide. If you port OTT code,
+   cite the OTT file in the docstring and add a `# OTT:` comment wherever you
+   follow a quirk of the original.
+2. **The setup and the result.** Add the field's keys to `levtrap.setup`
+   (validated, defaults filled, unknown keys kept) and build it in
+   `levtrap.solve`; put new numbers in the Result in SI units. Describe both
+   in `docs/ARCHITECTURE.md` §4 and §6.
+3. **Test it.** Add a pytest in `tests/` with a reference: an OTT test value,
+   an analytic result, a limit it must reduce to, or an independent
+   implementation. Don't invent reference numbers.
+4. **The screen.** Mirror the setup keys in `app/src/engine/types.ts` and
+   `validate.ts` (its test compares with `levtrap.setup.parse` case by case);
+   add an inspector in `app/src/screen/Inspector.tsx`, a part in `model.ts`,
+   a drawable in `scene3d/parts.tsx`, and an entry in the Add field menu.
+   A new number gets a row under More and an explanation with its formula in
+   `explain.ts` and `formulas.ts` (the formula test typesets it).
+5. **Check it.** `pytest -q`; in `app/`, `npm run typecheck`, `npm run lint`,
+   `npm test` and `npm run test:e2e`. CI then runs them again, and the
+   Pyodide checks.
 
 ## Credits and licence
 

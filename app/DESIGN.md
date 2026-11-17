@@ -267,6 +267,9 @@ touch screen. Islands have a 12 px radius and one shadow.
 
 ## 10. Where every input of the old site goes
 
+The full checklist, outputs included, with what was dropped and what is to
+be ticketed, is `docs/PARITY.md` (E2).
+
 `web/index.html` (trap simulator):
 
 | Old input | Now | Note |
