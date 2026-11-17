@@ -142,6 +142,18 @@ File → Copy as Python: the code that computes the same numbers.
 
 ![Copy as Python](screens/python-desktop-light.webp)
 
+## 7. A real lens (E1)
+
+The lens set to the ray-traced Thorlabs 354330-C, tilted 0.3° about y: the
+inspector says what the lens does to the focus.
+
+![The asphere, tilted](screens/asphere-inspector-desktop-light.webp)
+
+Zoomed out to millimetres: the lens at its true size and distance, the light
+converging from its back surface to the focus.
+
+![The asphere in the scene](screens/asphere-scene-desktop-light.webp)
+
 ## Other states
 
 A number explaining itself: the formula, the values that went in, the model

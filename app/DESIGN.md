@@ -101,11 +101,16 @@ for it).
   electrodes), the RF pair on x; its end caps are rings at ±z₀, open so that
   light along z passes. A ring trap's ring has inner radius r₀; its end caps
   sit at ±z₀.
-* **Not to scale:** the distance from a lens to its focus (the lens is a
-  symbol of the focusing optic, placed where the cone is 40 % of the view
-  wide), and a particle that would be smaller than 4.5 px. Such a particle
+* **Not to scale:** the distance from an ideal lens to its focus (the lens
+  is a symbol of the focusing optic, placed where the cone is 40 % of the
+  view wide), and a particle that would be smaller than 4.5 px. Such a particle
   is drawn larger inside a dotted ring, and its label says "enlarged";
   Show → True particle size turns that off.
+* **A real lens** (the asphere, E1) is drawn from its prescription at its
+  true size and distance (its back surface one back focal length before the
+  aligned focus), tilted and decentred as set, and the light converges to
+  where the ray trace puts the focus. Zoomed in on the focus it is out of
+  view; its label then waits at the edge of the view, towards it.
 * **The light** is a volume: its brightness follows the intensity on the
   axis (1/w²), fades out past the focus, and fades upstream of the lens.
   Its colour is the wavelength's own when visible; infrared is the theme's
@@ -158,7 +163,7 @@ next. The reason each one is visible is in the last column.
 
 | Input | Where | Why visible |
 |---|---|---|
-| Type | visible | Ideal lens today; the asphere (E1) and the parabolic mirror (E3) appear here. |
+| Type | visible | Ideal lens, or the ray-traced asphere Thorlabs 354330-C (E1; offered in a gas or vacuum, for a Gaussian beam). The parabolic mirror (E3) will appear here. |
 | NA and waist w₀ | visible, linked | Two descriptions of one focus: typing one updates the other (the waist through the mode's order). The setup keeps the one typed last. They set the trap's geometry, and with it every frequency. |
 | Half-angle | Advanced, linked | The third description of the same focus. |
 
@@ -293,8 +298,9 @@ touch screen. Islands have a 12 px radius and one shadow.
 
 | Old input | Now |
 |---|---|
-| Tilt about x, tilt about y, decentre x | visible: Lens, when its type is the asphere |
-| Pivot point | Advanced: Lens |
+| Tilt about x, tilt about y | visible: Lens, when its type is the asphere |
+| Decentre x (and now y) | Advanced: Lens (asphere) |
+| Pivot point | gone: the lens tilts about its centre, as the old page's default |
 | Beam diameter | visible: Lens (asphere) |
 | Wavelength, power, polarisation | visible: Beam |
 | Particle inputs, temperature | Particle, Environment |

@@ -300,6 +300,67 @@ export function secondaryNumbers(result: Result, setup: Setup): Secondary[] {
     });
   }
 
+  for (const lens of result.lenses ?? []) {
+    const beam = setup.trap.fields[lens.field];
+    const which = setup.trap.fields.filter((f) => f.kind === "beam").length > 1 ? ` (lens ${lens.field + 1})` : "";
+    const focus = beam?.kind === "beam" && beam.focus.kind === "asphere" ? beam.focus : null;
+    const tilt = focus?.tilt_deg ?? [0, 0];
+    const set = [
+      { symbol: String.raw`\theta_x, \theta_y`, value: `${formatNumber(tilt[0], 3, true)}°, ${formatNumber(tilt[1], 3, true)}°`, note: "tilt of the lens about its centre" },
+      { symbol: "D", value: focus ? formatSI(focus.beam_diameter, "m", 3, true) : "—", note: "beam diameter on the lens (1/e² intensity)" },
+    ];
+    const lensModel = model(result, "lens");
+    const shift = Math.hypot(...lens.focus_shift);
+    out.push({
+      id: `lens${lens.field}-focus`,
+      label: `Focus moved by the lens${which}`,
+      value: formatSI(shift, "m"),
+      explain: () => ({
+        title: "Focus moved by the lens",
+        value: formatSI(shift, "m"),
+        copy: copyTriple(lens.focus_shift, "m"),
+        formula: "lens-focus-shift",
+        inputs: [
+          { symbol: String.raw`\Delta\mathbf{r}`, value: triple(lens.focus_shift, (v) => formatSI(v, "m")), note: "x, y, z in the lab" },
+          ...set,
+          { symbol: String.raw`W_\mathrm{rms}`, value: `${formatNumber(lens.rms_waves, 3)} λ`, note: `wavefront error about the focus (${formatNumber(lens.rms_waves_untilted, 3)} λ aligned)` },
+        ],
+        model: lensModel,
+      }),
+    });
+    out.push({
+      id: `lens${lens.field}-clipping`,
+      label: `Clipped by the lens${which}`,
+      value: `${formatNumber(100 * lens.clipping_loss, 3)} %`,
+      explain: () => ({
+        title: "Light clipped by the lens",
+        value: `${formatNumber(100 * lens.clipping_loss, 3)} %`,
+        copy: String(lens.clipping_loss),
+        formula: "lens-clipping",
+        inputs: [...set, { symbol: String.raw`n_\mathrm{glass}`, value: formatNumber(lens.n_glass, 5), note: "the lens glass at the beam's wavelength" }],
+        model: lensModel,
+      }),
+    });
+    if (lens.trap_axis_tilt_mrad != null) {
+      out.push({
+        id: `lens${lens.field}-axis`,
+        label: `Trap axis tilted${which}`,
+        value: `${formatNumber(lens.trap_axis_tilt_mrad, 3)} mrad`,
+        explain: () => ({
+          title: "Trap axis tilted",
+          value: `${formatNumber(lens.trap_axis_tilt_mrad!, 3)} mrad`,
+          copy: `${lens.trap_axis_tilt_mrad! / 1e3} rad`,
+          formula: "trap-axis-tilt",
+          inputs: [
+            ...set,
+            { symbol: String.raw`\boldsymbol{\delta}`, value: `${formatNumber(lens.pointing_mrad[0], 3)}, ${formatNumber(lens.pointing_mrad[1], 3)} mrad`, note: "the light's mean direction behind the lens, off the axis" },
+          ],
+          model: model(result, "modes"),
+        }),
+      });
+    }
+  }
+
   if (result.rates) {
     const r = result.rates;
     const value = formatSI(r.gas_damping / (2 * Math.PI), "Hz");

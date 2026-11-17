@@ -70,7 +70,7 @@ export const RULES: Rule[] = [
     pattern: /^No stable trap: the particle is pushed away along ([\w, ]+)\.?$/,
     fatal: true,
     text: (m) => `No stable trap along ${axes(m[1])}: the force there pushes the particle away.`,
-    hint: () => "Usually a field that repels along that axis wins: a dark centre in the beam's mode, a DC voltage of the wrong sign, or end caps without a voltage.",
+    hint: () => "Usually a field that repels along that axis wins: a dark centre in the beam's mode, an aberrated focus (a tilted or decentred lens), a DC voltage of the wrong sign, or end caps without a voltage.",
   },
   {
     code: "no-trap-mathieu",

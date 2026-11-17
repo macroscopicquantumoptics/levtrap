@@ -41,6 +41,12 @@ export const gravityOf = (g: GravityField): Vec3 => g.g ?? DEFAULT_G;
 export const environmentOf = (s: Setup): Required<Environment> => ({ ...DEFAULT_ENVIRONMENT, ...s.environment });
 
 export function focusSummary(focus: Focus): string {
+  if (focus.kind === "asphere") {
+    const [tx, ty] = focus.tilt_deg ?? [0, 0];
+    const [dx, dy] = focus.decentre ?? [0, 0];
+    const off = [tx || ty ? `tilted ${formatNumber(Math.hypot(tx, ty), 3, true)}°` : "", dx || dy ? "decentred" : ""].filter(Boolean);
+    return [`${focus.lens ?? "354330-C"}`, `${formatSI(focus.beam_diameter, "m", 3, true)} beam`, ...off].join(" · ");
+  }
   if (focus.NA != null) return `NA ${formatNumber(focus.NA, 3, true)}`;
   if (focus.waist != null) return `w₀ ${formatSI(focus.waist, "m", 3, true)}`;
   return `half-angle ${formatNumber(focus.angle_deg, 3, true)}°`;
