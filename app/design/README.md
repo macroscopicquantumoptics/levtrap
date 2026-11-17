@@ -82,6 +82,55 @@ The axes without a trap frequency show a dash.
 
 <img width="250" alt="Stable, phone" src="screens/w3-2-answer-phone-light.webp"> <img width="250" alt="Stable, phone, dark" src="screens/w3-2-answer-phone-dark.webp"> <img width="250" alt="Not stable, phone" src="screens/w3-3-unstable-phone-light.webp"> <img width="250" alt="Not stable, phone, dark" src="screens/w3-3-unstable-phone-dark.webp">
 
+## 4. The scene in 3D (D3)
+
+Every trap is drawn to scale, in 3D, with an orthographic camera, so the
+scale bar is true everywhere in the picture. The tweezer, the counter-propagating
+pair, the linear and the ring Paul trap:
+
+![Tweezer](screens/scene-tweezer-desktop-light.webp)
+
+![Counter-propagating](screens/scene-counter-desktop-light.webp)
+
+![Linear Paul trap](screens/scene-paul-linear-desktop-light.webp)
+
+![Ring Paul trap](screens/scene-paul-ring-desktop-light.webp)
+
+A tweezer inside a linear Paul trap: the electrodes set the scale (mm) and
+the focus is a point in it.
+
+![Hybrid](screens/scene-hybrid-desktop-light.webp)
+
+The wheel zooms about the pointer, from the electrodes down to the focus,
+and the scale bar follows. Zoomed in this far the electrodes are drawn
+faint.
+
+![Hybrid, zoomed to the focus](screens/scene-hybrid-zoomed-desktop-light.webp)
+
+Show → Trap axes and Force arrows: the eigen-axes through the equilibrium,
+and the force of the light and of the Paul trap on the particle (log length).
+
+![Overlays](screens/scene-overlays-desktop-light.webp)
+
+Along and Side. From the side of a linear trap the rod in front of the
+centre is drawn faint, and clicks pass through it.
+
+![Along the beam](screens/scene-tweezer-along-desktop-light.webp) ![From the side](screens/scene-tweezer-side-desktop-light.webp)
+
+![Linear Paul trap from the side](screens/scene-paul-linear-side-desktop-light.webp)
+
+Dark:
+
+![Tweezer, dark](screens/scene-tweezer-desktop-dark.webp)
+
+![Counter-propagating, dark](screens/scene-counter-desktop-dark.webp)
+
+![Linear Paul trap, dark](screens/scene-paul-linear-desktop-dark.webp)
+
+![Ring Paul trap, dark](screens/scene-paul-ring-desktop-dark.webp)
+
+![Hybrid, dark](screens/scene-hybrid-desktop-dark.webp)
+
 ## Other states
 
 A number explaining itself: the formula, the values that went in, the model
