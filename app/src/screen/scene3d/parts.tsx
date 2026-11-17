@@ -290,7 +290,7 @@ export function PaulTrap({ id, paul, palette, picking }: { id: PartId; paul: Pau
       }
       inTheWay ||= zoomedIn;
       const mat = m.material as MeshStandardMaterial;
-      const opacity = inTheWay ? 0.16 : 1;
+      const opacity = zoomedIn ? 0.07 : inTheWay ? 0.16 : 1;
       if (mat.opacity !== opacity) {
         mat.opacity = opacity;
         mat.transparent = inTheWay;

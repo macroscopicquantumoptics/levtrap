@@ -18,7 +18,8 @@ async function scale(page: Page) {
   const label = page.getByTestId("scale-bar");
   const pxPerMetre = Number(await label.getAttribute("data-px-per-metre"));
   const text = (await label.textContent())!.replace(/\s+/g, " ").trim();
-  const px = (await page.getByTestId("scale-bar-line").boundingBox())!.width;
+  // the geometry of the bar (the page's box would include its stroke and corners)
+  const px = await page.getByTestId("scale-bar-line").evaluate((el) => (el as SVGGraphicsElement).getBBox().width);
   return { pxPerMetre, text, px };
 }
 
@@ -59,7 +60,7 @@ test("the scale bar tells the truth from the focus to the electrodes", async ({ 
   const check = async () => {
     const s = await scale(page);
     // the bar is as long as its label says, at the drawn scale
-    expect(Math.abs(s.px - metres(s.text) * s.pxPerMetre)).toBeLessThan(1.5);
+    expect(Math.abs(s.px - metres(s.text) * s.pxPerMetre), JSON.stringify(s)).toBeLessThan(1.5);
     seen.add(s.text.replace(/^[\d.]+ ?/, ""));
     return s;
   };
@@ -76,9 +77,10 @@ test("the scale bar tells the truth from the focus to the electrodes", async ({ 
   }
   expect(last / start.pxPerMetre).toBeGreaterThan(500);
   expect([...seen]).toEqual(expect.arrayContaining(["mm", "µm"]));
-  // the particle stays under the pointer: the zoom is about it
+  // the zoom is about the pointer: the particle moves away from it only by the
+  // pointer's sub-pixel offset from its centre, magnified by the zoom
   const now = await partAt(page, "particle");
-  expect(Math.hypot(now.x - at.x, now.y - at.y)).toBeLessThan(6);
+  expect(Math.hypot(now.x - at.x, now.y - at.y) / (last / start.pxPerMetre)).toBeLessThan(1);
   await shot(page, "scene-hybrid-zoomed-desktop-light");
   // Fit brings the whole trap back
   await page.getByTestId("view-fit").click();

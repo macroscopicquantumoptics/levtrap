@@ -437,8 +437,9 @@ function CameraRig({ setup, fit, fitKey, view, offset, onCamera }: RigProps) {
     const c = controls.current;
     if (c) {
       c.target.copy(target);
-      c.minZoom = camera.zoom / 3e4;
-      c.maxZoom = camera.zoom * 200;
+      // from 2 px per nm (a waist fills the view) to 10 px per mm (a whole vacuum chamber), whatever the trap
+      c.minZoom = 1e4 / WORLD;
+      c.maxZoom = 2e9 / WORLD;
       c.update();
     }
     invalidate();
