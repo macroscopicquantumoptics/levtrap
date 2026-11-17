@@ -138,7 +138,7 @@ for (const v of VARIANTS) {
       await expect(page.getByTestId("unit-paul0-rf_frequency")).toHaveValue("kHz");
       await setField(page, "paul0-rf_frequency", "2.5 kHz");
       await settled(page);
-      await expect(verdict).toContainText("No stable trap: outside the first Mathieu stability region along x, y.");
+      await expect(verdict).toContainText("No stable trap along x and y: outside the first Mathieu stability region.");
       await expect(verdict).toHaveAttribute("data-tone", "bad");
       await expect(page.getByTestId("freq-x")).toContainText("—");
       await expect(page.getByTestId("freq-z")).toContainText("99.5 Hz");

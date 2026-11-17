@@ -9,6 +9,7 @@ import { formatNumber, formatSI } from "../lib/format.ts";
 import { directionOf, partForPath, partsOf, positionOf, type PartId } from "./model.ts";
 import { presetForSetup } from "./presets.ts";
 import { RECORDED } from "./recorded.ts";
+import { describeWarning } from "./warnings.ts";
 
 /** "preset": the engine's result recorded for a preset; "engine": computed just now. */
 export type Origin = "engine" | "preset";
@@ -91,7 +92,9 @@ export interface Verdict {
   tone: "ok" | "bad" | "none";
   /** the headline sentence */
   text: string;
-  /** further sentences from the engine */
+  /** for no trap: the usual cause and what to change */
+  hint?: string;
+  /** further sentences: the engine's other warnings, each with its advice */
   more: string[];
 }
 
@@ -101,10 +104,11 @@ const listAxes = (axes: string[]) => (axes.length > 1 ? `${axes.slice(0, -1).joi
 export function verdict(answer: Answer, setup: Setup): Verdict {
   const { result, notice } = answer;
   if (!result) return { tone: "none", text: notice?.text ?? "No result yet.", more: [] };
-  const warnings = result.warnings.filter((w) => !w.startsWith("No stable trap")).map(sentence);
+  const described = result.warnings.map(describeWarning);
+  const fatal = described.find((w) => w.fatal);
+  const warnings = described.filter((w) => w !== fatal).map((w) => (w.hint ? `${w.text} ${w.hint}` : w.text));
   if (!result.stable) {
-    const why = result.warnings.find((w) => w.startsWith("No stable trap")) ?? "No stable trap.";
-    return { tone: "bad", text: sentence(why), more: warnings };
+    return { tone: "bad", text: fatal?.text ?? "No stable trap.", hint: fatal?.hint, more: warnings };
   }
   const details: string[] = [];
   if (result.paul) {

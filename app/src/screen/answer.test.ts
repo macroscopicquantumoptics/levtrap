@@ -94,7 +94,7 @@ test("the verdict is a sentence", () => {
   });
 });
 
-test("an unstable trap is said in the engine's words", () => {
+test("an unstable trap says along which axis, the usual cause, and the other warnings with their advice", () => {
   const recorded = instantAnswer(DEFAULT_SETUP)!.result!;
   const unstable: Result = {
     ...recorded,
@@ -105,8 +105,11 @@ test("an unstable trap is said in the engine's words", () => {
   };
   assert.deepEqual(verdict({ result: unstable, origin: "engine", notice: null }, DEFAULT_SETUP), {
     tone: "bad",
-    text: "No stable trap: the force along the beam axis (z) never restores the particle.",
-    more: ["The equilibrium search did not converge inside the scanned region."],
+    text: "No stable trap along z: the force along the beam never pulls the particle back.",
+    hint: "Usually the scattering force pushes the particle out faster than the gradient force pulls it in: focus tighter (a larger NA), or add a counter-propagating beam.",
+    more: [
+      "The equilibrium search did not converge inside the scanned region. The numbers may be missing or rough. A smaller step between setups, or a setup closer to a known trap, usually helps.",
+    ],
   });
 });
 

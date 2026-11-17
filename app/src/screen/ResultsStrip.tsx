@@ -1,14 +1,13 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useState, type ReactNode } from "react";
 import type { EngineStatus } from "../engine/client.ts";
-import type { Result, Setup } from "../engine/types.ts";
-import { formatMass, formatNumber, formatSci, formatSI, siParts } from "../lib/format.ts";
-import { toFieldText } from "../lib/units.ts";
+import type { Setup } from "../engine/types.ts";
+import { formatNumber, formatSI, siParts } from "../lib/format.ts";
 import { issueUrl, shownFrequency, verdict, type Answer } from "./answer.ts";
-import { explainDepth, explainFrequency, type Explanation } from "./explain.ts";
+import { explainDepth, explainFrequency, secondaryNumbers, type Explanation } from "./explain.ts";
 import { useDismiss } from "./hooks.ts";
-import { environmentOf, partsOf, subscript, type PartId } from "./model.ts";
+import { partsOf, type PartId } from "./model.ts";
 import { Icon } from "./ui/Icon.tsx";
 import ui from "./ui/ui.module.css";
 import styles from "./ResultsStrip.module.css";
@@ -25,6 +24,9 @@ export interface ResultsStripProps {
 }
 
 const AXES = ["x", "y", "z"];
+
+// KaTeX comes with the first explanation opened, not with the page
+const Explain = lazy(() => import("./Explain.tsx"));
 
 /** The answer, always on screen: three frequencies, the depth, and the verdict as a sentence. */
 export function ResultsStrip({ setup, answer, pending, status, expanded, onToggle, onSelect }: ResultsStripProps) {
@@ -68,6 +70,7 @@ export function ResultsStrip({ setup, answer, pending, status, expanded, onToggl
               k<sub>B</sub>T
             </>
           }
+          also={result && result.stable ? formatSI(result.depth.K, "K") : undefined}
           open={open === "depth"}
           onOpen={(o) => setOpen(o ? "depth" : null)}
           explain={result && result.stable ? () => explainDepth(result, setup) : null}
@@ -78,6 +81,12 @@ export function ResultsStrip({ setup, answer, pending, status, expanded, onToggl
         <span className={styles.mark} aria-hidden="true" />
         <p className={styles.sentences}>
           <span className={styles.headline}>{v.text}</span>
+          {v.hint && (
+            <span className={styles.hint} data-testid="verdict-hint">
+              {" "}
+              {v.hint}
+            </span>
+          )}
           {notice?.kind === "pending" && notice.ticket && (
             <>
               {" "}
@@ -128,11 +137,8 @@ export function ResultsStrip({ setup, answer, pending, status, expanded, onToggl
 
       {expanded && result && (
         <dl className={styles.secondary} id="more-numbers" data-testid="more-numbers">
-          {secondary(result, setup).map(([label, value]) => (
-            <div key={label} className={styles.pair}>
-              <dt>{label}</dt>
-              <dd>{value}</dd>
-            </div>
+          {secondaryNumbers(result, setup).map((row) => (
+            <Pair key={row.id} id={row.id} label={row.label} value={row.value} explain={row.explain} open={open === row.id} onOpen={(o) => setOpen(o ? row.id : null)} />
           ))}
         </dl>
       )}
@@ -140,36 +146,13 @@ export function ResultsStrip({ setup, answer, pending, status, expanded, onToggl
   );
 }
 
-/** The numbers behind the headline ones, straight from the Result. */
-function secondary(result: Result, setup: Setup): [string, string][] {
-  const out: [string, string][] = [];
-  const triple = (values: (number | null | undefined)[], unit: string) => values.map((v) => formatSI(v, unit)).join(" · ");
-  if (result.equilibrium) out.push(["Position (x, y, z)", result.equilibrium.map((c) => (Math.abs(c) < 1e-15 ? "0" : formatSI(c, "m"))).join(" · ")]);
-  if (result.modes.length) out.push(["Stiffness (x, y, z)", triple(result.modes.map((m) => m.stiffness), "N/m")]);
-  out.push(["Mass", formatMass(result.particle.mass)]);
-  if (result.paul) {
-    out.push(["Mathieu q (x, y, z)", [result.paul.q.x, result.paul.q.y, result.paul.q.z].map((q) => formatNumber(q, 3)).join(" · ")]);
-    out.push(["Mathieu a (x, y, z)", [result.paul.a.x, result.paul.a.y, result.paul.a.z].map((a) => formatSci(a, 3)).join(" · ")]);
-    if (result.paul.micromotion) out.push(["Micromotion amplitude", formatSI(Math.hypot(...result.paul.micromotion), "m")]);
-  }
-  if (result.optical) out.push(["Scattered power", formatSI(result.optical.P_sca, "W")]);
-  if (result.rates) {
-    const env = environmentOf(setup);
-    out.push([`Gas damping γ/2π in ${subscript(env.gas)}`, formatSI(result.rates.gas_damping / (2 * Math.PI), "Hz")]);
-    out.push(["Reheating in phonons/s (x, y, z)", result.rates.reheating_phonons_per_s.map((r) => formatSci(r, 3)).join(" · ")]);
-    const crossover = result.rates.modes.map((m) => m.crossover_pressure);
-    if (crossover.every((p) => p != null)) {
-      out.push(["Recoil exceeds gas heating below (x, y, z)", `${crossover.map((p) => toFieldText(p!, "pressure", "mbar", 2)).join(" · ")} mbar`]);
-    }
-  }
-  return out;
-}
-
 interface FigureProps {
   id: string;
   label: ReactNode;
   value: string;
   unit: ReactNode;
+  /** the same value in another unit, shown small beside it */
+  also?: string;
   open: boolean;
   onOpen(open: boolean): void;
   /** null: nothing to explain (no value) */
@@ -177,7 +160,7 @@ interface FigureProps {
 }
 
 /** One headline number. Click it for the formula, the inputs and the model. */
-function Figure({ id, label, value, unit, open, onOpen, explain }: FigureProps) {
+function Figure({ id, label, value, unit, also, open, onOpen, explain }: FigureProps) {
   const [node, setNode] = useState<HTMLElement | null>(null);
   const close = useCallback(() => onOpen(false), [onOpen]);
   useDismiss(node, open, close);
@@ -199,57 +182,58 @@ function Figure({ id, label, value, unit, open, onOpen, explain }: FigureProps) 
             {value}
           </span>{" "}
           <span className={styles.unit}>{unit}</span>
+          {also && (
+            <span className={styles.also} data-testid={`${id}-also`}>
+              {also}
+            </span>
+          )}
         </span>
       </button>
-      {open && explain && <Explain explanation={explain()} onClose={close} />}
+      {open && explain && <Popover explain={explain} onClose={close} />}
     </div>
   );
 }
 
-function Explain({ explanation: e, onClose }: { explanation: Explanation; onClose(): void }) {
-  const [copied, setCopied] = useState(false);
+function Popover({ explain, onClose }: { explain: () => Explanation; onClose(): void }) {
   return (
-    <div className={`${ui.island} ${styles.explain}`} role="dialog" aria-label={e.title} data-testid="explain">
-      <header className={styles.explainHead}>
-        <div>
-          <p className={styles.explainTitle}>{e.title}</p>
-          <p className={styles.explainValue}>{e.value}</p>
-        </div>
+    <Suspense fallback={null}>
+      <Explain explanation={explain()} onClose={onClose} />
+    </Suspense>
+  );
+}
+
+interface PairProps {
+  id: string;
+  label: string;
+  value: string;
+  explain(): Explanation;
+  open: boolean;
+  onOpen(open: boolean): void;
+}
+
+/** One number of the second row; it too explains itself. */
+function Pair({ id, label, value, explain, open, onOpen }: PairProps) {
+  const [node, setNode] = useState<HTMLElement | null>(null);
+  const close = useCallback(() => onOpen(false), [onOpen]);
+  useDismiss(node, open, close);
+  return (
+    <div className={styles.pair} ref={setNode}>
+      <dt>{label}</dt>
+      <dd>
         <button
           type="button"
-          className={ui.button}
-          onClick={() => {
-            void navigator.clipboard?.writeText(e.copy).then(
-              () => setCopied(true),
-              () => setCopied(false),
-            );
-          }}
+          className={styles.pairValue}
+          data-testid={`more-${id}`}
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          title="How this number is computed"
+          onClick={() => onOpen(!open)}
         >
-          <Icon name={copied ? "check" : "copy"} />
-          {copied ? "Copied" : "Copy"}
+          {value}
         </button>
-        <button type="button" className={ui.iconButton} aria-label="Close" onClick={onClose}>
-          <Icon name="close" />
-        </button>
-      </header>
-      <p className={styles.formula}>{e.formula}</p>
-      <dl className={styles.inputs}>
-        {e.inputs.map((input) => (
-          <div key={input.symbol} className={styles.input}>
-            <dt>{input.symbol}</dt>
-            <dd>
-              <span className={styles.inputValue}>{input.value}</span>
-              <span className={styles.inputNote}>{input.note}</span>
-            </dd>
-          </div>
-        ))}
-      </dl>
-      {e.model && (
-        <p className={styles.model}>
-          <span className={styles.modelName}>{e.model.name}.</span> {e.model.validity}
-          {e.model.notes.length > 0 ? `: ${e.model.notes.join("; ")}.` : "."}
-        </p>
-      )}
+      </dd>
+      {open && <Popover explain={explain} onClose={close} />}
     </div>
   );
 }
+

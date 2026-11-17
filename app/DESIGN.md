@@ -52,9 +52,9 @@ These are the rules of `docs/ARCHITECTURE.md` §7. Each has a test in
 | **Start from a preset, never from an empty form.** | A first visit opens the tweezer with its numbers on screen, and the preset picker over it. Every field added later arrives with working values. |
 | **At most six inputs per selected thing.** | The largest inspector (the Paul trap) has six. Everything else is in one Advanced fold. Its summary names what differs from the default ("LG₀₁", "axial factor 0.3"), so a closed fold hides nothing that matters. |
 | **The strip is always visible and always current.** | The strip is outside the scene, so nothing covers it. While a new result is computed the old numbers are dimmed, not removed. |
-| **Every number explains itself.** | Click a number: its formula, the values that went in, the model and its validity, and a Copy button. There is no glossary page. |
+| **Every number explains itself.** | Click a number, in the strip or under More: its formula typeset (KaTeX, from the formula sheet `src/screen/formulas.ts`, with its source), the values that went in, the model and its validity, and a Copy button that copies the full SI value. A test typesets every formula. There is no glossary page. |
 | **Fields take units as typed.** | `200 mW`, `0.2 W`, `1e-6 mbar`. Enter or leaving the field applies; Esc puts the old value back. The unit selector changes how the value reads, not the value. A mistake is answered with a sentence under the field. |
-| **Warnings are sentences in the strip.** | "No stable trap: outside the first Mathieu stability region along x, y." No banners, no pop-ups. |
+| **Warnings are sentences in the strip.** | "No stable trap along x and y: outside the first Mathieu stability region." followed by the usual cause and what to change. Each engine warning has a code and its copy in `src/screen/warnings.ts`; a test checks the engine still writes each one. No banners, no pop-ups. |
 | **Plots are inline SVG in the theme's colours.** | The Forces tab. No Plotly. |
 | **Undo and redo, light and dark.** | One step per edit; Ctrl Z and Ctrl Shift Z. Every edit is autosaved in the browser; a reload opens where you left off (a saved setup that no longer validates is not opened, and the screen says why). The share link is D6. |
 
@@ -183,7 +183,7 @@ is 1 in vacuum.
 | State | What the strip shows |
 |---|---|
 | Stable | Numbers, a green dot, "Stable trap." and where the particle rests. For a Paul trap also the largest Mathieu q. |
-| Not stable | A red diamond and the engine's sentence. An axis without a restoring force shows a dash. |
+| Not stable | A red diamond, the reason along which axis ("No stable trap along z: …"), then the usual cause and what to change. An axis without a restoring force shows a dash. |
 | Recomputing | The previous numbers, dimmed, and "Computing" on the right. |
 | Engine starting | The same, with "Starting the engine 35%". A preset's numbers are on screen before the engine is ready. |
 | Not computed yet | Dashes, an empty ring, the reason, and a link to the issue. |
@@ -192,9 +192,11 @@ is 1 in vacuum.
 
 Numbers have three significant figures and an SI prefix ("96.8 kHz").
 Each frequency carries a short line in its axis colour; the text itself
-stays in the text colour. **More** opens the numbers behind the headline
-ones: position, stiffness, mass, scattered power, gas damping, reheating,
-and for a Paul trap q, a and the micromotion amplitude.
+stays in the text colour. The depth is in k_BT, with the same in kelvin
+beside it ("386 k_BT 116 kK"). **More** opens the numbers behind the
+headline ones: position, stiffness, mass, scattered and absorbed power, gas
+damping, reheating and the pressure below which recoil wins, and for a Paul
+trap q, a and the micromotion amplitude. Each of them explains itself too.
 
 The line at the right of the tabs says where the numbers came from:
 "Recorded from the engine for this preset" or "Computed in 240 ms".
@@ -315,7 +317,6 @@ gravity, a beam's direction and focus position.
 * The unit-aware fields are written here, not ported from QUOP (its code was
   not reachable from this work). Radius, diameter and mass are linked, as
   are NA, waist and half-angle (`src/lib/linked.ts`).
-* Formulas are plain text. D4 typesets them.
 * Presets are example values. `docs/validation/references.md` has no
   verified paper yet (C3), so no preset names one. D6 replaces them.
 * The file menu's four file actions and the intensity slice in the Show
