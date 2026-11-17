@@ -1,0 +1,86 @@
+/* The 3D scene: the canvas, and the HTML over it (labels, corner, views). */
+.stage {
+  position: absolute;
+  inset: 0;
+  user-select: none;
+}
+
+.stage[data-grid] {
+  background-image: radial-gradient(circle, var(--scene-dot) 1.25px, transparent 1.6px);
+}
+
+.canvas {
+  position: absolute !important;
+  inset: 0;
+  touch-action: none;
+}
+
+/* the corner and the leaders: drawn over the canvas, clicks pass through except on the gravity arrow */
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--font-sans);
+}
+
+.hud g[data-part] {
+  pointer-events: auto;
+}
+
+.views {
+  position: absolute;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--island);
+}
+
+.view {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.view:hover {
+  color: var(--text);
+}
+
+.view:focus-visible {
+  outline: 2px solid var(--focus-ring);
+}
+
+.view[aria-pressed="true"] {
+  background: var(--select-soft);
+  color: var(--text);
+}
+
+.tip {
+  position: absolute;
+  transform: translate(12px, -130%);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--island);
+  color: var(--text);
+  font-size: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* positions of the parts on screen: read by tests, never shown */
+.anchors {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  margin: 0;
+  padding: 0;
+}

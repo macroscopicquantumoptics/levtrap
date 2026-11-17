@@ -5,7 +5,7 @@
  * (`npm run shots` copies them to design/screens/).
  */
 import { expect, test } from "@playwright/test";
-import { expectNoSidewaysScroll, frequencies, local, open, partButton, selectPart, setField, settled, shot, VIEWS, type Scheme, type View } from "./helpers";
+import { drawnPart, expectNoSidewaysScroll, frequencies, local, open, partButton, selectPart, setField, settled, shot, VIEWS, type Scheme, type View } from "./helpers";
 
 interface Variant {
   name: string;
@@ -85,7 +85,7 @@ for (const v of VARIANTS) {
       await expect(inspector).toContainText("Beam 2");
       await expect(page.getByTestId("field-beam1-direction")).toHaveValue("against");
       await expect(page.getByTestId("field-beam1-power")).toHaveValue("200");
-      await expect(page.getByTestId("scene").locator('g[data-part="lens:1"]')).toHaveCount(1);
+      await expect(drawnPart(page, "lens:1")).toHaveCount(1);
 
       // the scattering forces cancel: the particle moves back to the focus, and the trap is stiffer
       const verdict = page.getByTestId("verdict");
@@ -110,7 +110,7 @@ for (const v of VARIANTS) {
       await expect(inspector).toHaveCount(0);
       expect(await frequencies(page)).toEqual(TWEEZER);
       await page.getByTestId("redo").click();
-      await expect(page.getByTestId("scene").locator('g[data-part="field:1"]')).toHaveCount(1);
+      await expect(drawnPart(page, "field:1")).toHaveCount(1);
       expect(await frequencies(page)).toEqual(COUNTER);
     });
 

@@ -24,7 +24,29 @@ export async function open(page: Page, query: string, view: View = "desktop", sc
   await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
   await page.goto(local(query));
   await expect(page.getByTestId("screen")).toBeVisible();
+  await sceneDrawn(page);
 }
+
+/** Wait for the scene: the 3D one has loaded and drawn (or the flat one stands in for good). */
+export async function sceneDrawn(page: Page) {
+  await expect(page.getByTestId("scene")).toHaveAttribute("data-renderer", /^(webgl|svg)$/, { timeout: 30_000 });
+}
+
+/** Where a part is drawn, in page px: the 3D scene lists every part's screen position. */
+export async function partAt(page: Page, id: string): Promise<{ x: number; y: number }> {
+  const li = page.getByTestId("scene-anchors").locator(`li[data-part="${id}"]`);
+  const box = (await page.getByTestId("scene").boundingBox())!;
+  return { x: box.x + Number(await li.getAttribute("data-x")), y: box.y + Number(await li.getAttribute("data-y")) };
+}
+
+/** Click a part where it is drawn (not on its label). */
+export async function clickInScene(page: Page, id: string) {
+  const { x, y } = await partAt(page, id);
+  await page.mouse.click(x, y);
+}
+
+/** The parts drawn in the scene. */
+export const drawnPart = (page: Page, id: string) => page.getByTestId("scene-anchors").locator(`li[data-part="${id}"]`);
 
 /**
  * Select a part the way a user would: its label in the drawing on a wide
@@ -52,6 +74,7 @@ const SHOTS = process.env.SCREENSHOT_DIR ?? "test-results/screenshots";
  * screenshot".
  */
 export async function shot(page: Page, name: string) {
+  await sceneDrawn(page);
   await page.evaluate(async () => {
     await document.fonts.ready;
     await new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done())));

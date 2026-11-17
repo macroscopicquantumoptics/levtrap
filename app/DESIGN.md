@@ -71,29 +71,59 @@ Three more rules came out of building it:
 
 ## 4. The scene
 
-The scene is drawn from the setup, one drawing per kind of field, in SVG.
-It stands in for the three.js scene of D3 (see decision 1 in section 12).
+The scene is the trap in 3D (`src/screen/scene3d/`, react-three-fiber),
+drawn from the setup, one drawable per kind of field. The flat SVG drawing
+of the prototype stays for three jobs: the preset cards' thumbnails, the
+moment while three.js loads, and browsers without WebGL (`?scene=svg` asks
+for it).
 
-* **View.** z, the axis of the first beam, runs to the right; y is up; x
-  recedes up and to the right at half length. The axes in the corner say so.
-* **To scale:** the particle, the beam's waist and its cone angle, the
-  electrodes of a Paul trap, and the particle's position (the computed
-  equilibrium: in the tweezer it sits 216 nm downstream of the focus, and
-  the drawing shows it). The scale bar is a round length and changes with
-  the view.
+* **Camera.** Orthographic, so a length across the view is drawn at the same
+  scale wherever it is, and the scale bar is true everywhere in the picture.
+  The scene is drawn in micrometres, so a 0.25 µm waist and a 3 mm
+  electrode are both exact in one picture.
+* **Views.** Fit (from above and a little upstream, the first beam running
+  across), Along (looking down the first beam, or down a Paul trap's axis),
+  Side (the beam left to right, y up). The buttons are top right. Drag
+  turns the view, the wheel or a pinch zooms about the pointer, right-drag
+  pans. The axes in the corner turn with the view.
+* **Two scales.** A trap with light only fits the focus (micrometres); a
+  trap with electrodes fits the electrodes (millimetres). The zoom crosses
+  from one to the other without a step, and the scale bar follows: it is a
+  round length (1, 2 or 5 × 10ⁿ) that is exactly as long as it says. When
+  the view is far smaller than the electrodes, they are drawn faint, so the
+  focus is not seen against a wall of metal.
+* **To scale:** the particle at the computed equilibrium (in the tweezer
+  216 nm downstream of the focus), the beam's waist and its cone angle (the
+  hyperbola w(ζ) = √(w₀² + ζ² tan²θ)), the light's direction and focus, and
+  the electrodes: a linear trap's rods are round, of radius 1.145 r₀ with
+  their surfaces r₀ from the axis (the radius that best mimics hyperbolic
+  electrodes), the RF pair on x; its end caps are rings at ±z₀, open so that
+  light along z passes. A ring trap's ring has inner radius r₀; its end caps
+  sit at ±z₀.
 * **Not to scale:** the distance from a lens to its focus (the lens is a
-  symbol, placed where it fits), and a particle that would be smaller than
-  4.5 px. Such a particle is drawn larger inside a dotted ring, and its
-  label says "enlarged".
-* **Two scales.** A trap with light only is drawn at the scale of the focus
-  (micrometres). A trap with electrodes is drawn at their scale
-  (millimetres). A smooth zoom between the two is D3.
+  symbol of the focusing optic, placed where the cone is 40 % of the view
+  wide), and a particle that would be smaller than 4.5 px. Such a particle
+  is drawn larger inside a dotted ring, and its label says "enlarged";
+  Show → True particle size turns that off.
+* **The light** is a volume: its brightness follows the intensity on the
+  axis (1/w²), fades out past the focus, and fades upstream of the lens.
+  Its colour is the wavelength's own when visible; infrared is the theme's
+  laser red.
+* **In the way.** A rod between the camera and the trap centre is drawn
+  faint, and clicks pass through it.
 * **Labels.** Every part has a label with its name and the values worth
   seeing without a click: "Beam 1064 nm · 200 mW", "Lens NA 0.8",
   "Particle SiO₂ · 100 nm". So the setup can be read off the drawing.
-  A label and the drawn thing both select the part.
-* **Selecting.** The selected part gets a blue outline and its label turns
-  blue. Clicking the table deselects, and so does Esc.
+  A label and the drawn thing both select the part. A part turned or zoomed
+  out of the view has no label. With labels hidden, hovering a thing names it.
+* **Selecting.** The selected part glows in the selection blue (the light:
+  its edges) and its label turns blue. A ray through the scene meets several
+  things: the particle wins over the lens and electrodes, which win over the
+  light. Clicking the table deselects, and so does Esc; a drag never selects.
+* **Overlays** (Show menu): the trap's eigen-axes through the equilibrium,
+  and each field's force on the particle as an arrow (length on a log
+  scale; only when more than one field shares the load, since with one the
+  force at the equilibrium is zero). The intensity slice is later.
 * **Narrow screens.** There is no room for labels, so the parts become a row
   of buttons under the results.
 
@@ -279,22 +309,22 @@ gravity, a beam's direction and focus position.
 
 ## 11. What the prototype is not
 
-* The scene is an SVG drawing with a fixed view. D3 replaces it.
 * The store has undo and redo but no autosave and no file load (D2).
 * The unit-aware fields are a small local version. D2 ports the ones from
   QUOP, with linked pairs for radius, diameter and mass.
 * Formulas are plain text. D4 typesets them.
 * Presets are example values. `docs/validation/references.md` has no
   verified paper yet (C3), so no preset names one. D6 replaces them.
-* The file menu's four file actions and three overlays in the Show menu are
-  listed, greyed, with their issue.
+* The file menu's four file actions and the intensity slice in the Show
+  menu are listed, greyed, with their issue.
 
 ## 12. Decisions for a human
 
-1. **The scene: a drawing or a free 3D view?** The prototype draws the trap
-   in one fixed view, like an optics diagram. It reads at a glance and
-   everything is clickable. D3 plans three.js. Options: (a) keep a fixed
-   drawn view as the default and add 3D as a second view; (b) 3D only.
+1. **The scene: a drawing or a free 3D view?** D3 made the 3D view the
+   default, opening at an oblique Fit view that reads like the prototype's
+   drawing; the flat drawing remains for thumbnails and without WebGL.
+   The other option was to keep the flat drawing as the default and offer
+   3D as a second view.
 2. **Labels as the navigation.** Every part is named in the drawing, with
    its key values. The alternative is a list of parts in a side panel. The
    labels keep the screen to one place to look.

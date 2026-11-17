@@ -1,6 +1,6 @@
 /** The screen's rules (docs/ARCHITECTURE.md §7, app/DESIGN.md), one test each. */
 import { expect, test } from "@playwright/test";
-import { collectErrors, expectNoSidewaysScroll, frequencies, open, partButton, selectPart, setField, settled, shot, VIEWS } from "./helpers";
+import { clickInScene, collectErrors, expectNoSidewaysScroll, frequencies, open, partButton, selectPart, setField, settled, shot, VIEWS } from "./helpers";
 
 const TWEEZER = ["227 kHz", "285 kHz", "96.8 kHz"];
 
@@ -227,11 +227,14 @@ test("Show hides the labels and keeps every part reachable", async ({ page }) =>
 
 test("clicking a thing in the drawing selects it, clicking the table deselects", async ({ page }) => {
   await open(page, "preset=tweezer");
-  await page.getByTestId("scene").locator('g[data-part="particle"]').click();
+  // the particle sits inside the light: the click goes to the particle
+  await clickInScene(page, "particle");
   await expect(page.getByTestId("inspector")).toHaveAttribute("data-part", "particle");
-  await page.getByTestId("scene").locator('g[data-part="lens:0"]').click();
+  await clickInScene(page, "lens:0");
   await expect(page.getByTestId("inspector")).toHaveAttribute("data-part", "lens:0");
-  await page.getByTestId("scene").locator("svg").click({ position: { x: 250, y: 610 } }); // the table, below the beam
+  await clickInScene(page, "field:0");
+  await expect(page.getByTestId("inspector")).toHaveAttribute("data-part", "field:0");
+  await page.mouse.click(250, 160); // the table, above the beam
   await expect(page.getByTestId("inspector")).toHaveCount(0);
 });
 

@@ -15,6 +15,10 @@ const REPO = "https://github.com/macroscopicquantumoptics/levtrap";
 export interface ShowOptions {
   labels: boolean;
   grid: boolean;
+  /** the 3D scene's overlays */
+  axes: boolean;
+  forces: boolean;
+  trueSize: boolean;
 }
 
 export interface TopBarProps {
@@ -101,10 +105,23 @@ export function TopBar({ name, canUndo, canRedo, onUndo, onRedo, show, onShow, o
               <MenuItem title="Labels" note="Name every part beside it" checked={show.labels} onSelect={() => onShow({ ...show, labels: !show.labels })} testId="show-labels" />
               <MenuItem title="Grid" checked={show.grid} onSelect={() => onShow({ ...show, grid: !show.grid })} testId="show-grid" />
               <MenuRule />
-              <MenuHeading>With the 3D scene</MenuHeading>
-              <MenuItem title="Intensity slice" tag="#19" disabled />
-              <MenuItem title="Trap axes" tag="#19" disabled />
-              <MenuItem title="Force arrows" tag="#19" disabled />
+              <MenuHeading>In the 3D scene</MenuHeading>
+              <MenuItem title="Trap axes" note="The eigen-axes through the equilibrium" checked={show.axes} onSelect={() => onShow({ ...show, axes: !show.axes })} testId="show-axes" />
+              <MenuItem
+                title="Force arrows"
+                note="Each field's force on the particle, log length"
+                checked={show.forces}
+                onSelect={() => onShow({ ...show, forces: !show.forces })}
+                testId="show-forces"
+              />
+              <MenuItem
+                title="True particle size"
+                note="Do not enlarge a particle too small to see"
+                checked={show.trueSize}
+                onSelect={() => onShow({ ...show, trueSize: !show.trueSize })}
+                testId="show-true-size"
+              />
+              <MenuItem title="Intensity slice" tag="later" disabled />
             </>
           )}
         </Menu>

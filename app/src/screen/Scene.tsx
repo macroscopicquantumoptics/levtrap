@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { Component, lazy, Suspense, useState, type ReactNode } from "react";
 import type { BeamField, GravityField, PaulField, Result, Setup, Vec3 } from "../engine/types.ts";
 import { useSize } from "./hooks.ts";
 import { directionOf, environmentOf, gravityOf, partsOf, positionOf, type Part, type PartId } from "./model.ts";
@@ -18,6 +18,8 @@ import {
   type Box,
   type Point,
 } from "./scene/geometry.ts";
+import { lightColor } from "./scene/light.ts";
+import type { Overlays } from "./scene3d/Scene3D.tsx";
 import styles from "./Scene.module.css";
 
 export interface SceneProps {
@@ -33,6 +35,8 @@ export interface SceneProps {
   grid: boolean;
   /** a small still picture (preset cards): no scale bar, no axes, nothing to click */
   thumbnail?: boolean;
+  /** the 3D scene's overlays (Show menu) */
+  overlays?: Overlays;
 }
 
 interface LabelSpot {
@@ -45,45 +49,91 @@ interface LabelSpot {
 
 const MIN_PARTICLE_PX = 4.5;
 
-/** Colour of the drawn light: the wavelength's own colour when visible, deep red or violet outside. */
-function lightColor(wavelength: number): string {
-  const nm = wavelength * 1e9;
-  if (nm > 700) return "var(--light)";
-  if (nm < 400) return "#8b5cf6";
-  const stops: [number, string][] = [
-    [400, "#7c3aed"],
-    [450, "#2563eb"],
-    [490, "#06b6d4"],
-    [530, "#22c55e"],
-    [570, "#eab308"],
-    [600, "#f97316"],
-    [640, "#ef4444"],
-    [700, "#dc2626"],
-  ];
-  return stops.reduce((best, s) => (Math.abs(s[0] - nm) < Math.abs(best[0] - nm) ? s : best))[1];
+const Scene3D = lazy(() => import("./scene3d/Scene3D.tsx"));
+
+const NO_OVERLAYS: Overlays = { trueSize: false, axes: false, forces: false };
+
+let webgl: boolean | undefined;
+/** Whether this browser draws WebGL (asked once). `?scene=svg` asks for the flat drawing. */
+function canDraw3D(): boolean {
+  if (webgl === undefined) {
+    try {
+      const wanted = new URLSearchParams(window.location.search).get("scene") !== "svg";
+      webgl = wanted && Boolean(document.createElement("canvas").getContext("webgl2"));
+    } catch {
+      webgl = false;
+    }
+  }
+  return webgl;
 }
 
-/** The scene: the trap, drawn from the Setup. Click a thing to select it. */
-export function Scene({ setup, result, selected, onSelect, inset, labels, grid, thumbnail }: SceneProps) {
+/** Falls back to the flat drawing if the 3D scene fails (a lost or refused WebGL context). */
+class Fallback extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+/**
+ * The scene: the trap, drawn from the Setup. Click a thing to select it.
+ * In 3D (scene3d/Scene3D.tsx) where WebGL works; as a flat SVG drawing while
+ * that loads, where it does not, and for the preset cards' thumbnails.
+ */
+export function Scene(props: SceneProps) {
+  const { setup, result, selected, onSelect, inset, labels, grid, thumbnail, overlays } = props;
   const [ref, size] = useSize();
   const [hover, setHover] = useState<PartId | null>(null);
+  const [drawn, setDrawn] = useState(false);
   const ready = size.width > 0 && size.height > 0;
+  const three = !thumbnail && ready && canDraw3D();
+
+  const flat = ready && (
+    <Drawing
+      setup={setup}
+      result={result}
+      selected={selected}
+      onSelect={onSelect}
+      labels={labels}
+      grid={grid}
+      thumbnail={thumbnail}
+      box={{ width: size.width, height: size.height, inset }}
+      hover={hover}
+      setHover={setHover}
+    />
+  );
 
   return (
-    <div ref={ref} className={styles.scene} data-testid={thumbnail ? undefined : "scene"} data-thumbnail={thumbnail || undefined}>
-      {ready && (
-        <Drawing
-          setup={setup}
-          result={result}
-          selected={selected}
-          onSelect={onSelect}
-          labels={labels}
-          grid={grid}
-          thumbnail={thumbnail}
-          box={{ width: size.width, height: size.height, inset }}
-          hover={hover}
-          setHover={setHover}
-        />
+    <div
+      ref={ref}
+      className={styles.scene}
+      data-testid={thumbnail ? undefined : "scene"}
+      data-thumbnail={thumbnail || undefined}
+      data-renderer={thumbnail ? undefined : three ? (drawn ? "webgl" : "loading") : "svg"}
+    >
+      {three ? (
+        <Fallback fallback={flat}>
+          <Suspense fallback={flat}>
+            <Scene3D
+              setup={setup}
+              result={result}
+              selected={selected}
+              onSelect={onSelect}
+              inset={inset}
+              labels={labels}
+              grid={grid}
+              width={size.width}
+              height={size.height}
+              overlays={overlays ?? NO_OVERLAYS}
+              onReady={() => setDrawn(true)}
+            />
+          </Suspense>
+        </Fallback>
+      ) : (
+        flat
       )}
     </div>
   );
