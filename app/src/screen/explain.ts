@@ -1,12 +1,14 @@
 /**
- * Every number explains itself: what it is, the formula, the values that
- * went in, and the model behind it with its validity. Entries are data, so
- * a test can check each one (the pattern D4 extends with typeset formulas).
+ * Every number explains itself: what it is, the formula (formulas.ts), the
+ * values that went in, and the model behind it with its validity. Entries
+ * are data, so a test can check each one and typeset every formula.
  */
 import type { ModelInfo, PaulField, Result, Setup } from "../engine/types.ts";
-import { formatMass, formatNumber, formatSI } from "../lib/format.ts";
+import { formatMass, formatNumber, formatSci, formatSI } from "../lib/format.ts";
+import { toFieldText } from "../lib/units.ts";
 import { shownFrequency } from "./answer.ts";
-import { environmentOf } from "./model.ts";
+import type { FormulaId } from "./formulas.ts";
+import { environmentOf, subscript } from "./model.ts";
 
 export interface Explanation {
   /** "Trap frequency along x" */
@@ -15,7 +17,8 @@ export interface Explanation {
   value: string;
   /** the full SI value, for the clipboard */
   copy: string;
-  formula: string;
+  formula: FormulaId;
+  /** symbols are TeX */
   inputs: { symbol: string; value: string; note: string }[];
   model: { name: string; validity: string; notes: string[] } | null;
 }
@@ -24,6 +27,8 @@ const MODELS: Record<string, string> = {
   mie: "Mie theory (T-matrix): exact for a homogeneous sphere of any size",
   mathieu: "Mathieu equation: exact secular frequency",
   pseudopotential: "Pseudopotential approximation of the RF field",
+  "knudsen-interpolation": "Knudsen-number interpolation from the free-molecular to the continuum limit",
+  "dipole-pattern": "Photon recoil with the scattered light's dipole pattern",
 };
 
 const VALIDITY: Record<string, string> = { ok: "Valid here", approximate: "Approximate here" };
@@ -32,6 +37,15 @@ function describeModel(info: ModelInfo | undefined): Explanation["model"] {
   if (!info) return null;
   return { name: MODELS[info.model] ?? info.model, validity: VALIDITY[info.validity] ?? info.validity, notes: info.notes };
 }
+
+const model = (result: Result, quantity: string) => describeModel(result.models.find((m) => m.quantity === quantity));
+const AXES = ["x", "y", "z"] as const;
+type Axis = (typeof AXES)[number];
+const triple = (values: (number | null | undefined)[], format: (v: number | null | undefined) => string) => values.map(format).join(" · ");
+const copyTriple = (values: (number | null | undefined)[], unit: string) => values.map((v) => (v == null ? "" : `${v} ${unit}`)).join(", ");
+const KB = 1.380649e-23;
+
+// --- headline numbers ---------------------------------------------------------------
 
 /** One mode's frequency. */
 export function explainFrequency(result: Result, setup: Setup, index: number): Explanation {
@@ -45,26 +59,26 @@ export function explainFrequency(result: Result, setup: Setup, index: number): E
     copy: frequency == null ? "" : `${frequency} Hz`,
     model: describeModel(info),
   };
-  const axis = mode.name as "x" | "y" | "z";
-  if (result.paul && paul && axis in result.paul.q) {
-    const a = { symbol: `a`, value: formatNumber(result.paul.a[axis], 3), note: `Mathieu a along ${axis}: the static field` };
-    const q = { symbol: `q`, value: formatNumber(result.paul.q[axis], 3), note: `Mathieu q along ${axis}: the RF field` };
-    const rf = { symbol: "f_RF", value: formatSI(paul.rf_frequency, "Hz", 3, true), note: "RF frequency" };
+  const axis = mode.name as Axis;
+  if (result.paul && paul && axis in result.paul.q && !result.optical) {
+    const a = { symbol: `a_${axis}`, value: formatNumber(result.paul.a[axis], 3), note: `Mathieu a along ${axis}: the static field` };
+    const q = { symbol: `q_${axis}`, value: formatNumber(result.paul.q[axis], 3), note: `Mathieu q along ${axis}: the RF field` };
+    const rf = { symbol: String.raw`f_\mathrm{RF}`, value: formatSI(paul.rf_frequency, "Hz", 3, true), note: "RF frequency" };
     if (info?.model === "mathieu") {
       const beta = frequency == null ? null : (2 * frequency) / paul.rf_frequency;
       return {
         ...base,
-        formula: "f = β · f_RF / 2",
-        inputs: [{ symbol: "β", value: formatNumber(beta, 3), note: "characteristic exponent of the Mathieu equation for a and q" }, a, q, rf],
+        formula: "paul-exact",
+        inputs: [{ symbol: String.raw`\beta_${axis}`, value: formatNumber(beta, 3), note: "characteristic exponent of the Mathieu equation for a and q" }, a, q, rf],
       };
     }
-    return { ...base, formula: "f = (f_RF / 2) · √(a + q² / 2)", inputs: [a, q, rf] };
+    return { ...base, formula: "paul-pseudopotential", inputs: [a, q, rf] };
   }
   return {
     ...base,
-    formula: "f = √(k / m) / 2π",
+    formula: "optical-frequency",
     inputs: [
-      { symbol: "k", value: formatSI(mode.stiffness, "N/m"), note: "stiffness: how fast the restoring force grows away from the equilibrium" },
+      { symbol: `k_${mode.name}`, value: formatSI(mode.stiffness, "N/m"), note: "stiffness: how fast the restoring force grows away from the equilibrium" },
       { symbol: "m", value: formatMass(result.particle.mass), note: "mass of the sphere, from its radius and density" },
     ],
   };
@@ -73,22 +87,278 @@ export function explainFrequency(result: Result, setup: Setup, index: number): E
 /** The trap depth. */
 export function explainDepth(result: Result, setup: Setup): Explanation {
   const temperature = environmentOf(setup).temperature;
-  const info = result.models.find((m) => m.quantity === "modes");
   return {
     title: "Trap depth",
     value: `${formatNumber(result.depth.kT, 3)} k_BT`,
     copy: `${result.depth.J} J`,
-    formula: "U = −∫ F ds, from the equilibrium to the nearest barrier",
+    formula: "depth",
     inputs: [
       { symbol: "U", value: formatSI(result.depth.J, "J"), note: "the smallest depth over the three axes" },
-      { symbol: "U / k_B", value: formatSI(result.depth.K, "K"), note: "the same as a temperature" },
+      { symbol: String.raw`U / k_\mathrm{B}`, value: formatSI(result.depth.K, "K"), note: "the same as a temperature" },
       { symbol: "T", value: `${formatNumber(temperature, 3, true)} K`, note: "temperature of the environment" },
       ...result.modes.map((m) => ({
         symbol: `U_${m.name}`,
-        value: m.depth == null ? "—" : `${formatNumber(m.depth / (result.depth.J / result.depth.kT || Infinity), 3)} k_BT`,
+        value: m.depth == null ? "—" : `${formatNumber(m.depth / (KB * temperature), 3)} k_BT`,
         note: `depth along ${m.name}`,
       })),
     ],
-    model: describeModel(info),
+    model: model(result, "modes"),
   };
+}
+
+// --- secondary numbers ----------------------------------------------------------------
+
+export interface Secondary {
+  id: string;
+  label: string;
+  value: string;
+  explain(): Explanation;
+}
+
+/** The numbers behind the headline ones, each with its explanation. */
+export function secondaryNumbers(result: Result, setup: Setup): Secondary[] {
+  const out: Secondary[] = [];
+  const env = environmentOf(setup);
+  const modeNames = result.modes.map((m) => m.name).join(", ");
+
+  if (result.equilibrium) {
+    const eq = result.equilibrium;
+    const value = eq.map((c) => (Math.abs(c) < 1e-15 ? "0" : formatSI(c, "m"))).join(" · ");
+    out.push({
+      id: "position",
+      label: "Position (x, y, z)",
+      value,
+      explain: () => ({
+        title: "Equilibrium position",
+        value,
+        copy: copyTriple(eq, "m"),
+        formula: "equilibrium",
+        inputs: [
+          { symbol: String.raw`\mathbf{r}_0`, value, note: "where the forces of all the fields add to zero, and pull back from every side" },
+          ...(result.breakdown ?? []).map((share, i) => ({
+            symbol: String.raw`\mathbf{F}_{${i + 1}}`,
+            value: triple(share.force, (v) => formatSI(v, "N")),
+            note: `${share.kind === "beam" ? "light" : share.kind === "paul" ? "Paul trap" : "gravity"} (field ${share.fields.map((f) => f + 1).join(", ")})`,
+          })),
+        ],
+        model: model(result, "modes"),
+      }),
+    });
+  }
+
+  if (result.modes.length) {
+    const ks = result.modes.map((m) => m.stiffness);
+    const value = triple(ks, (v) => formatSI(v, "N/m"));
+    out.push({
+      id: "stiffness",
+      label: `Stiffness (${modeNames})`,
+      value,
+      explain: () => ({
+        title: "Stiffness",
+        value,
+        copy: copyTriple(ks, "N/m"),
+        formula: "stiffness",
+        inputs: result.modes.map((m) => ({
+          symbol: `k_${m.name}`,
+          value: formatSI(m.stiffness, "N/m"),
+          note: `along (${m.axis.map((c) => formatNumber(c, 2, true)).join(", ")})`,
+        })),
+        model: model(result, "modes"),
+      }),
+    });
+  }
+
+  {
+    const p = setup.particle;
+    const value = formatMass(result.particle.mass);
+    out.push({
+      id: "mass",
+      label: "Mass",
+      value,
+      explain: () => ({
+        title: "Mass",
+        value,
+        copy: `${result.particle.mass} kg`,
+        formula: "mass",
+        inputs: [
+          { symbol: "R", value: formatSI(p.radius, "m"), note: "radius" },
+          { symbol: String.raw`\rho`, value: `${formatNumber(result.particle.density, 4, true)} kg/m³`, note: p.material ? `density of ${subscript(p.material)}` : "density" },
+        ],
+        model: null,
+      }),
+    });
+  }
+
+  const paul = setup.trap.fields.find((f): f is PaulField => f.kind === "paul");
+  if (result.paul && paul) {
+    const pb = result.paul;
+    const Q = { symbol: "Q", value: `${result.particle.charge ?? setup.particle.charge ?? 0} e`, note: "charge of the particle" };
+    const m = { symbol: "m", value: formatMass(result.particle.mass), note: "mass" };
+    const rf = { symbol: String.raw`f_\mathrm{RF}`, value: formatSI(paul.rf_frequency, "Hz", 3, true), note: "RF frequency" };
+    const qValue = triple(AXES.map((a) => pb.q[a]), (v) => formatNumber(v, 3));
+    out.push({
+      id: "mathieu-q",
+      label: "Mathieu q (x, y, z)",
+      value: qValue,
+      explain: () => ({
+        title: "Mathieu q",
+        value: qValue,
+        copy: AXES.map((a) => pb.q[a]).join(", "),
+        formula: "mathieu-q",
+        inputs: [
+          Q,
+          m,
+          rf,
+          { symbol: "V", value: `${formatNumber(paul.rf_voltage, 3, true)} V`, note: "RF amplitude" },
+          { symbol: "r_0", value: formatSI(paul.r0, "m", 3, true), note: "electrode distance: the curvature c′ goes as V / r₀²" },
+        ],
+        model: model(result, "modes"),
+      }),
+    });
+    const aValue = triple(AXES.map((a) => pb.a[a]), (v) => formatSci(v, 3));
+    out.push({
+      id: "mathieu-a",
+      label: "Mathieu a (x, y, z)",
+      value: aValue,
+      explain: () => ({
+        title: "Mathieu a",
+        value: aValue,
+        copy: AXES.map((a) => pb.a[a]).join(", "),
+        formula: "mathieu-a",
+        inputs: [
+          Q,
+          m,
+          rf,
+          { symbol: "U", value: `${formatNumber(paul.dc_voltage ?? 0, 3, true)} V`, note: "DC offset on the electrodes" },
+          ...(paul.geometry === "linear"
+            ? [{ symbol: String.raw`U_\mathrm{ec}`, value: `${formatNumber(paul.endcap_voltage ?? 0, 3, true)} V`, note: "end-cap voltage: the axial well" }]
+            : []),
+        ],
+        model: model(result, "modes"),
+      }),
+    });
+    if (pb.micromotion) {
+      const mm = pb.micromotion;
+      const value = formatSI(Math.hypot(...mm), "m");
+      out.push({
+        id: "micromotion",
+        label: "Micromotion amplitude",
+        value,
+        explain: () => ({
+          title: "Micromotion amplitude",
+          value,
+          copy: `${Math.hypot(...mm)} m`,
+          formula: "micromotion",
+          inputs: [
+            { symbol: String.raw`\mathbf{x}_0`, value: triple(result.equilibrium ?? [0, 0, 0], (v) => formatSI(v, "m")), note: "the equilibrium, away from the RF null" },
+            { symbol: "q", value: qValue, note: "Mathieu q per axis" },
+            { symbol: "A", value: triple(mm, (v) => formatSI(v, "m")), note: "per axis; the value shown is their length" },
+          ],
+          model: model(result, "modes"),
+        }),
+      });
+    }
+  }
+
+  if (result.optical) {
+    const o = result.optical;
+    const sca = formatSI(o.P_sca, "W");
+    out.push({
+      id: "scattered",
+      label: "Scattered power",
+      value: sca,
+      explain: () => ({
+        title: "Scattered power",
+        value: sca,
+        copy: `${o.P_sca} W`,
+        formula: "scattered-power",
+        inputs: [
+          { symbol: "P", value: formatSI(o.power, "W"), note: "the beams' power" },
+          { symbol: String.raw`Q_\mathrm{sca}`, value: formatSci(o.Qsca, 3), note: "plane-wave scattering efficiency, for scale" },
+          { symbol: "x", value: formatNumber(o.size_parameter, 3), note: "size parameter 2πnR/λ" },
+        ],
+        model: model(result, "optical"),
+      }),
+    });
+    const abs = formatSI(o.P_abs, "W");
+    out.push({
+      id: "absorbed",
+      label: "Absorbed power",
+      value: abs,
+      explain: () => ({
+        title: "Absorbed power",
+        value: abs,
+        copy: `${o.P_abs} W`,
+        formula: "absorbed-power",
+        inputs: [
+          { symbol: "P", value: formatSI(o.power, "W"), note: "the beams' power" },
+          { symbol: String.raw`Q_\mathrm{abs}`, value: formatSci(o.Qabs, 3), note: "plane-wave absorption efficiency, for scale" },
+          { symbol: "k", value: formatSci(result.particle.k, 3), note: "absorption index of the particle" },
+        ],
+        model: model(result, "optical"),
+      }),
+    });
+  }
+
+  if (result.rates) {
+    const r = result.rates;
+    const value = formatSI(r.gas_damping / (2 * Math.PI), "Hz");
+    out.push({
+      id: "damping",
+      label: `Gas damping γ/2π in ${subscript(env.gas)}`,
+      value,
+      explain: () => ({
+        title: "Gas damping",
+        value,
+        copy: `${r.gas_damping} 1/s`,
+        formula: "gas-damping",
+        inputs: [
+          { symbol: String.raw`\mathrm{Kn}`, value: formatSci(r.gas.knudsen, 3), note: "Knudsen number: mean free path over radius" },
+          { symbol: String.raw`\ell`, value: formatSI(r.gas.mean_free_path, "m"), note: `mean free path in ${subscript(env.gas)} at ${toFieldText(env.pressure, "pressure", "mbar", 3)} mbar` },
+          { symbol: String.raw`\eta`, value: `${formatSci(r.gas.viscosity, 3)} Pa s`, note: "viscosity of the gas" },
+          { symbol: String.raw`\gamma_\mathrm{Epstein}`, value: `${formatSci(r.epstein_damping, 3)} /s`, note: "the free-molecular limit, for comparison" },
+        ],
+        model: model(result, "gas_damping"),
+      }),
+    });
+    const reheat = triple(r.reheating_phonons_per_s, (v) => formatSci(v, 3));
+    out.push({
+      id: "reheating",
+      label: `Reheating in phonons/s (${modeNames})`,
+      value: reheat,
+      explain: () => ({
+        title: "Reheating rate",
+        value: `${reheat} phonons/s`,
+        copy: copyTriple(r.reheating_phonons_per_s, "1/s"),
+        formula: "reheating",
+        inputs: r.modes.flatMap((m) => [
+          { symbol: String.raw`\Gamma_{\mathrm{gas},${m.name}}`, value: `${formatSci(m.gas_heating, 3)} /s`, note: `gas heating along ${m.name}` },
+          { symbol: String.raw`\Gamma_{\mathrm{recoil},${m.name}}`, value: `${formatSci(m.recoil_heating, 3)} /s`, note: `photon recoil along ${m.name}` },
+        ]),
+        model: model(result, "recoil_heating"),
+      }),
+    });
+    const crossover = r.modes.map((m) => m.crossover_pressure);
+    if (crossover.every((p) => p != null)) {
+      const value = `${crossover.map((p) => toFieldText(p!, "pressure", "mbar", 2)).join(" · ")} mbar`;
+      out.push({
+        id: "crossover",
+        label: `Recoil exceeds gas heating below (${modeNames})`,
+        value,
+        explain: () => ({
+          title: "Recoil-limited below",
+          value,
+          copy: copyTriple(crossover, "Pa"),
+          formula: "crossover",
+          inputs: r.modes.map((m) => ({
+            symbol: `p_${m.name}`,
+            value: `${toFieldText(m.crossover_pressure!, "pressure", "mbar", 3)} mbar`,
+            note: `below this, photon recoil heats the ${m.name} mode more than the gas`,
+          })),
+          model: model(result, "recoil_heating"),
+        }),
+      });
+    }
+  }
+  return out;
 }

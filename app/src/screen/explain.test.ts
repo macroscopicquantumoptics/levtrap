@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { explainDepth, explainFrequency } from "./explain.ts";
+import { explainDepth, explainFrequency, secondaryNumbers } from "./explain.ts";
 import { PRESETS } from "./presets.ts";
 import { RECORDED } from "./recorded.ts";
 
@@ -11,14 +11,18 @@ test("every number of every recorded preset has an explanation with real values"
   for (const preset of PRESETS) {
     const result = RECORDED[preset.id];
     if (!result) continue;
-    const all = [...result.modes.map((_, i) => explainFrequency(result, preset.setup, i)), explainDepth(result, preset.setup)];
+    const all = [
+      ...result.modes.map((_, i) => explainFrequency(result, preset.setup, i)),
+      explainDepth(result, preset.setup),
+      ...secondaryNumbers(result, preset.setup).map((s) => s.explain()),
+    ];
     for (const e of all) {
       assert.ok(e.title && e.formula, `${preset.id}: ${e.title}`);
       assert.doesNotMatch(e.value, /—|NaN|undefined/, `${preset.id}: ${e.title} value`);
       assert.ok(e.copy.length > 0);
-      assert.ok(e.inputs.length >= 2);
+      assert.ok(e.inputs.length >= 1);
       for (const input of e.inputs) assert.doesNotMatch(input.value, /—|NaN|undefined|Infinity/, `${preset.id}: ${e.title}: ${input.symbol}`);
-      assert.ok(e.model, `${preset.id}: ${e.title} names its model`);
+      if (e.title !== "Mass") assert.ok(e.model, `${preset.id}: ${e.title} names its model`);
     }
   }
 });
@@ -27,11 +31,11 @@ test("an optical frequency is explained by stiffness and mass", () => {
   const e = explainFrequency(RECORDED.tweezer!, tweezer.setup, 0);
   assert.equal(e.title, "Trap frequency along x");
   assert.equal(e.value, "227 kHz");
-  assert.equal(e.formula, "f = √(k / m) / 2π");
+  assert.equal(e.formula, "optical-frequency");
   assert.deepEqual(
     e.inputs.map((i) => [i.symbol, i.value]),
     [
-      ["k", "18.8 µN/m"],
+      ["k_x", "18.8 µN/m"],
       ["m", "9.22 fg"],
     ],
   );
@@ -47,10 +51,10 @@ test("a Paul-trap frequency is explained by a, q and the RF frequency", () => {
   const r = RECORDED["paul-linear"]!;
   const e = explainFrequency(r, paul.setup, 0);
   assert.equal(e.value, "556 Hz");
-  assert.equal(e.formula, "f = (f_RF / 2) · √(a + q² / 2)");
+  assert.equal(e.formula, "paul-pseudopotential");
   assert.deepEqual(
     e.inputs.map((i) => i.symbol),
-    ["a", "q", "f_RF"],
+    ["a_x", "q_x", String.raw`f_\mathrm{RF}`],
   );
   assert.equal(e.inputs[2].value, "5 kHz");
   // the formula holds for the numbers shown
@@ -65,11 +69,30 @@ test("the depth is explained in joules, kelvin and per axis", () => {
     e.inputs.map((i) => [i.symbol, i.value]),
     [
       ["U", "1.60 aJ"],
-      ["U / k_B", "116 kK"],
+      [String.raw`U / k_\mathrm{B}`, "116 kK"],
       ["T", "300 K"],
       ["U_x", "574 k_BT"],
       ["U_y", "574 k_BT"],
       ["U_z", "386 k_BT"],
     ],
   );
+});
+
+
+test("the second row: every number of a tweezer and of a Paul trap, explained", () => {
+  const ids = (id: "tweezer" | "paul-linear") => secondaryNumbers(RECORDED[id]!, PRESETS.find((p) => p.id === id)!.setup).map((s) => s.id);
+  assert.deepEqual(ids("tweezer"), ["position", "stiffness", "mass", "scattered", "absorbed", "damping", "reheating", "crossover"]);
+  assert.deepEqual(ids("paul-linear"), ["position", "stiffness", "mass", "mathieu-q", "mathieu-a", "micromotion"]);
+  const rows = secondaryNumbers(RECORDED.tweezer!, tweezer.setup);
+  const row = (id: string) => rows.find((r) => r.id === id)!;
+  assert.equal(row("absorbed").value, "14.0 aW");
+  assert.equal(row("scattered").explain().formula, "scattered-power");
+  assert.equal(row("damping").explain().formula, "gas-damping");
+  // the mass formula holds for the numbers shown
+  const m = (4 / 3) * Math.PI * tweezer.setup.particle.radius ** 3 * 2200;
+  assert.ok(Math.abs(m - RECORDED.tweezer!.particle.mass) < 1e-6 * m);
+  // the micromotion formula holds: A = |q x0| / 2 along y
+  const r = RECORDED["paul-linear"]!;
+  const A = Math.abs(r.paul!.q.y * r.equilibrium![1]) / 2;
+  assert.ok(Math.abs(A - r.paul!.micromotion![1]) < 1e-6 * A);
 });
