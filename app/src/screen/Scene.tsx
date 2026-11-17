@@ -453,7 +453,7 @@ function Drawing({ setup, result, selected, onSelect, labels, grid, thumbnail, b
         )}
         <g className={styles.corner} display={thumbnail ? "none" : undefined}>
           <path d={`M${barRight - bar.px} ${bottom - 22}v6h${bar.px}v-6`} className={styles.scaleBar} />
-          <text className={styles.cornerText} x={barRight - bar.px / 2} y={bottom - 26} textAnchor="middle" data-testid="scale-bar">
+          <text className={styles.cornerText} x={barRight - bar.px / 2} y={bottom - 26} textAnchor="middle" data-testid={thumbnail ? undefined : "scale-bar"}>
             {bar.label}
           </text>
           {(

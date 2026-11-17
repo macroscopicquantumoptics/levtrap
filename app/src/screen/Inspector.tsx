@@ -21,14 +21,13 @@ import {
   type Part,
   type PartId,
 } from "./model.ts";
-import { coneHalfAngle, waistRadius } from "./scene/geometry.ts";
+import { getMaterial, MATERIAL_NAMES } from "../engine/materials.ts";
+import { angleFromNA, angleFromWaist, modeOrder, naFromAngle, radiusFromMass, sphereMass, waistFromAngle } from "../lib/linked.ts";
 import { NumberField, SelectField } from "./ui/fields.tsx";
 import { Icon } from "./ui/Icon.tsx";
 import ui from "./ui/ui.module.css";
 import styles from "./Inspector.module.css";
 
-/** Materials the engine has optical data for (levtrap.materials). */
-const MATERIALS = ["SiO2", "Si", "WS2", "MoS2", "WSe2", "MoTe2", "MoSe2"];
 const KIND_NOTE: Record<Part["kind"], string> = {
   particle: "A homogeneous sphere",
   beam: "A focused laser beam",
@@ -129,24 +128,32 @@ const whole = (v: number) => (Number.isInteger(v) ? null : "Must be a whole numb
 
 // ---- particle -----------------------------------------------------------------
 
-function ParticleEditor({ setup, result, prefix, onEdit }: EditorProps & { result: Result | null }) {
+function ParticleEditor({ setup, prefix, onEdit }: EditorProps & { result: Result | null }) {
   const p = setup.particle;
   const beam = setup.trap.fields.find((f): f is BeamField => f.kind === "beam");
+  const wavelength = beam?.wavelength ?? 1.064e-6;
   const custom = !p.material;
   const charged = hasKind(setup, "paul") || Boolean(p.charge);
-  // what the engine resolved for the material, to show and to start a custom material from
-  const resolved = result?.particle;
-  const n = p.n ?? resolved?.n ?? 1.45;
-  const k = p.k ?? resolved?.k ?? 0;
-  const density = p.density ?? resolved?.density ?? 2200;
+  // the material's values at the beam's wavelength, as the engine will take them
+  const mat = p.material ? getMaterial(p.material, wavelength) : null;
+  const n = p.n ?? (mat?.valid ? mat.n : 1.45);
+  const k = p.k ?? (mat?.valid ? mat.k : 0);
+  const density = p.density ?? mat?.density ?? 2200;
   const edit = (patch: Partial<typeof p>) => onEdit(withParticle(setup, patch));
   const charge = (
     <NumberField id={`${prefix}-charge`} label="Charge" value={p.charge ?? 0} quantity="charge" unit="e" check={whole} onCommit={(v) => edit({ charge: v })} />
   );
-  const source =
-    !custom && resolved && resolved.n != null && beam
-      ? `n = ${formatNumber(resolved.n, 4)}, k = ${formatNumber(resolved.k ?? 0, 2)}, ${formatNumber(resolved.density, 4, true)} kg/m³ at ${wavelengthText(beam.wavelength)}`
-      : null;
+  const note = !mat ? null : mat.valid ? (
+    <>
+      n = {formatNumber(mat.n, 4)}, k = {formatNumber(mat.k, 2)}, {formatNumber(mat.density, 4, true)} kg/m³ at {wavelengthText(wavelength)}.{" "}
+      <span className={styles.source}>Source: {mat.source}.</span>
+    </>
+  ) : (
+    <>
+      No data for {subscript(p.material!)} at {wavelengthText(wavelength)}: choose Custom and type n and k.{" "}
+      <span className={styles.source}>Source: {mat.source}.</span>
+    </>
+  );
   return (
     <>
       <Fields>
@@ -154,14 +161,25 @@ function ParticleEditor({ setup, result, prefix, onEdit }: EditorProps & { resul
           id={`${prefix}-material`}
           label="Material"
           value={p.material ?? "custom"}
-          options={[...MATERIALS.map((m) => ({ value: m, label: subscript(m) })), { value: "custom", label: "Custom" }]}
+          options={[...MATERIAL_NAMES.map((m) => ({ value: m, label: subscript(m) })), { value: "custom", label: "Custom" }]}
           onChange={(m) => edit(m === "custom" ? { material: null, n, k, density } : { material: m, n: undefined, k: undefined, density: undefined })}
-          note={source}
+          note={note}
         />
         <NumberField id={`${prefix}-radius`} label="Radius" value={p.radius} quantity="length" unit="nm" check={positive} onCommit={(v) => edit({ radius: v })} />
         {charged && charge}
       </Fields>
       <Advanced changed={[...(custom ? [`n ${formatNumber(n, 3, true)}`] : []), ...(!charged && p.charge ? [`${p.charge} e`] : [])]}>
+        {/* linked to the radius: one sphere */}
+        <NumberField id={`${prefix}-diameter`} label="Diameter" value={2 * p.radius} quantity="length" unit="nm" check={positive} onCommit={(v) => edit({ radius: v / 2 })} />
+        <NumberField
+          id={`${prefix}-mass`}
+          label="Mass"
+          value={sphereMass(p.radius, density) * 1e3}
+          quantity="mass"
+          unit="fg"
+          check={positive}
+          onCommit={(v) => edit({ radius: radiusFromMass(v / 1e3, density) })}
+        />
         <NumberField id={`${prefix}-n`} label="Refractive index n" value={n} quantity="number" check={positive} disabled={!custom} onCommit={(v) => edit({ n: v })} />
         <NumberField id={`${prefix}-k`} label="Absorption k" value={k} quantity="number" check={notNegative} disabled={!custom} onCommit={(v) => edit({ k: v })} />
         <NumberField id={`${prefix}-density`} label="Density" value={density} quantity="density" unit="kg/m³" check={positive} disabled={!custom} onCommit={(v) => edit({ density: v })} />
@@ -328,22 +346,17 @@ function BeamEditor({ setup, beam, index, prefix, onEdit }: EditorProps & { beam
 
 // ---- lens ---------------------------------------------------------------------------
 
-type FocusBy = "NA" | "angle" | "waist";
-
 function LensEditor({ setup, beam, index, prefix, onEdit }: EditorProps & { beam: BeamField; index: number }) {
   const focus = beam.focus;
   const n = environmentOf(setup).medium_index;
-  const by: FocusBy = focus.NA != null ? "NA" : focus.angle_deg != null ? "angle" : "waist";
-  const gaussian = modeLabel(beam) === "Gaussian";
+  const order = modeOrder(beam.mode?.type ?? "lg", beam.mode?.indices ?? [0, 0]);
   const edit = (next: BeamField["focus"]) => onEdit(withField<BeamField>(setup, index, { focus: next }));
-  // the same focus in another description (the engine's definitions; the waist relation holds for a Gaussian beam)
-  const describe = (to: FocusBy): BeamField["focus"] => {
-    const theta = coneHalfAngle(focus, beam.wavelength, n);
-    const round = (v: number) => Number(v.toPrecision(10)); // enough that going back and forth does not drift
-    if (to === "NA") return { kind: "lens", NA: round(n * Math.sin(theta)) };
-    if (to === "angle") return { kind: "lens", angle_deg: round((theta * 180) / Math.PI) };
-    return { kind: "lens", waist: round(waistRadius(focus, beam.wavelength, n)) };
-  };
+  // NA, waist and half-angle are one focus (the engine's relation); the setup keeps the one last typed
+  const angle =
+    focus.NA != null ? angleFromNA(focus.NA, n) : focus.angle_deg != null ? (focus.angle_deg * Math.PI) / 180 : angleFromWaist(focus.waist!, beam.wavelength, n, order);
+  const na = naFromAngle(angle, n);
+  const waist = waistFromAngle(angle, beam.wavelength, n, order);
+  const given = focus.NA != null ? "NA" : focus.waist != null ? "waist" : "half-angle";
   return (
     <>
       <Fields>
@@ -358,42 +371,36 @@ function LensEditor({ setup, beam, index, prefix, onEdit }: EditorProps & { beam
           ]}
           onChange={() => {}}
         />
-        <SelectField<FocusBy>
-          id={`${prefix}-by`}
-          label="Focus given by"
-          value={by}
-          options={[
-            { value: "NA", label: "Numerical aperture" },
-            { value: "angle", label: "Half-angle" },
-            { value: "waist", label: "Waist", disabled: !gaussian && by !== "waist" },
-          ]}
-          onChange={(to) => to !== by && edit(describe(to))}
+        <NumberField
+          id={`${prefix}-NA`}
+          label="NA"
+          value={na}
+          quantity="number"
+          check={(v) => (v > 0 && v < n ? null : `Must be between 0 and the medium index (${formatNumber(n, 4, true)}).`)}
+          onCommit={(v) => edit({ kind: "lens", NA: v })}
         />
-        {by === "NA" && (
-          <NumberField
-            id={`${prefix}-NA`}
-            label="NA"
-            value={focus.NA!}
-            quantity="number"
-            check={(v) => (v > 0 && v < n ? null : `Must be between 0 and the medium index (${formatNumber(n, 4, true)}).`)}
-            onCommit={(v) => edit({ kind: "lens", NA: v })}
-          />
-        )}
-        {by === "angle" && (
-          <NumberField
-            id={`${prefix}-angle`}
-            label="Half-angle"
-            value={focus.angle_deg!}
-            quantity="angle"
-            unit="°"
-            check={(v) => (v > 0 && v <= 90 ? null : "Must be between 0° and 90°.")}
-            onCommit={(v) => edit({ kind: "lens", angle_deg: v })}
-          />
-        )}
-        {by === "waist" && (
-          <NumberField id={`${prefix}-waist`} label="Waist w₀" value={focus.waist!} quantity="length" unit="µm" check={positive} onCommit={(v) => edit({ kind: "lens", waist: v })} />
-        )}
+        <NumberField
+          id={`${prefix}-waist`}
+          label={<>Waist w₀</>}
+          value={waist}
+          quantity="length"
+          unit="µm"
+          check={positive}
+          onCommit={(v) => edit({ kind: "lens", waist: v })}
+          note={`Linked to the NA${order ? ` for this mode (order ${order})` : ""}. The setup keeps the ${given}.`}
+        />
       </Fields>
+      <Advanced changed={given === "half-angle" ? [`half-angle ${formatNumber((angle * 180) / Math.PI, 3, true)}°`] : []}>
+        <NumberField
+          id={`${prefix}-angle`}
+          label="Half-angle"
+          value={(angle * 180) / Math.PI}
+          quantity="angle"
+          unit="°"
+          check={(v) => (v > 0 && v <= 90 ? null : "Must be between 0° and 90°.")}
+          onCommit={(v) => edit({ kind: "lens", angle_deg: v })}
+        />
+      </Advanced>
       <p className={styles.aside}>Drawn with its true cone angle. Its distance from the focus is not to scale.</p>
     </>
   );

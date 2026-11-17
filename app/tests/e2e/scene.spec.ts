@@ -15,12 +15,18 @@ async function hybrid(page: Page) {
 
 /** px per metre and the scale bar as drawn. */
 async function scale(page: Page) {
-  const label = page.getByTestId("scale-bar");
-  const pxPerMetre = Number(await label.getAttribute("data-px-per-metre"));
-  const text = (await label.textContent())!.replace(/\s+/g, " ").trim();
-  // the geometry of the bar (the page's box would include its stroke and corners)
-  const px = await page.getByTestId("scale-bar-line").evaluate((el) => (el as SVGGraphicsElement).getBBox().width);
-  return { pxPerMetre, text, px };
+  // read together, from one frame: during a zoom the next frame may already differ
+  return page.evaluate(() => {
+    const label = document.querySelector('[data-testid="scene"] [data-testid="scale-bar"]')!;
+    const line = document.querySelector('[data-testid="scene"] [data-testid="scale-bar-line"]')!;
+    return {
+      pxPerMetre: Number(label.getAttribute("data-px-per-metre")),
+      text: label.textContent!.replace(/\s+/g, " ").trim(),
+      // the bar's drawn length, from its path "M x y v6 h<length> v-6" (a box
+      // measured on the page would add the stroke and the corners)
+      px: Number(/h([\d.e+-]+)/.exec(line.getAttribute("d")!)![1]),
+    };
+  });
 }
 
 const metres = (text: string) => {

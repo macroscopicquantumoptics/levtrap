@@ -56,7 +56,7 @@ These are the rules of `docs/ARCHITECTURE.md` §7. Each has a test in
 | **Fields take units as typed.** | `200 mW`, `0.2 W`, `1e-6 mbar`. Enter or leaving the field applies; Esc puts the old value back. The unit selector changes how the value reads, not the value. A mistake is answered with a sentence under the field. |
 | **Warnings are sentences in the strip.** | "No stable trap: outside the first Mathieu stability region along x, y." No banners, no pop-ups. |
 | **Plots are inline SVG in the theme's colours.** | The Forces tab. No Plotly. |
-| **Undo and redo, light and dark.** | One step per edit; Ctrl Z and Ctrl Shift Z. Autosave and the share link are D2 and D6. |
+| **Undo and redo, light and dark.** | One step per edit; Ctrl Z and Ctrl Shift Z. Every edit is autosaved in the browser; a reload opens where you left off (a saved setup that no longer validates is not opened, and the screen says why). The share link is D6. |
 
 Three more rules came out of building it:
 
@@ -158,8 +158,8 @@ next. The reason each one is visible is in the last column.
 | Input | Where | Why visible |
 |---|---|---|
 | Type | visible | Ideal lens today; the asphere (E1) and the parabolic mirror (E3) appear here. |
-| Focus given by | visible | NA, half-angle or waist: three descriptions of one focus. Switching converts the value. |
-| NA (or half-angle, or waist) | visible | It sets the trap's geometry, and with it every frequency. |
+| NA and waist w₀ | visible, linked | Two descriptions of one focus: typing one updates the other (the waist through the mode's order). The setup keeps the one typed last. They set the trap's geometry, and with it every frequency. |
+| Half-angle | Advanced, linked | The third description of the same focus. |
 
 **Paul trap**
 
@@ -272,7 +272,7 @@ touch screen. Islands have a 12 px radius and one shadow.
 | Total power | visible: Beam, as Power | Each beam has its own power. |
 | Mode family, mode indices | Advanced: Beam | |
 | Polarisation | visible: Beam | |
-| Focus given by; NA or waist | visible: Lens | |
+| NA and waist, linked | visible: Lens | |
 | Add a second, coherent beam | visible: Add field, then Beam: Interferes with | A beam is a field like any other. |
 | Component ratio P₂/P₁ | removed | Replaced by each beam's own power. |
 | Relative phase | visible when beams interfere: Beam | |
@@ -309,9 +309,12 @@ gravity, a beam's direction and focus position.
 
 ## 11. What the prototype is not
 
-* The store has undo and redo but no autosave and no file load (D2).
-* The unit-aware fields are a small local version. D2 ports the ones from
-  QUOP, with linked pairs for radius, diameter and mass.
+* There is no file load or save yet (D6). The setup is checked in the
+  browser by `src/engine/validate.ts`, a port of `setup.parse` with the same
+  messages, before it is autosaved or reopened.
+* The unit-aware fields are written here, not ported from QUOP (its code was
+  not reachable from this work). Radius, diameter and mass are linked, as
+  are NA, waist and half-angle (`src/lib/linked.ts`).
 * Formulas are plain text. D4 typesets them.
 * Presets are example values. `docs/validation/references.md` has no
   verified paper yet (C3), so no preset names one. D6 replaces them.

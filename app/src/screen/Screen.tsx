@@ -12,7 +12,8 @@ import { PartsRow } from "./PartsRow.tsx";
 import { PresetPicker } from "./PresetPicker.tsx";
 import { DEFAULT_PRESET, presetById, presetForSetup } from "./presets.ts";
 import { Scene } from "./Scene.tsx";
-import { initialState, reduce } from "./store.ts";
+import { restoreSetup, saveSetup, type Restored } from "./autosave.ts";
+import { initialState, reduce, type ScreenState } from "./store.ts";
 import { TopBar, type ShowOptions } from "./TopBar.tsx";
 import styles from "./Screen.module.css";
 
@@ -29,6 +30,7 @@ const NARROW = "(max-width: 720px)";
  * the answer always at the bottom. Query parameters, for links and tests:
  *   ?preset=<id>   start from that preset, without the picker
  *   ?recorded=0    ask the engine even for a preset's own values
+ * Without ?preset the last setup is reopened from autosave (autosave.ts).
  */
 export function Screen({ engine }: ScreenProps) {
   const isClient = useIsClient();
@@ -37,21 +39,42 @@ export function Screen({ engine }: ScreenProps) {
   return <ScreenBody engine={engine} />;
 }
 
+function storage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null; // storage blocked
+  }
+}
+
 function readParams() {
   const q = new URLSearchParams(window.location.search);
+  const store = storage();
   let welcomed = false;
   try {
-    welcomed = window.localStorage.getItem(WELCOMED_KEY) === "1";
+    welcomed = store?.getItem(WELCOMED_KEY) === "1";
   } catch {
     // storage blocked: the picker shows on every visit
   }
   const preset = presetById(q.get("preset"));
-  return { preset, recorded: q.get("recorded") !== "0", firstVisit: !preset && !welcomed };
+  // a link to a preset wins over what was being edited
+  const restored: Restored = preset || !store ? { kind: "none" } : restoreSetup(store, DEFAULT_PRESET);
+  return {
+    preset,
+    restored,
+    recorded: q.get("recorded") !== "0",
+    firstVisit: !preset && !welcomed && restored.kind === "none",
+  };
+}
+
+function startState(params: ReturnType<typeof readParams>): ScreenState {
+  if (params.restored.kind === "restored") return { ...initialState(params.restored.preset), setup: params.restored.setup };
+  return initialState(params.preset ?? DEFAULT_PRESET);
 }
 
 function ScreenBody({ engine }: ScreenProps) {
   const [params] = useState(readParams);
-  const [state, dispatch] = useReducer(reduce, undefined, () => initialState(params.preset ?? DEFAULT_PRESET));
+  const [state, dispatch] = useReducer(reduce, params, startState);
   const { setup, selected } = state;
   const { answer, pending, status } = useAnswer(setup, engine, params.recorded);
   const narrow = useMedia(NARROW);
@@ -59,6 +82,13 @@ function ScreenBody({ engine }: ScreenProps) {
   const [tab, setTab] = useState<TabId | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [picker, setPicker] = useState(params.firstVisit);
+  const [refused, setRefused] = useState(params.restored.kind === "refused" ? params.restored.reason : null);
+
+  // every change is kept, so a reload opens where one left off
+  useEffect(() => {
+    const store = storage();
+    if (store) saveSetup(store, setup, state.preset);
+  }, [setup, state.preset]);
 
   const parts = partsOf(setup);
   const part = parts.find((p) => p.id === selected);
@@ -119,6 +149,17 @@ function ScreenBody({ engine }: ScreenProps) {
           </div>
         )}
       </div>
+
+      {refused && (
+        <div className={styles.notice} role="status" data-testid="autosave-refused">
+          <p>
+            Your last setup could not be opened: {refused}. Started from the {DEFAULT_PRESET.name.toLowerCase()}.
+          </p>
+          <button type="button" onClick={() => setRefused(null)} aria-label="Dismiss">
+            ×
+          </button>
+        </div>
+      )}
 
       {part && (
         <div className={styles.inspector}>
