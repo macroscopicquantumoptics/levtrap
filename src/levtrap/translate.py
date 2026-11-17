@@ -227,4 +227,13 @@ def wigner_rotation_matrix(nmax: int, R) -> sparse.csr_matrix:
         DDD[-1, :-2] += D1[2, 0] * d[2:][::-1] * DD[-1, :]
         blocks.append(DDD)
         DD = DDD
-    return sparse.block_diag([sparse.csr_matrix(b) for b in blocks], format="csr")
+    # Frame fix (not in OTT 1.5.9): the recursion gives D in the
+    # Condon-Shortley convention, but levtrap's (OTT's) spharm, and so the
+    # fields and the beams built from it, have no (-1)^m phase.  Conjugating
+    # by S = diag((-1)^m) makes a rotation by R turn the beam's field by R.
+    # Rotations about z (diagonal D) are unchanged.  See force.forcetorque_beams.
+    out = []
+    for n, blk in enumerate(blocks, start=1):
+        sgn = (-1.0) ** np.arange(-n, n + 1)
+        out.append(sparse.csr_matrix(sgn[:, None] * blk * sgn[None, :]))
+    return sparse.block_diag(out, format="csr")

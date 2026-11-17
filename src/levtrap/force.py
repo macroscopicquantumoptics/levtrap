@@ -101,6 +101,16 @@ def forcetorque_beams(ibeam: Bsc, sbeam: Bsc):
               * (pnp1mm1 * cj(q) - qnp1mm1 * cj(p) - anp1mm1 * cj(b) + bnp1mm1 * cj(a))))
     sxy = np.sum(Cxy + Dxy, axis=0)
     s = np.vstack([sxy.imag, sxy.real, sz.real])
+    # Frame fix (not in OTT 1.5.9): OTT's force formula reads the coefficients
+    # in the Condon-Shortley convention of its Wigner matrices, while its
+    # spherical harmonics (spharm, hence the fields and every beam built from
+    # them) leave that phase (-1)^m out.  The two readings differ by a
+    # rotation of pi about z, so the formula's x and y components are those
+    # of the beam turned by pi.  Turning them back makes the force, the
+    # fields and the rotations (translate.wigner_rotation_matrix) agree.
+    # Beams symmetric under that rotation (along z, centred) are unaffected.
+    for v in (f, t, s):
+        v[:2] *= -1
     return f, t, s
 
 

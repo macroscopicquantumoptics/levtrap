@@ -43,13 +43,9 @@ coefficients), so the derivative is taken in the engine's own position frame.
 Frame
 -----
 Directions (theta, phi) are those of :meth:`levtrap.bsc.Bsc.em_field_xyz`:
-theta from +z (the beam axis), phi from +x.  Note that the position frame of
-``Bsc.translate_xyz`` (and hence of ``forcetorque(position=...)``) is that
-frame rotated by pi about z (a particle "at" (x, y, z) in the force frame
-sits at (-x, -y, z) in the field frame).  The information patterns are
-quadratic in dF/dr_j and do not depend on this sign; patterns of setups
-symmetric under that rotation (all beams along z, focus on axis) are
-unaffected.
+theta from +z (the beam axis), phi from +x.  Positions (``Bsc.translate_xyz``,
+``forcetorque(position=...)``) use the same frame: levtrap corrects OTT's
+mismatch between the two (see ``tests/test_frames.py``).
 """
 
 from __future__ import annotations
