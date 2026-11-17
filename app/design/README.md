@@ -131,6 +131,17 @@ Dark:
 
 ![Hybrid, dark](screens/scene-hybrid-desktop-dark.webp)
 
+## 6. Presets, files and links (D6)
+
+The picker says where each preset's values come from: example values for
+now, and the paper each will be checked against (C3).
+
+![Preset sources](screens/presets-sources-desktop-light.webp)
+
+File → Copy as Python: the code that computes the same numbers.
+
+![Copy as Python](screens/python-desktop-light.webp)
+
 ## Other states
 
 A number explaining itself: the formula, the values that went in, the model

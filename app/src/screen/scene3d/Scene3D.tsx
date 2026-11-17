@@ -209,7 +209,7 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
         flat
         frameloop="demand"
         dpr={[1, 2]}
-        gl={{ antialias: true, alpha: true }}
+        gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
         camera={{ manual: true, position: [0, 0, 100], near: 0.001, far: 1000 }}
         onCreated={() => requestAnimationFrame(() => requestAnimationFrame(() => onReady?.()))}
         onPointerMissed={(e) => {
