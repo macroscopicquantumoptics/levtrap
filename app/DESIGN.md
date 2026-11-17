@@ -56,7 +56,8 @@ These are the rules of `docs/ARCHITECTURE.md` §7. Each has a test in
 | **Fields take units as typed.** | `200 mW`, `0.2 W`, `1e-6 mbar`. Enter or leaving the field applies; Esc puts the old value back. The unit selector changes how the value reads, not the value. A mistake is answered with a sentence under the field. |
 | **Warnings are sentences in the strip.** | "No stable trap along x and y: outside the first Mathieu stability region." followed by the usual cause and what to change. Each engine warning has a code and its copy in `src/screen/warnings.ts`; a test checks the engine still writes each one. No banners, no pop-ups. |
 | **Plots are inline SVG in the theme's colours.** | The Forces tab. No Plotly. |
-| **Undo and redo, light and dark.** | One step per edit; Ctrl Z and Ctrl Shift Z. Every edit is autosaved in the browser; a reload opens where you left off (a saved setup that no longer validates is not opened, and the screen says why). The share link is D6. |
+| **Undo and redo, light and dark.** | One step per edit; Ctrl Z and Ctrl Shift Z. Every edit is autosaved in the browser; a reload opens where you left off (a saved setup that no longer validates is not opened, and the screen says why). |
+| **A setup travels as a file or a link.** | File menu: open and save a setup `.json` (the engine's own format, so `levtrap.solve` reads it), copy a share link (the setup lz-compressed in the fragment: no server, nothing sent), copy the Python that computes the same numbers, export the results (CSV: every number in SI with its model; JSON: the setup and the whole result) and the scene as PNG. Opening a file is an edit, so Ctrl Z takes it back. A link opens in place of the autosave and then leaves the address. |
 
 Three more rules came out of building it:
 
@@ -328,16 +329,17 @@ gravity, a beam's direction and focus position.
 
 ## 11. What the prototype is not
 
-* There is no file load or save yet (D6). The setup is checked in the
-  browser by `src/engine/validate.ts`, a port of `setup.parse` with the same
-  messages, before it is autosaved or reopened.
+* A setup is checked in the browser by `src/engine/validate.ts`, a port of
+  `setup.parse` with the same messages, before it is autosaved, opened from
+  a file or loaded from a link.
 * The unit-aware fields are written here, not ported from QUOP (its code was
   not reachable from this work). Radius, diameter and mass are linked, as
   are NA, waist and half-angle (`src/lib/linked.ts`).
-* Presets are example values. `docs/validation/references.md` has no
-  verified paper yet (C3), so no preset names one. D6 replaces them.
-* The file menu's four file actions and the intensity slice in the Show
-  menu are listed, greyed, with their issue.
+* Presets are example values: `docs/validation/references.json` (C3) has no
+  verified paper yet. Each card names the paper its trap type is waiting for,
+  and a verified entry the schema can hold replaces the example and is cited
+  (`buildPresets`, tested), with no change to the screen.
+* The intensity slice in the Show menu is listed, greyed.
 * The Sweep sweeps one input at a time; a two-dimensional map is not built.
 
 ## 12. Decisions for a human

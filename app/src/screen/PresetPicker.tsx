@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { issueUrl } from "./answer.ts";
 import { PRESETS, type Preset } from "./presets.ts";
+import { shortCitation } from "./referenceTypes.ts";
 import { RECORDED } from "./recorded.ts";
 import { Scene } from "./Scene.tsx";
 import { Icon } from "./ui/Icon.tsx";
@@ -67,15 +68,33 @@ export function PresetPicker({ open, current, onPick, onClose }: PresetPickerPro
                       {preset.id === current.id && <span className={ui.tag}>open now</span>}
                     </span>
                     <span className={styles.blurb}>{preset.blurb}</span>
-                    <span className={styles.source}>
+                    <span className={styles.source} data-testid={`preset-${preset.id}-source`}>
                       {preset.source}
                       {preset.pending ? " · not computed yet" : ""}
+                      {preset.references[0]?.status === "wanted" && <> · to be checked against {shortCitation(preset.references[0])}</>}
                     </span>
                   </span>
                 </button>
               </li>
             ))}
           </ul>
+          <p className={styles.foot} data-testid="presets-sources">
+            Each preset will become a setup from a paper once its values are checked against the paper
+            (docs/validation/references.md). Papers waiting:{" "}
+            {PRESETS.flatMap((p) => p.references.filter((r) => r.status === "wanted")).map((r, i) => (
+              <span key={r.id}>
+                {i > 0 && "; "}
+                {r.doi ? (
+                  <a href={`https://doi.org/${r.doi}`} target="_blank" rel="noreferrer">
+                    {shortCitation(r)}
+                  </a>
+                ) : (
+                  shortCitation(r)
+                )}
+              </span>
+            ))}
+            .
+          </p>
           {PRESETS.some((p) => p.pending) && (
             <p className={styles.foot}>
               A trap marked “not computed yet” is drawn and can be edited; its numbers arrive with the engine (

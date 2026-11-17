@@ -13,6 +13,10 @@ import { PresetPicker } from "./PresetPicker.tsx";
 import { DEFAULT_PRESET, presetById, presetForSetup } from "./presets.ts";
 import { Scene } from "./Scene.tsx";
 import { restoreSetup, saveSetup, type Restored } from "./autosave.ts";
+import { fileActions, type Notice } from "./files/actions.ts";
+import { PythonDialog } from "./files/PythonDialog.tsx";
+import { pythonSnippet } from "./files/python.ts";
+import { readLinkFragment } from "./files/setupText.ts";
 import { initialState, reduce, type ScreenState } from "./store.ts";
 import { TopBar, type ShowOptions } from "./TopBar.tsx";
 import styles from "./Screen.module.css";
@@ -57,14 +61,26 @@ function readParams() {
     // storage blocked: the picker shows on every visit
   }
   const preset = presetById(q.get("preset"));
-  // a link to a preset wins over what was being edited
-  const restored: Restored = preset || !store ? { kind: "none" } : restoreSetup(store, DEFAULT_PRESET);
+  // a shared setup wins over a link to a preset, which wins over what was being edited
+  const link = readLinkFragment(window.location.hash);
+  let restored: Restored | { kind: "link-refused"; reason: string };
+  if (link?.ok) restored = { kind: "restored", setup: link.setup, preset: presetForSetup(link.setup) ?? DEFAULT_PRESET };
+  else if (link) restored = { kind: "link-refused", reason: link.reason };
+  else restored = preset || !store ? { kind: "none" } : restoreSetup(store, DEFAULT_PRESET);
   return {
     preset,
     restored,
+    fromLink: link !== null,
     recorded: q.get("recorded") !== "0",
-    firstVisit: !preset && !welcomed && restored.kind === "none",
+    firstVisit: !preset && !welcomed && restored.kind === "none" && !link,
   };
+}
+
+function firstNotice(params: ReturnType<typeof readParams>): Notice | null {
+  const r = params.restored;
+  if (r.kind === "refused") return { tone: "bad", testId: "autosave-refused", text: `Your last setup could not be opened: ${r.reason}. Started from the ${DEFAULT_PRESET.name.toLowerCase()}.` };
+  if (r.kind === "link-refused") return { tone: "bad", testId: "link-refused", text: `The shared link could not be opened: ${r.reason}. Started from the ${DEFAULT_PRESET.name.toLowerCase()}.` };
+  return null;
 }
 
 function startState(params: ReturnType<typeof readParams>): ScreenState {
@@ -82,7 +98,20 @@ function ScreenBody({ engine }: ScreenProps) {
   const [tab, setTab] = useState<TabId | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [picker, setPicker] = useState(params.firstVisit);
-  const [refused, setRefused] = useState(params.restored.kind === "refused" ? params.restored.reason : null);
+  const [notice, setNotice] = useState<Notice | null>(() => firstNotice(params));
+  const [python, setPython] = useState(false);
+
+  // a shared setup is in the address only to arrive: from now on autosave keeps it, and a reload does not undo edits
+  useEffect(() => {
+    if (params.fromLink) window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }, [params.fromLink]);
+
+  // a confirmation goes away by itself; a problem stays until dismissed
+  useEffect(() => {
+    if (notice?.tone !== "ok") return;
+    const t = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [notice]);
 
   // every change is kept, so a reload opens where one left off
   useEffect(() => {
@@ -96,6 +125,15 @@ function ScreenBody({ engine }: ScreenProps) {
   const edit = (next: Setup, pick?: PartId | null) => dispatch({ type: "edit", setup: next, select: pick });
   const named = presetForSetup(setup);
   const name = named ? named.name : `${state.preset.name} · edited`;
+
+  const files = fileActions({
+    setup,
+    name,
+    result: answer.result,
+    open: (next) => edit(next, null),
+    say: setNotice,
+    showPython: () => setPython(true),
+  });
 
   const closePicker = () => {
     setPicker(false);
@@ -141,6 +179,7 @@ function ScreenBody({ engine }: ScreenProps) {
           onShow={setShow}
           onPresets={() => setPicker(true)}
           status={status}
+          files={files}
         />
         {!narrow && (
           <div className={styles.corner}>
@@ -150,16 +189,16 @@ function ScreenBody({ engine }: ScreenProps) {
         )}
       </div>
 
-      {refused && (
-        <div className={styles.notice} role="status" data-testid="autosave-refused">
-          <p>
-            Your last setup could not be opened: {refused}. Started from the {DEFAULT_PRESET.name.toLowerCase()}.
-          </p>
-          <button type="button" onClick={() => setRefused(null)} aria-label="Dismiss">
+      {notice && (
+        <div className={styles.notice} data-tone={notice.tone} role="status" data-testid={notice.testId}>
+          <p>{notice.text}</p>
+          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss">
             ×
           </button>
         </div>
       )}
+
+      <PythonDialog open={python} code={pythonSnippet(setup, name)} onClose={() => setPython(false)} />
 
       {part && (
         <div className={styles.inspector}>

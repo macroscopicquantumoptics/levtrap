@@ -69,6 +69,11 @@
   font-size: var(--text-sm);
 }
 
+/* a confirmation ("copied") rather than a problem */
+.notice[data-tone="ok"] {
+  border-color: var(--ok);
+}
+
 .notice p {
   margin: 0;
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import type { EngineStatus } from "../engine/client.ts";
 import { currentTheme, setTheme, subscribeTheme } from "../lib/theme.ts";
 import { issueUrl } from "./answer.ts";
+import type { FileActions } from "./files/actions.ts";
 import { useDismiss } from "./hooks.ts";
 import { Icon } from "./ui/Icon.tsx";
 import { Menu, MenuHeading, MenuItem, MenuRule } from "./ui/Menu.tsx";
@@ -32,10 +33,12 @@ export interface TopBarProps {
   onShow(show: ShowOptions): void;
   onPresets(): void;
   status: EngineStatus | null;
+  files: FileActions;
 }
 
 /** The islands along the top: file menu and name, undo · show · redo, help and theme. */
-export function TopBar({ name, canUndo, canRedo, onUndo, onRedo, show, onShow, onPresets, status }: TopBarProps) {
+export function TopBar({ name, canUndo, canRedo, onUndo, onRedo, show, onShow, onPresets, status, files }: TopBarProps) {
+  const picker = useRef<HTMLInputElement>(null);
   const theme = useSyncExternalStore(subscribeTheme, currentTheme, () => "light" as const);
   const next = theme === "dark" ? "light" : "dark";
   return (
@@ -62,11 +65,74 @@ export function TopBar({ name, canUndo, canRedo, onUndo, onRedo, show, onShow, o
                 }}
               />
               <MenuRule />
-              <MenuHeading>Setup file</MenuHeading>
-              <MenuItem title="Open a setup file" tag="#22" disabled />
-              <MenuItem title="Save the setup" tag="#22" disabled />
-              <MenuItem title="Copy a share link" tag="#22" disabled />
-              <MenuItem title="Copy as Python" tag="#22" disabled />
+              <MenuHeading>Setup</MenuHeading>
+              <MenuItem
+                title="Open a setup file"
+                note=".json, as saved here or written for levtrap.solve"
+                testId="file-open"
+                onSelect={() => {
+                  close();
+                  picker.current?.click();
+                }}
+              />
+              <MenuItem
+                title="Save the setup"
+                note="A .json file to open here or in Python"
+                testId="file-save"
+                onSelect={() => {
+                  close();
+                  files.save();
+                }}
+              />
+              <MenuItem
+                title="Copy a share link"
+                note="The whole setup in the link; no server"
+                testId="file-share"
+                onSelect={() => {
+                  close();
+                  void files.share();
+                }}
+              />
+              <MenuItem
+                title="Copy as Python"
+                note="The code that computes these numbers"
+                testId="file-python"
+                onSelect={() => {
+                  close();
+                  files.python();
+                }}
+              />
+              <MenuRule />
+              <MenuHeading>Export</MenuHeading>
+              <MenuItem
+                title="Results as CSV"
+                note="Every number, in SI units, with its model"
+                testId="file-results-csv"
+                disabled={!files.exportCsv}
+                onSelect={() => {
+                  close();
+                  files.exportCsv?.();
+                }}
+              />
+              <MenuItem
+                title="Results as JSON"
+                note="The setup and the engine's whole result"
+                testId="file-results-json"
+                disabled={!files.exportJson}
+                onSelect={() => {
+                  close();
+                  files.exportJson?.();
+                }}
+              />
+              <MenuItem
+                title="The scene as PNG"
+                note="The drawing as it is on screen"
+                testId="file-scene-png"
+                onSelect={() => {
+                  close();
+                  void files.exportPng();
+                }}
+              />
               <MenuRule />
               <a className={ui.menuItem} role="menuitem" href="../">
                 <span className={ui.menuIcon} />
@@ -78,6 +144,18 @@ export function TopBar({ name, canUndo, canRedo, onUndo, onRedo, show, onShow, o
             </>
           )}
         </Menu>
+        <input
+          ref={picker}
+          type="file"
+          accept=".json,application/json"
+          hidden
+          data-testid="file-input"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void file.text().then((text) => files.open(text, file.name));
+          }}
+        />
         <h1 className={styles.wordmark}>
           lev<span>trap</span>
         </h1>
