@@ -117,11 +117,12 @@ test("an invalid setup names the thing to fix", async ({ page }) => {
   const inspector = page.getByTestId("inspector");
   await expect(inspector).toHaveAttribute("data-part", "particle");
   await expect(inspector.getByRole("alert")).toContainText("a Paul trap needs a charged particle");
-  // with the charge set the setup is valid; a Paul trap with a beam is the next ticket
   await setField(page, "particle-charge", "30");
   await settled(page);
-  await expect(verdict).toContainText("Not computed yet: a Paul trap together with a beam.");
-  await expect(verdict.getByRole("link", { name: "Issue #12" })).toBeVisible();
+  // with a charge the setup is valid: a tweezer inside a Paul trap (B3), held by the light
+  await expect(verdict).toContainText("Stable trap.");
+  await expect(verdict).toContainText("Mathieu q = 0.32 on x and y.");
+  await expect(page.getByTestId("freq-x")).toContainText("kHz");
 });
 
 test("a field takes units as typed and answers mistakes with a sentence", async ({ page }) => {

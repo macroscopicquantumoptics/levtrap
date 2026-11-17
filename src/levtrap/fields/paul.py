@@ -51,7 +51,7 @@ import numpy as np
 
 from . import ModelInfo, _positions
 
-__all__ = ["PaulField", "mathieu_beta", "in_first_region", "PSEUDO_Q_LIMIT", "E_CHARGE"]
+__all__ = ["PaulField", "mathieu_beta", "floquet_beta", "in_first_region", "PSEUDO_Q_LIMIT", "E_CHARGE"]
 
 E_CHARGE = 1.602176634e-19  # C
 PSEUDO_Q_LIMIT = 0.4        # |q| above which the pseudopotential is flagged as inaccurate
@@ -81,6 +81,44 @@ def mathieu_beta(a: float, q: float, steps: int = 600) -> float | None:
     if abs(half_trace) >= 1 or not in_first_region(a, q):
         return None
     return math.acos(half_trace) / math.pi
+
+
+def floquet_beta(a: float, q: float) -> float | None:
+    """Characteristic exponent beta of x'' + (a - 2 q cos 2 xi) x = 0 in any
+    stability band, or ``None`` where the motion grows.
+
+    For a Paul trap with another, static, confining force (light, B3) the
+    static curvature a is often far above the first region; the motion is
+    stable except in narrow parametric resonances near integer beta.
+    cos(pi beta) = tr(M) / 2 fixes beta up to the band; the band is the one
+    whose beta is closest to the pseudopotential value sqrt(a + q^2 / 2).
+    In the first region this is :func:`mathieu_beta`.
+    """
+    if q == 0:
+        return math.sqrt(a) if a > 0 else None
+    steps = max(600, int(60 * math.sqrt(abs(a) + 2 * abs(q))) * 10)  # >= ~60 RK4 steps per oscillation
+    h = math.pi / steps
+    Y = np.array([[1.0, 0.0], [0.0, 1.0]])
+
+    def f(xi, Y):
+        return np.array([Y[1], -(a - 2 * q * math.cos(2 * xi)) * Y[0]])
+
+    xi = 0.0
+    for _ in range(steps):
+        k1 = f(xi, Y)
+        k2 = f(xi + h / 2, Y + h / 2 * k1)
+        k3 = f(xi + h / 2, Y + h / 2 * k2)
+        k4 = f(xi + h, Y + h * k3)
+        Y = Y + h / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+        xi += h
+    half_trace = 0.5 * (Y[0, 0] + Y[1, 1])
+    if abs(half_trace) >= 1:
+        return None
+    b0 = math.acos(half_trace) / math.pi  # in [0, 1]
+    guess = math.sqrt(max(a + q * q / 2, 0.0))
+    k = round((guess - b0) / 2)
+    candidates = [b0 + 2 * j for j in (k - 1, k, k + 1)] + [-b0 + 2 * j for j in (k, k + 1, k + 2)]
+    return min((c for c in candidates if c >= 0), key=lambda c: abs(c - guess))
 
 
 def in_first_region(a: float, q: float) -> bool:

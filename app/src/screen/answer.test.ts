@@ -50,15 +50,16 @@ test("the engine's refusals become sentences", () => {
   });
   const range = answerFromError(new EngineError("setup", "must be smaller than the medium index (1)", "trap.fields[0].focus.NA"), DEFAULT_SETUP);
   assert.deepEqual(range.notice, { kind: "invalid", text: "Lens: NA must be smaller than the medium index (1).", part: "lens:0" });
-  const hybrid = answerFromError(new EngineError("unsupported", "hybrid traps (beam + Paul trap) are not computed yet"), withParticle(paul, { charge: 50 }));
-  assert.deepEqual(hybrid.notice, { kind: "pending", text: "Not computed yet: a Paul trap together with a beam.", ticket: 12 });
+  const two = addField(withParticle(paul, { charge: 50 }), newPaulTrap("ring"));
+  const refused = answerFromError(new EngineError("unsupported", "more than one Paul trap is not computed yet"), two);
+  assert.deepEqual(refused.notice, { kind: "pending", text: "Not computed yet: more than one Paul trap." });
   const crash = answerFromError(new Error("boom"), DEFAULT_SETUP);
   assert.deepEqual(crash.notice, { kind: "failed", text: "The engine failed: boom." });
 });
 
 test("what the engine cannot compute yet, with its ticket", () => {
-  const hybrid = addField(withParticle(DEFAULT_SETUP, { charge: 30 }), newPaulTrap("linear"));
-  assert.deepEqual(pending(hybrid), { kind: "pending", text: "Not computed yet: a Paul trap together with a beam.", ticket: 12 });
+  const two = addField(addField(withParticle(DEFAULT_SETUP, { charge: 30 }), newPaulTrap("linear")), newPaulTrap("ring"));
+  assert.deepEqual(pending(two), { kind: "pending", text: "Not computed yet: more than one Paul trap." });
   const none = { ...DEFAULT_SETUP, trap: { fields: [] } };
   assert.deepEqual(pending(none), { kind: "pending", text: "Nothing holds the particle: add a beam or a Paul trap." });
   assert.deepEqual(pending(DEFAULT_SETUP, "trap.fields[0].mode: this mode is not computed yet"), {

@@ -45,8 +45,6 @@ def check_supported(s: dict) -> None:
         raise UnsupportedSetup(f"{', '.join(others)} fields are not computed yet")
     beams = [f for f in fields if f["kind"] == "beam"]
     pauls = [f for f in fields if f["kind"] == "paul"]
-    if beams and pauls:
-        raise UnsupportedSetup("hybrid traps (beam + Paul trap) are not computed yet")
     if len(pauls) > 1:
         raise UnsupportedSetup("more than one Paul trap is not computed yet")
     if not beams and not pauls:
@@ -196,16 +194,33 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     beams = [f for f in s["trap"]["fields"] if f["kind"] == "beam"]
     gravity = [GravityField(mass, f["g"]) for f in s["trap"]["fields"] if f["kind"] == "gravity"]
     paul_setup = next((f for f in s["trap"]["fields"] if f["kind"] == "paul"), None)
-    if paul_setup is not None:
+    if paul_setup is not None and not any(float(b["power"]) > 0 for b in beams):
+        # a beam without power exerts no force: this is the Paul trap alone
         return _solve_paul(s, paul_setup, gravity, mass, p, warnings, want, t0)
     optical = optical_fields(s, _single_beam, lambda wl: _tmatrix(_particle_at(given, wl), wl, nm)[0])
-    fields = optical + gravity
+    paul = None
+    if paul_setup is not None:
+        from .fields.paul import E_CHARGE, PaulField
+        paul = PaulField(paul_setup, float(p["charge"]) * E_CHARGE, mass)
+    fields = optical + ([paul] if paul else []) + gravity
     P = sum(float(b["power"]) for b in beams)
     n_p = complex(float(p["n"]), float(p["k"] or 0.0))
     centre, ranges = scan_box(beams)
     along_z = all(b["direction"][0] == 0 and b["direction"][1] == 0 for b in beams)
 
     trap = find_trap(fields, mass, centre=centre, ranges=ranges, points=SCAN_POINTS)
+    if paul is not None and not trap.stable:
+        # Two scales: the optical focus (um) was searched first. Now scan the
+        # electrodes (mm) for a seed, and search a box of the optical size
+        # around it (Newton steps are limited to the optical scale).
+        from .solver import _seed
+        box = np.array([paul.r0, paul.r0, paul.z0])
+        seed = _seed(fields, np.zeros(3), box, SCAN_POINTS)
+        if seed is not None:
+            fine = np.maximum(ranges, 2 * box / (SCAN_POINTS - 1))
+            wide = find_trap(fields, mass, centre=seed, ranges=fine, points=SCAN_POINTS)
+            if wide.stable or trap.equilibrium is None:
+                trap, centre, ranges = wide, seed, fine
     warnings += trap.warnings
     r_eq = trap.equilibrium
     if r_eq is None:
@@ -218,7 +233,11 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
         warnings.append("No stable trap: the particle is pushed away along " + ", ".join(loose) + ".")
     modes = [dict(name=m["name"], axis=[float(v) for v in m["axis"]], frequency=m["frequency"],
                   stiffness=m["stiffness"], depth=m["depth"]) for m in trap.modes]
-    U = min(m["depth"] for m in trap.modes) if trap.stable else 0.0
+    stable = trap.stable
+    paul_block = paul_model = None
+    if paul is not None:
+        stable, paul_block, paul_model = _hybrid_paul(paul, fields, trap, modes, mass, temp, warnings)
+    U = min(m["depth"] for m in modes) if stable else 0.0
 
     wl = beams[0]["wavelength"]
     eff = mie_efficiencies(float(p["radius"]), wl, n_p, nm)
@@ -228,19 +247,24 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     result: dict[str, Any] = dict(
         version=RESULT_VERSION,
         engine=__version__,
-        stable=trap.stable,
+        stable=stable,
         equilibrium=None if r_eq is None else [float(v) for v in r_eq],
         modes=modes,
         depth=dict(J=U, K=U / KB, kT=U / (KB * temp)),
-        particle=dict(n=p["n"], k=p["k"], density=p["density"], mass=mass),
+        particle=dict(n=p["n"], k=p["k"], density=p["density"], mass=mass, charge=p["charge"]),
         optical=dict(P_sca=sc["P_sca"], P_abs=sc["P_abs"], power=P,
                      Qext=eff["Qext"], Qsca=eff["Qsca"], Qabs=eff["Qabs"],
                      size_parameter=eff["x"],
                      Nmax=dict(beam=max(f.beam.Nmax for f in optical), particle=optical[0].T.Nmax[0])),
-        models=[dict(quantity="modes", model="mie", validity="ok", notes=[]),
+        models=[dict(quantity="modes", **paul_model.as_dict()) if paul_model else
+                dict(quantity="modes", model="mie", validity="ok", notes=[]),
                 dict(quantity="optical", model="mie", validity="ok", notes=[])],
         warnings=warnings,
     )
+    if paul_block is not None:
+        result["paul"] = paul_block
+    if r_eq is not None:
+        result["breakdown"] = breakdown(s, fields, optical, paul, r_eq, modes, trap)
     q = eff["Qsca_multipoles"]
     rates, rate_models = rates_block(s, modes=modes, mass=mass, P_sca=sc["P_sca"], P_abs=sc["P_abs"],
                                      ed_fraction=q["ED"] / eff["Qsca"] if eff["Qsca"] > 0 else None)
@@ -333,6 +357,95 @@ def _solve_paul(s, f, gravity, mass, p, warnings, want, t0) -> dict:
         result["curves"] = _curves(fields, r_eq if r_eq is not None else np.zeros(3), ranges, SCAN_POINTS)
     result["time"] = time.perf_counter() - t0
     return result
+
+
+def _hybrid_paul(paul, fields, trap, modes, mass, temp, warnings):
+    """A Paul trap with light: frequencies and stability (``docs/ARCHITECTURE.md`` §5, B3).
+
+    The optical, gravity and DC forces are static, so near the equilibrium
+    they add a static curvature to the Mathieu equation of each axis:
+    a_eff = a + 4 k_static / (m Omega^2), with k_static the stiffness of
+    everything but the RF pseudopotential. Stability is the Floquet
+    criterion for (a_eff, q) in any band (light usually puts a_eff far above
+    the first region; only narrow parametric resonances are then unstable),
+    and the exact secular frequency is beta(a_eff, q) Omega / 2. With q = 0
+    this is sqrt(k / m) (the optical trap alone); with no light it is the
+    Paul trap's own result.
+
+    Returns ``(stable, paul block, model)`` and updates ``modes`` in place.
+    """
+    from .fields.paul import floquet_beta
+    from .derived import KB
+
+    model = paul.model()
+    warnings += [n for n in model.notes if n not in warnings]
+    k_rf = mass * (paul.Omega / 2) ** 2 * paul.q ** 2 / 2  # pseudopotential stiffness of the RF, per axis
+    a_eff, exact, ok = {}, {}, {}
+    for i, ax in enumerate("xyz"):
+        mode = next((m for m in modes if max(range(3), key=lambda j: abs(m["axis"][j])) == i), None)
+        aligned = mode is not None and abs(mode["axis"][i]) > 1 - 1e-6
+        if not aligned:  # eigen-axes turned away from the electrodes' axes: pseudopotential only
+            continue
+        k_static = mode["stiffness"] - k_rf[i]
+        a_eff[ax] = float(4 * k_static / (mass * paul.Omega ** 2))
+        beta = floquet_beta(a_eff[ax], float(paul.q[i]))
+        ok[ax] = beta is not None
+        exact[ax] = beta * paul.Omega / (4 * math.pi) if beta is not None else None
+        if model.name == "mathieu" and exact[ax] is not None:
+            mode["frequency"] = exact[ax]
+            mode["stiffness"] = mass * (2 * math.pi * exact[ax]) ** 2
+    unstable = [ax for ax, good in ok.items() if not good and abs(float(paul.q["xyz".index(ax)])) > 0]
+    stable = bool(trap.stable and not unstable)
+    if unstable:
+        warnings.append("No stable trap: the RF drives a parametric resonance along "
+                        + ", ".join(unstable) + ", even with the light's restoring force.")
+    r_eq = trap.equilibrium
+    sec = paul.secular()
+    block = dict(a=sec["a"], q=sec["q"], stable=not unstable, a_effective=a_eff,
+                 secular=dict(pseudopotential=sec["pseudopotential"], exact=sec["exact"], with_light=exact),
+                 micromotion=paul.micromotion(r_eq) if r_eq is not None else None)
+    # a focus away from the Paul trap's centre holds the particle where the RF field is not zero
+    # (only along axes where the RF field acts: a linear trap has none along its own axis)
+    if r_eq is not None and stable:
+        for m in modes:
+            i = max(range(3), key=lambda j: abs(m["axis"][j]))
+            if paul.q[i] == 0:
+                continue
+            spread = math.sqrt(KB * temp / m["stiffness"]) if m["stiffness"] > 0 else math.inf
+            off = abs(float(r_eq[i]))
+            if off > spread:
+                warnings.append(f"The particle sits {off * 1e9:.0f} nm from the Paul trap's centre along "
+                                f"{'xyz'[i]}, more than its thermal spread ({spread * 1e9:.0f} nm): expect "
+                                f"excess micromotion (amplitude {block['micromotion'][i] * 1e9:.2g} nm).")
+                break
+    return stable, block, model
+
+
+def breakdown(s: dict, fields, optical, paul, r_eq, modes, trap) -> list[dict]:
+    """Each field's share at the equilibrium: its force [N] and its stiffness
+    [N/m] along each mode's axis, so one sees which field sets which frequency."""
+    from .solver import _scale
+
+    h = _scale(fields) / 200
+    names, beams = [], [i for i, f in enumerate(s["trap"]["fields"]) if f["kind"] == "beam"]
+    from .optics import coherent_groups
+    groups = coherent_groups([s["trap"]["fields"][i] for i in beams])
+    for f in fields:
+        if f in optical:
+            names.append(("beam", [beams[j] for j in groups[optical.index(f)]]))
+        elif f is paul:
+            names.append(("paul", [i for i, g in enumerate(s["trap"]["fields"]) if g["kind"] == "paul"]))
+        else:
+            names.append(("gravity", [i for i, g in enumerate(s["trap"]["fields"]) if g["kind"] == "gravity"]))
+    out = []
+    for f, (kind, idx) in zip(fields, names):
+        stiff = {}
+        for m in modes:
+            e = np.asarray(m["axis"], float)
+            fp, fm = f.force(r_eq + h * e)[0], f.force(r_eq - h * e)[0]
+            stiff[m["name"]] = float(-(fp - fm) @ e / (2 * h))
+        out.append(dict(kind=kind, fields=idx, force=[float(v) for v in f.force(r_eq)[0]], stiffness=stiff))
+    return out
 
 
 def pattern_result(s: dict, r) -> dict:
