@@ -215,6 +215,19 @@ export interface PaulResult {
   micromotion: Vec3 | null;
 }
 
+/**
+ * One field's share of a hybrid trap at the equilibrium (solve._add_hybrid):
+ * its force [N] and its stiffness along each mode axis [N/m], keyed by mode
+ * name. The shares of all fields add up to the trap's.
+ */
+export interface FieldShare {
+  kind: "beam" | "paul" | "gravity";
+  /** indices into setup.trap.fields this entry stands for (a coherent group of beams is one entry) */
+  fields: number[];
+  force: Vec3;
+  stiffness: Record<string, number>;
+}
+
 export interface Result {
   version: 1;
   /** levtrap version that computed it */
@@ -241,8 +254,10 @@ export interface Result {
     size_parameter: number;
     Nmax: { beam: number; particle: number };
   } | null;
-  /** present for a Paul trap */
+  /** present for a Paul trap (alone or in a hybrid trap) */
   paul?: PaulResult | null;
+  /** hybrid traps (beam + Paul trap) only: each field's share at the equilibrium */
+  breakdown?: FieldShare[];
   /** null when the trap has no beam */
   rates?: Rates | null;
   models: ModelInfo[];

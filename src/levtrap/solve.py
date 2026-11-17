@@ -6,8 +6,9 @@ The setup becomes a list of fields (:mod:`levtrap.fields`) and the generic
 solver (:mod:`levtrap.solver`) finds the equilibrium, modes and depth of
 their summed force.  Computed: any number of beams in any direction with
 any focus position (:mod:`levtrap.optics`: incoherent beams add their
-forces, coherent groups interfere), a Paul trap, and gravity with either.
-A Paul trap together with a beam (B3) raises :class:`UnsupportedSetup`.
+forces, coherent groups interfere), a Paul trap, both together (a hybrid
+trap, with a per-field breakdown), and gravity with any of them.  More than
+one Paul trap raises :class:`UnsupportedSetup`.
 """
 
 from __future__ import annotations
@@ -45,13 +46,11 @@ def check_supported(s: dict) -> None:
         raise UnsupportedSetup(f"{', '.join(others)} fields are not computed yet")
     beams = [f for f in fields if f["kind"] == "beam"]
     pauls = [f for f in fields if f["kind"] == "paul"]
-    if beams and pauls:
-        raise UnsupportedSetup("hybrid traps (beam + Paul trap) are not computed yet")
     if len(pauls) > 1:
         raise UnsupportedSetup("more than one Paul trap is not computed yet")
     if not beams and not pauls:
         raise UnsupportedSetup("a setup without a beam or a Paul trap does not trap")
-    if pauls:
+    if not beams:
         return
     wl = {b["wavelength"] for b in beams}
     if len(wl) > 1 and s["particle"]["material"] is None:
@@ -166,6 +165,10 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
       ``stable`` (every axis in the first stability region) and the
       ``micromotion`` amplitude [m] per axis at the equilibrium.  ``optical``
       and ``rates`` are ``None`` for a trap without light.
+    * ``breakdown`` — hybrid traps (beam + Paul trap) only: per field (a
+      coherent group of beams counts as one), its ``force`` [N] and its
+      ``stiffness`` [N/m] along each mode axis at the equilibrium; the shares
+      add up to the trap's.
     * ``rates`` — gas damping [1/s], and per mode the gas, recoil and total
       reheating [phonons/s], Q, coherence time [s], coherent oscillations and
       the pressure [Pa] where recoil equals gas heating (:mod:`levtrap.rates`).
@@ -196,16 +199,24 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     beams = [f for f in s["trap"]["fields"] if f["kind"] == "beam"]
     gravity = [GravityField(mass, f["g"]) for f in s["trap"]["fields"] if f["kind"] == "gravity"]
     paul_setup = next((f for f in s["trap"]["fields"] if f["kind"] == "paul"), None)
-    if paul_setup is not None:
+    if paul_setup is not None and not beams:
         return _solve_paul(s, paul_setup, gravity, mass, p, warnings, want, t0)
     optical = optical_fields(s, _single_beam, lambda wl: _tmatrix(_particle_at(given, wl), wl, nm)[0])
-    fields = optical + gravity
+    paul = None
+    if paul_setup is not None:
+        from .fields.paul import E_CHARGE, PaulField
+        paul = PaulField(paul_setup, float(p["charge"]) * E_CHARGE, mass)
+    fields = optical + ([paul] if paul else []) + gravity
     P = sum(float(b["power"]) for b in beams)
     n_p = complex(float(p["n"]), float(p["k"] or 0.0))
     centre, ranges = scan_box(beams)
     along_z = all(b["direction"][0] == 0 and b["direction"][1] == 0 for b in beams)
 
     trap = find_trap(fields, mass, centre=centre, ranges=ranges, points=SCAN_POINTS)
+    if paul is not None and not trap.stable:
+        trap = _hybrid_wide_search(fields, mass, paul, trap, ranges)
+        if trap.equilibrium is not None:
+            centre = trap.equilibrium
     warnings += trap.warnings
     r_eq = trap.equilibrium
     if r_eq is None:
@@ -246,6 +257,8 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
                                      ed_fraction=q["ED"] / eff["Qsca"] if eff["Qsca"] > 0 else None)
     result["rates"] = rates
     result["models"] += rate_models
+    if paul is not None:
+        _add_hybrid(result, s, paul, fields, trap, mass, temp, warnings)
     if "curves" in want:
         result["curves"] = _curves(fields, at, ranges, SCAN_POINTS)
     if "pattern" in want:
@@ -259,6 +272,72 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
                                       "(there is no equilibrium).")
     result["time"] = time.perf_counter() - t0
     return result
+
+
+def _hybrid_wide_search(fields, mass, paul, near, optical_ranges):
+    """Second, two-scale search for a hybrid trap when none was found near the
+    optical focus: scan the Paul trap's own region (r0, r0, z0 around its
+    centre) at its own length scale, then refine on the optical scale around
+    what was found.  Returns the better of the two searches."""
+    from .solver import find_trap
+    wide = find_trap(fields, mass, centre=np.zeros(3), ranges=(paul.r0, paul.r0, paul.z0),
+                     points=SCAN_POINTS, length_scale=paul.length_scale / 100)
+    if wide.equilibrium is None:
+        return near
+    fine = find_trap(fields, mass, centre=wide.equilibrium, ranges=optical_ranges, points=SCAN_POINTS)
+    if fine.converged and (fine.stable or not near.converged):
+        return fine
+    return near if near.converged else wide
+
+
+def _add_hybrid(result, s, paul, fields, trap, mass, temp, warnings) -> None:
+    """Hybrid trap: the ``paul`` block, the per-field ``breakdown`` at the
+    equilibrium and the excess-micromotion warning (in place)."""
+    from .derived import KB
+    from .solver import stiffness
+
+    sec = paul.secular()
+    model = paul.model()
+    r_eq = trap.equilibrium
+    result["particle"]["charge"] = s["particle"]["charge"]
+    result["paul"] = dict(a=sec["a"], q=sec["q"], stable=sec["all_stable"],
+                          secular=dict(pseudopotential=sec["pseudopotential"], exact=sec["exact"]),
+                          micromotion=paul.micromotion(r_eq) if r_eq is not None else None)
+    result["models"].append(dict(quantity="paul", **model.as_dict()))
+    warnings += model.notes
+
+    # which setup fields each solver field stands for
+    setup_fields = s["trap"]["fields"]
+    beam_idx = [i for i, f in enumerate(setup_fields) if f["kind"] == "beam"]
+    from .optics import coherent_groups
+    groups = [[beam_idx[j] for j in g] for g in coherent_groups([setup_fields[i] for i in beam_idx])]
+    labels = ([dict(kind="beam", fields=g) for g in groups]
+              + [dict(kind="paul", fields=[i for i, f in enumerate(setup_fields) if f["kind"] == "paul"])]
+              + [dict(kind="gravity", fields=[i]) for i, f in enumerate(setup_fields) if f["kind"] == "gravity"])
+    if r_eq is not None:
+        h = min(f.length_scale for f in fields if f.length_scale) / 200
+        breakdown = []
+        for f, lab in zip(fields, labels):
+            K, F = stiffness([f], r_eq, h)
+            Ks = 0.5 * (K + K.T)
+            breakdown.append(dict(**lab, force=[float(v) for v in F],
+                                  stiffness={m["name"]: float(np.asarray(m["axis"]) @ Ks @ np.asarray(m["axis"]))
+                                             for m in result["modes"]}))
+        result["breakdown"] = breakdown
+
+    # an optical focus off the RF null drags the particle into micromotion
+    w2 = paul.omega2_pseudo
+    foci = np.array([setup_fields[i]["position"] for i in beam_idx], dtype=float)
+    focus = foci.mean(axis=0)
+    off = []
+    for i, ax in enumerate("xyz"):
+        if w2[i] > 0:
+            sigma = math.sqrt(KB * temp / (mass * w2[i]))
+            if abs(focus[i]) > sigma:
+                off.append(f"{ax} by {abs(focus[i]) * 1e6:.3g} um (thermal extent {sigma * 1e6:.3g} um)")
+    if off:
+        warnings.append("The optical focus is displaced from the Paul trap centre along " + "; ".join(off)
+                        + ": expect excess micromotion.")
 
 
 def _curves(fields, centre, ranges, points) -> dict:
