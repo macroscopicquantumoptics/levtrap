@@ -178,6 +178,8 @@ function ScreenBody({ engine }: ScreenProps) {
           expanded={expanded}
           onToggle={() => setExpanded((e) => !e)}
           onSelect={select}
+          engine={engine}
+          recorded={params.recorded}
         />
       </div>
 

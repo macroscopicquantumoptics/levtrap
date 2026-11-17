@@ -117,7 +117,7 @@ export interface Setup {
 // ---------------------------------------------------------------------------
 
 /** Extra blocks `solve` computes only on request (solve.WANTS). */
-export type Want = "curves" | "pattern";
+export type Want = "curves" | "dipole" | "pattern";
 
 export interface TrapMode {
   /** the lab axis the eigen-axis is nearest to: "x" | "y" | "z" */
@@ -139,11 +139,40 @@ export interface ModelInfo {
   notes: string[];
 }
 
+/** A force cut through the equilibrium along one eigen-axis (solve._curves). */
 export interface Curve {
-  /** m */
+  /** unit vector; absent in results recorded before D5 (then the lab axis of its name) */
+  axis?: Vec3;
+  /** m, the coordinate along the axis */
   position: number[];
-  /** N */
+  /** N, along the axis */
   force: number[];
+  /** N, the same with the light in the dipole approximation (want "dipole") */
+  dipole?: number[];
+}
+
+/** The radiation pattern (levtrap.pattern.pattern_block). Grids are flat lists. */
+export interface Pattern {
+  frame: string;
+  grid: { theta: number[]; phi: number[]; weight: number[] };
+  /** W/sr */
+  scattered: number[];
+  total: number[];
+  /** W/(sr m²), per axis */
+  information: { x: number[]; y: number[]; z: number[] };
+  P_sca: number;
+  P_total: number;
+  information_total: { x: number; y: number; z: number };
+  /** numerical apertures of the collection lens */
+  NA: number[];
+  directions: Record<string, Vec3>;
+  /** fraction of P_sca collected by a lens of each NA, per direction */
+  collection: Record<string, number[]>;
+  /** fraction of the position information collected, per direction and axis */
+  information_efficiency: Record<string, { x: number[]; y: number[]; z: number[] }>;
+  /** NA of the trapping lens, and what it collects looking back at the particle */
+  trap_NA?: number | null;
+  at_trap_NA?: Record<string, unknown> | null;
 }
 
 /** Rates of one mode (rates.mode_rates). Heating rates are in phonons/s. */
@@ -273,9 +302,10 @@ export interface Result {
   warnings: string[];
   /** s, engine wall time */
   time: number;
-  curves?: { x: Curve; y: Curve; z: Curve };
+  /** on request: keyed by mode name */
+  curves?: Record<string, Curve>;
   /** on request; see levtrap.pattern.pattern_block */
-  pattern?: Record<string, unknown>;
+  pattern?: Pattern;
 }
 
 /** What `solve_json` returns. */

@@ -201,11 +201,28 @@ The line at the right of the tabs says where the numbers came from:
 
 ## 7. The plots drawer
 
-| Tab | In the prototype |
+Opened on demand, one tab at a time. A tab asks the engine for its own data
+while it is open (the strip never waits for a plot): Forces and Potential for
+the force cuts, Radiation for the pattern. Heating draws from the result the
+strip already has, and Sweep runs one solve per value when asked.
+
+| Tab | What it draws |
 |---|---|
-| Forces | Real. The force along x, y and z through the equilibrium; hover or arrow keys read the values; the Table button lists them. |
-| Heating | Real, as a table: the rates the engine returns. The plot against pressure is D5. |
-| Potential, Sweep, Radiation | One sentence saying what the tab will show, and its issue. |
+| Forces | The force along each eigen-axis of the trap, through the equilibrium. "Dipole approximation" draws the same with the light as a point dipole, dashed: where Mie theory matters shows. |
+| Potential | The potential along each axis in k_BT (the force integrated from the equilibrium), and the harmonic trap of the same stiffness dashed: anharmonicity shows where they part. Its barriers are the depths in the strip. |
+| Sweep | Any input of the setup (power, wavelength, NA, radius, charge, RF voltage and frequency, pressure, temperature…) against a headline number (the frequencies, the depth, the position along the beam, the scattered power). One solve per value, with progress and Cancel; the values without a stable trap are shaded. |
+| Radiation | Where the scattered light goes, in two planes through the beam axis (polar); the fraction a lens of each NA collects, forward and backward; and the fraction of the position information a backward lens collects, per axis. The trapping lens's NA is marked. |
+| Heating | The reheating rate of each mode against pressure (10⁻⁹ to 10³ mbar), with photon recoil alone dashed, the setup's pressure marked, and a dot where recoil and gas heat equally. "At 1e-6 mbar" shows the rates as a table. |
+
+Every plot is the same component (`src/screen/plots/Plot.tsx`, inline SVG
+in the theme's colours): SI-prefixed ticks, log axes where a quantity spans
+decades, a crosshair readout by pointer or arrow keys, drag to zoom and Fit
+to go back, a direct label on each line and a legend, a Table of the same
+data, and Export as PNG, SVG (the colours written in) or CSV (SI units).
+Series take the axis colours, or `--series-a` and `--series-b` for two
+series that are not axes; both sets pass the colour-vision checks in each
+theme. A dashed line is always a second version of the same quantity (a
+model, a fit, one part of a sum), said once in the legend.
 
 ## 8. Tokens
 
@@ -320,6 +337,7 @@ gravity, a beam's direction and focus position.
   verified paper yet (C3), so no preset names one. D6 replaces them.
 * The file menu's four file actions and the intensity slice in the Show
   menu are listed, greyed, with their issue.
+* The Sweep sweeps one input at a time; a two-dimensional map is not built.
 
 ## 12. Decisions for a human
 

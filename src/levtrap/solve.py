@@ -28,7 +28,7 @@ __all__ = ["solve", "solve_json", "check_supported", "check_simple", "scan_box",
            "RESULT_VERSION", "WANTS", "pattern_result"]
 
 RESULT_VERSION = 1
-WANTS = ("curves", "pattern")
+WANTS = ("curves", "dipole", "pattern")
 SCAN_RANGES = (1.5e-6, 1.5e-6, 3e-6)  # half-widths [m] searched for the equilibrium (x, y, z)
 SCAN_POINTS = 61
 
@@ -141,8 +141,11 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     ----------
     setup : dict or JSON text, see :mod:`levtrap.setup`.
     want : extra blocks to compute, from :data:`WANTS`.  ``"curves"`` adds the
-        force along x, y and z through the equilibrium; ``"pattern"`` adds the
-        radiation pattern at the equilibrium (:func:`pattern_result`).
+        force along each eigen-axis of the trap through the equilibrium
+        (:func:`_curves`); ``"dipole"`` adds to each curve the same force with
+        the light in the dipole approximation (implies ``"curves"``);
+        ``"pattern"`` adds the radiation pattern at the equilibrium
+        (:func:`pattern_result`).
 
     Returns
     -------
@@ -270,8 +273,13 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
                                      ed_fraction=q["ED"] / eff["Qsca"] if eff["Qsca"] > 0 else None)
     result["rates"] = rates
     result["models"] += rate_models
-    if "curves" in want:
-        result["curves"] = _curves(fields, at, ranges, SCAN_POINTS)
+    if "curves" in want or "dipole" in want:
+        radius = float(p["radius"])
+
+        def dipole(line):
+            return sum((f.dipole_force(line, radius) if f in optical else f.force(line)) for f in fields)
+
+        result["curves"] = _curves(fields, at, ranges, SCAN_POINTS, modes, dipole if "dipole" in want else None)
     if "pattern" in want:
         if len(optical) > 1 or not is_simple(beams):
             raise UnsupportedSetup("the radiation pattern is computed only for beams along +z "
@@ -285,15 +293,35 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     return result
 
 
-def _curves(fields, centre, ranges, points) -> dict:
-    """Force cuts along x, y, z through ``centre``: the ``curves`` block."""
+def _curves(fields, centre, ranges, points, modes=(), dipole=None) -> dict:
+    """The ``curves`` block: force cuts through ``centre`` along each eigen-axis
+    of the trap (along x, y and z when there are no modes, or two share a name).
+
+    Each cut is keyed by its mode's name and holds ``axis`` (unit vector),
+    ``position`` [m] (the coordinate along the axis, ``centre . axis + s``) and
+    ``force`` [N] (along the axis); with ``dipole`` (a function of lab
+    positions (N, 3) -> forces (N, 3)) also ``dipole`` [N], the same force
+    with the light in the dipole approximation. The range along an axis is
+    that of the lab axis it is closest to.
+    """
     from .fields import total_force
+    names = [m["name"] for m in modes]
+    if len(modes) == 3 and len(set(names)) == 3:
+        axes = [(m["name"], np.asarray(m["axis"], dtype=float)) for m in modes]
+    else:
+        axes = [(name, np.eye(3)[j]) for j, name in enumerate("xyz")]
+    centre = np.asarray(centre, dtype=float)
     out = {}
-    for j, name in enumerate("xyz"):
+    for name, u in axes:
+        u = u / np.linalg.norm(u)
+        j = int(np.argmax(np.abs(u)))
         ss = np.linspace(-ranges[j], ranges[j], points)
-        line = np.tile(centre, (points, 1))
-        line[:, j] += ss
-        out[name] = dict(position=(centre[j] + ss).tolist(), force=total_force(fields, line)[:, j].tolist())
+        line = centre + ss[:, None] * u
+        entry = dict(axis=[float(v) for v in u], position=(float(centre @ u) + ss).tolist(),
+                     force=(total_force(fields, line) @ u).tolist())
+        if dipole is not None:
+            entry["dipole"] = (np.asarray(dipole(line)) @ u).tolist()
+        out[name] = entry
     return out
 
 
@@ -303,7 +331,7 @@ def _solve_paul(s, f, gravity, mass, p, warnings, want, t0) -> dict:
     from .fields.paul import E_CHARGE, PaulField
     from .solver import find_trap
 
-    bad = [w for w in want if w != "curves"]
+    bad = [w for w in want if w not in ("curves", "dipole")]
     if bad:
         raise UnsupportedSetup(f"{bad[0]} needs a beam; a Paul trap alone has no light")
     temp = float(s["environment"]["temperature"])
@@ -353,8 +381,9 @@ def _solve_paul(s, f, gravity, mass, p, warnings, want, t0) -> dict:
         models=[dict(quantity="modes", **model.as_dict())],
         warnings=warnings,
     )
-    if "curves" in want:
-        result["curves"] = _curves(fields, r_eq if r_eq is not None else np.zeros(3), ranges, SCAN_POINTS)
+    if "curves" in want or "dipole" in want:
+        # no light: nothing to approximate, the curves have no dipole key
+        result["curves"] = _curves(fields, r_eq if r_eq is not None else np.zeros(3), ranges, SCAN_POINTS, modes)
     result["time"] = time.perf_counter() - t0
     return result
 
