@@ -7,7 +7,7 @@ import pytest
 
 from levtrap import api
 from levtrap.derived import C
-from levtrap.setup import DEFAULT_SETUP, SetupError
+from levtrap.setup import parse, DEFAULT_SETUP, SetupError
 from levtrap.solve import RESULT_VERSION, UnsupportedSetup, solve, solve_json
 
 # tests/testExamples.m (OTT v1): see tests/test_examples.py
@@ -108,15 +108,29 @@ def test_unknown_keys_become_warnings():
     lambda s: s["trap"]["fields"].append({"kind": "paul", "geometry": "ring", "rf_voltage": 100,
                                           "rf_frequency": 1e3, "r0": 1e-3, "z0": 1e-3}) or
               s["particle"].update(charge=100),
-    lambda s: s["trap"]["fields"][0].update(direction=[0, 0, -1]),
-    lambda s: s["trap"]["fields"][0].update(position=[0, 0, 1e-6]),
-    lambda s: s["trap"]["fields"].append({**s["trap"]["fields"][0], "id": "beam2"}),
+    # n and k given by hand hold at one wavelength only
+    lambda s: s["particle"].update(material=None, n=1.45, k=0.0, density=2200.0) or
+              s["trap"]["fields"].append({**s["trap"]["fields"][0], "id": "beam2", "wavelength": 1.55e-6}),
 ])
 def test_unsupported_setups_say_so(change):
     s = copy.deepcopy(DEFAULT_SETUP)
     change(s)
     with pytest.raises(UnsupportedSetup):
         solve(s)
+
+
+@pytest.mark.parametrize("change", [
+    lambda s: s["trap"]["fields"][0].update(direction=[0, 0, -1]),
+    lambda s: s["trap"]["fields"][0].update(position=[0, 0, 1e-6]),
+    lambda s: s["trap"]["fields"].append({**s["trap"]["fields"][0], "id": "beam2"}),
+])
+def test_the_web_page_api_keeps_its_limits(change):
+    """solve() computes these (B1); the current page's api does not."""
+    from levtrap.solve import check_simple
+    s = copy.deepcopy(DEFAULT_SETUP)
+    change(s)
+    with pytest.raises(UnsupportedSetup):
+        check_simple(parse(s))
 
 
 def test_material_without_data():
@@ -133,6 +147,8 @@ def test_json_wrapper_and_dispatch():
     bad = json.loads(solve_json(json.dumps({**DEFAULT_SETUP, "particle": {"radius": -1}})))
     assert bad == dict(ok=False, kind="setup", path="particle.radius", error=bad["error"])
     s = copy.deepcopy(DEFAULT_SETUP)
-    s["trap"]["fields"][0]["direction"] = [1, 0, 0]
+    s["particle"]["charge"] = 30
+    s["trap"]["fields"].append({"kind": "paul", "geometry": "ring", "rf_voltage": 100,
+                                "rf_frequency": 1e3, "r0": 1e-3, "z0": 1e-3})
     assert json.loads(solve_json(json.dumps(s)))["kind"] == "unsupported"
     assert json.loads(solve_json(json.dumps(DEFAULT_SETUP), '["nonsense"]'))["kind"] == "setup"

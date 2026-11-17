@@ -117,10 +117,10 @@ export interface Setup {
 // ---------------------------------------------------------------------------
 
 /** Extra blocks `solve` computes only on request (solve.WANTS). */
-export type Want = "curves";
+export type Want = "curves" | "pattern";
 
 export interface TrapMode {
-  /** "x" | "y" | "z" while the solver works along the lab axes */
+  /** the lab axis the eigen-axis is nearest to: "x" | "y" | "z" */
   name: string;
   /** unit vector */
   axis: Vec3;
@@ -146,6 +146,75 @@ export interface Curve {
   force: number[];
 }
 
+/** Rates of one mode (rates.mode_rates). Heating rates are in phonons/s. */
+export interface ModeRates {
+  name: string;
+  axis: Vec3;
+  gas_heating: number | null;
+  recoil_heating: number | null;
+  recoil_scattered: number | null;
+  recoil_incident: number | null;
+  /** gas + recoil */
+  reheating: number | null;
+  Q: number | null;
+  /** s */
+  coherence_time: number | null;
+  coherent_oscillations: number | null;
+  /** Pa: below this pressure recoil heating exceeds gas heating */
+  crossover_pressure: number | null;
+}
+
+/** The `rates` block (rates.rates_block). */
+export interface Rates {
+  gas: {
+    species: Gas;
+    /** Pa */
+    pressure: number;
+    /** K */
+    temperature: number;
+    /** kg */
+    molecular_mass: number;
+    /** Pa s */
+    viscosity: number;
+    /** m */
+    mean_free_path: number;
+    knudsen: number;
+  };
+  /** 1/s, the Knudsen-number interpolation used for the heating rates */
+  gas_damping: number;
+  /** 1/s, continuum limit */
+  stokes_damping: number;
+  /** 1/s, free-molecular limit */
+  epstein_damping: number;
+  /** phonons/s per mode */
+  recoil_heating: (number | null)[];
+  reheating_phonons_per_s: (number | null)[];
+  modes: ModeRates[];
+  /** W */
+  P_sca: number;
+  P_abs: number;
+}
+
+/** Per lab axis. */
+export type PerAxis<T> = { x: T; y: T; z: T };
+
+/**
+ * The `paul` block of a Paul-trap result (solve._solve_paul, conventions in
+ * levtrap/fields/paul.py: Leibfried et al., Rev. Mod. Phys. 75, 281 (2003)).
+ */
+export interface PaulResult {
+  /** Mathieu a per axis */
+  a: PerAxis<number>;
+  /** Mathieu q per axis (signed) */
+  q: PerAxis<number>;
+  /** every axis lies in the first stability region */
+  stable: boolean;
+  /** secular frequencies [Hz]; `exact` is null on an axis outside the stability region */
+  secular: { pseudopotential: PerAxis<number | null>; exact: PerAxis<number | null> };
+  /** micromotion amplitude at the equilibrium [m]; null without an equilibrium */
+  micromotion: Vec3 | null;
+}
+
 export interface Result {
   version: 1;
   /** levtrap version that computed it */
@@ -153,27 +222,37 @@ export interface Result {
   stable: boolean;
   /** m; null when there is no equilibrium */
   equilibrium: Vec3 | null;
+  /** empty when there is no equilibrium */
   modes: TrapMode[];
   /** the smallest depth over the modes; zero when not stable */
   depth: { J: number; K: number; kT: number };
-  /** resolved from the material; mass in kg */
-  particle: { n: number; k: number; density: number; mass: number };
+  /** n and k resolved from the material at the beam's wavelength (null without a beam); mass in kg */
+  particle: { n: number | null; k: number | null; density: number; mass: number; charge?: number };
+  /** null when the trap has no beam */
   optical: {
+    /** W, at the equilibrium */
     P_sca: number;
     P_abs: number;
     power: number;
+    /** plane-wave Mie efficiencies */
     Qext: number;
     Qsca: number;
     Qabs: number;
     size_parameter: number;
-    Nmax: number;
-  };
+    Nmax: { beam: number; particle: number };
+  } | null;
+  /** present for a Paul trap */
+  paul?: PaulResult | null;
+  /** null when the trap has no beam */
+  rates?: Rates | null;
   models: ModelInfo[];
   /** sentences, ready to show */
   warnings: string[];
   /** s, engine wall time */
   time: number;
   curves?: { x: Curve; y: Curve; z: Curve };
+  /** on request; see levtrap.pattern.pattern_block */
+  pattern?: Record<string, unknown>;
 }
 
 /** What `solve_json` returns. */

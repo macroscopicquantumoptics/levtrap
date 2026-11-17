@@ -94,6 +94,10 @@ def test_wigner_arbitrary_value():
         [-0.0022 + 0.0030j, 0.0212 + 0.0154j, 0.0663 - 0.0913j, -0.2638 - 0.1917j, -0.3513 + 0.4836j, 0.3759 + 0.2731j, -0.3257 + 0.4483j],
         [-0.0003 - 0.0004j, -0.0030 + 0.0022j, 0.0121 + 0.0167j, 0.0673 - 0.0489j, -0.1477 - 0.2033j, -0.4483 + 0.3257j, 0.4637 + 0.6383j]])
     val = dense(wigner_rotation_matrix(3, rotx(32) @ rotz(18)))
-    np.testing.assert_allclose(val[0:3, 0:3], n1, atol=tol)
-    np.testing.assert_allclose(val[3:8, 3:8], n2, atol=tol)
-    np.testing.assert_allclose(val[8:, 8:], n3, atol=tol)
+    # levtrap deviates from OTT on purpose: its D is OTT's conjugated by
+    # S = diag((-1)^m), so that rotations agree with spharm's fields (see
+    # translate.wigner_rotation_matrix and test_frames.py)
+    S = lambda n: np.diag((-1.0) ** np.arange(-n, n + 1))
+    np.testing.assert_allclose(val[0:3, 0:3], S(1) @ n1 @ S(1), atol=tol)
+    np.testing.assert_allclose(val[3:8, 3:8], S(2) @ n2 @ S(2), atol=tol)
+    np.testing.assert_allclose(val[8:, 8:], S(3) @ n3 @ S(3), atol=tol)

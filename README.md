@@ -34,7 +34,9 @@ through [Pyodide](https://pyodide.org) and locally for research scripts.
 > **levtrap 2 is being planned and built.** The design is in
 > [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), the work is tracked in
 > [issue #6](https://github.com/macroscopicquantumoptics/levtrap/issues/6).
-> The new engine entry point is `levtrap.solve.solve(setup)`.
+> The new engine entry point is `levtrap.solve.solve(setup)`. The new
+> screen lives in `app/` and is deployed at `/next/` beside this site; its
+> design is in [`app/DESIGN.md`](app/DESIGN.md).
 
 ## Quick start — web
 
@@ -64,6 +66,22 @@ python scripts/devserver.py            # open http://localhost:8000/?backend=loc
 ```
 
 (Plotly is still loaded from the CDN.)
+
+### The new screen (`app/`)
+
+```bash
+pip install -e .
+python scripts/devserver.py            # the engine, as native Python, on :8000
+```
+
+```bash
+cd app && npm ci && npm run dev        # open http://localhost:3000/?backend=local
+```
+
+Without `?backend=local` the page runs the engine in the browser (Pyodide);
+for that, build the wheel and stage it with `npm run wheel` first. Checks:
+`npm run typecheck`, `npm run lint`, `npm test` (unit tests; they call the
+Python engine) and `npm run test:e2e` (builds, then drives a browser).
 
 ## Quick start — Python
 
@@ -128,25 +146,30 @@ tests/         ported OTT tests + analytic checks (pytest)
 web/           index.html app.js lens.html lens.js lens3d.js common.js
                worker.js view3d.js style.css
                (static site; Plotly, three.js and Pyodide from jsDelivr)
+app/           levtrap 2 screen: Next static export, React, TypeScript.
+               src/engine (typed engine client, Pyodide worker), src/screen
+               (the one screen), tests/e2e (Playwright), DESIGN.md
 scripts/       devserver.py (native backend), pyodide_check.mjs, ui_check.js (CI)
-ci/workflows/  test.yml, pages.yml — copy to .github/workflows/ (see below)
+ci/workflows/  test.yml, app.yml, pages.yml — a copy of .github/workflows/
 examples/      paper_2607_09896.py
 docs/paper/    reproduced figures and notes
 ```
 
-### Enabling CI and the website
+### CI and the website
 
 GitHub only accepts workflow files that are pushed with the `workflow`
-permission, so they live in `ci/workflows/`. Enable them once:
+permission. A session without it changes `ci/workflows/` only; someone with
+the permission then copies the files over:
 
 ```bash
-mkdir -p .github/workflows && cp ci/workflows/*.yml .github/workflows/
-git add .github && git commit -m "Enable CI and Pages" && git push
+cp ci/workflows/*.yml .github/workflows/
 ```
 
-Then, in **Settings → Pages**, set **Source = GitHub Actions**. `pages.yml`
-runs on every push to `main`: it runs the tests, builds the wheel, checks it
-in Pyodide (OTT benchmark) and in a headless browser, and deploys `web/`.
+In **Settings → Pages**, **Source** is **GitHub Actions**. `pages.yml` runs
+on every push to `main`: it runs the tests, builds the wheel, checks it in
+Pyodide (OTT benchmark) and in a headless browser, builds `app/` and checks
+it the same way, and deploys `web/` with the new screen at `/next/`.
+`app.yml` checks `app/` on every push and pull request.
 
 ## Adding a feature
 

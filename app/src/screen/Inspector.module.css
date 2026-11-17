@@ -1,0 +1,150 @@
+.inspector {
+  display: flex;
+  flex-direction: column;
+  width: 316px;
+  max-height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px 10px 12px;
+}
+
+.kindIcon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.kindIcon[data-kind="particle"] {
+  color: var(--particle);
+}
+
+.kindIcon[data-kind="beam"] {
+  color: var(--light);
+}
+
+.kindIcon[data-kind="lens"] {
+  color: var(--glass);
+}
+
+.kindIcon[data-kind="paul"] {
+  color: var(--field);
+}
+
+.titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.kind {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.problem {
+  margin: 0 12px 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.fields {
+  display: grid;
+  gap: 6px;
+  padding: 2px 12px 12px;
+}
+
+.aside {
+  margin: -4px 12px 12px;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.advanced {
+  border-top: 1px solid var(--border);
+}
+
+.advancedSummary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.advancedSummary::-webkit-details-marker {
+  display: none;
+}
+
+.advancedSummary:hover {
+  color: var(--text);
+}
+
+.chevron {
+  display: inline-flex;
+  transform: rotate(-90deg);
+  transition: transform 120ms;
+}
+
+.advanced[open] .chevron {
+  transform: none;
+}
+
+/* what differs from the default, visible while the fold is closed */
+.changed {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--select-soft);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.advanced .fields {
+  padding-top: 0;
+}
+
+.foot {
+  border-top: 1px solid var(--border);
+  padding: 6px;
+}
+
+@media (max-width: 720px) {
+  .inspector {
+    width: auto;
+    border-radius: 12px;
+  }
+}

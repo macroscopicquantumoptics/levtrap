@@ -4,10 +4,10 @@ See ``docs/ARCHITECTURE.md`` §4 (Setup) and §6 (Result).  Everything is SI.
 
 The setup becomes a list of fields (:mod:`levtrap.fields`) and the generic
 solver (:mod:`levtrap.solver`) finds the equilibrium, modes and depth of
-their summed force.  Computed so far: one beam, or one coherent group of two
-beams, travelling along +z with the focus at the origin, plus gravity; or a
-Paul trap (:mod:`levtrap.fields.paul`) plus gravity.  Other setups raise
-:class:`UnsupportedSetup` naming what is missing.
+their summed force.  Computed: any number of beams in any direction with
+any focus position (:mod:`levtrap.optics`: incoherent beams add their
+forces, coherent groups interfere), a Paul trap, and gravity with either.
+A Paul trap together with a beam (B3) raises :class:`UnsupportedSetup`.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from .materials import get_material
 from .rates import rates_block
 from .setup import SetupError, parse, unknown_keys
 
-__all__ = ["solve", "solve_json", "check_supported", "resolve_particle", "UnsupportedSetup",
+__all__ = ["solve", "solve_json", "check_supported", "check_simple", "scan_box", "resolve_particle", "UnsupportedSetup",
            "RESULT_VERSION", "WANTS", "pattern_result"]
 
 RESULT_VERSION = 1
@@ -53,6 +53,22 @@ def check_supported(s: dict) -> None:
         raise UnsupportedSetup("a setup without a beam or a Paul trap does not trap")
     if pauls:
         return
+    wl = {b["wavelength"] for b in beams}
+    if len(wl) > 1 and s["particle"]["material"] is None:
+        # one n, k given by hand cannot hold at two wavelengths
+        raise UnsupportedSetup("beams of different wavelengths need a particle material "
+                               "(a hand-given n and k hold at one wavelength)")
+
+
+def check_simple(s: dict) -> None:
+    """The original engine's limits, still those of :mod:`levtrap.api` (the
+    current web page): one beam, or two coherent beams, along +z with the
+    focus at the origin."""
+    check_supported(s)
+    fields = s["trap"]["fields"]
+    if any(f["kind"] == "paul" for f in fields):
+        raise UnsupportedSetup("paul fields are not computed by this page")
+    beams = [f for f in fields if f["kind"] == "beam"]
     if len(beams) > 2:
         raise UnsupportedSetup("more than two beams are not computed yet")
     for i, b in enumerate(beams):
@@ -67,6 +83,21 @@ def check_supported(s: dict) -> None:
                  (b["coherent_with"] is not None and b["coherent_with"] == a.get("id"))
         if not linked:
             raise UnsupportedSetup("two beams that are not coherent with each other are not computed yet")
+
+
+def scan_box(beams: list[dict]) -> tuple[np.ndarray, np.ndarray]:
+    """Centre and half-widths [m] of the region searched for the equilibrium:
+    around the mean of the foci, 3 um along each beam's axis and 1.5 um across
+    it, plus the spread of the foci."""
+    pos = np.array([b["position"] for b in beams], dtype=float)
+    centre = pos.mean(axis=0)
+    ranges = np.array(SCAN_RANGES[:2] + (SCAN_RANGES[0],), dtype=float)
+    for b in beams:
+        d = np.abs(np.asarray(b["direction"], dtype=float))
+        d = d / np.linalg.norm(d)
+        ranges = np.maximum(ranges, SCAN_RANGES[0] + (SCAN_RANGES[2] - SCAN_RANGES[0]) * d)
+    ranges = ranges + np.abs(pos - centre).max(axis=0)
+    return centre, ranges
 
 
 def resolve_particle(s: dict) -> dict:
@@ -85,6 +116,20 @@ def resolve_particle(s: dict) -> dict:
         if not m["valid"] and p["n"] is None:
             raise SetupError("particle.material", f"no refractive-index data for {p['material']} at "
                                                   f"{wl * 1e9:.0f} nm; give n and k")
+        for key in ("n", "k", "density"):
+            if p[key] is None:
+                p[key] = m[key]
+    return p
+
+
+def _particle_at(given: dict, wavelength: float) -> dict:
+    """The particle (as given in the setup) with n, k and density at a wavelength."""
+    p = dict(given)
+    if p["material"] is not None and (p["n"] is None or p["k"] is None or p["density"] is None):
+        m = get_material(p["material"], wavelength)
+        if not m["valid"] and p["n"] is None:
+            raise SetupError("particle.material", f"no refractive-index data for {p['material']} at "
+                                                  f"{wavelength * 1e9:.0f} nm; give n and k")
         for key in ("n", "k", "density"):
             if p[key] is None:
                 p[key] = m[key]
@@ -127,9 +172,10 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     * ``models``, ``warnings`` — what was used and what to be careful about.
     """
     # late imports: api and the fields pull in the whole engine
-    from .api import build_beam, build_tmatrix
+    from .api import _single_beam, _tmatrix
     from .derived import KB, mie_efficiencies, sphere_mass
-    from .fields import GravityField, OpticalField
+    from .fields import GravityField
+    from .optics import is_simple, optical_fields
     from .solver import find_trap
 
     t0 = time.perf_counter()
@@ -141,6 +187,7 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     s = parse(raw)
     warnings = [f"{path}: unknown key, ignored" for path in unknown_keys(raw)]
     check_supported(s)
+    given = dict(s["particle"])  # before the material fills n, k: other wavelengths need it
     p = resolve_particle(s)
     env = s["environment"]
     nm, temp = float(env["medium_index"]), float(env["temperature"])
@@ -151,17 +198,21 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     paul_setup = next((f for f in s["trap"]["fields"] if f["kind"] == "paul"), None)
     if paul_setup is not None:
         return _solve_paul(s, paul_setup, gravity, mass, p, warnings, want, t0)
-    optical_setup = dict(s, trap=dict(fields=beams))
-    beam, P = build_beam(optical_setup)
-    T, n_p = build_tmatrix(optical_setup)
-    optical = OpticalField(beam, T, nm)
-    fields = [optical] + gravity
+    optical = optical_fields(s, _single_beam, lambda wl: _tmatrix(_particle_at(given, wl), wl, nm)[0])
+    fields = optical + gravity
+    P = sum(float(b["power"]) for b in beams)
+    n_p = complex(float(p["n"]), float(p["k"] or 0.0))
+    centre, ranges = scan_box(beams)
+    along_z = all(b["direction"][0] == 0 and b["direction"][1] == 0 for b in beams)
 
-    trap = find_trap(fields, mass, ranges=SCAN_RANGES, points=SCAN_POINTS)
+    trap = find_trap(fields, mass, centre=centre, ranges=ranges, points=SCAN_POINTS)
     warnings += trap.warnings
     r_eq = trap.equilibrium
     if r_eq is None:
-        warnings.append("No stable trap: the force along the beam axis (z) never restores the particle.")
+        warnings.append("No stable trap: the force along the beam axis (z) never restores the particle."
+                        if along_z else
+                        "No stable trap: nowhere in the searched region does the force vanish and pull the "
+                        "particle back.")
     elif not trap.stable:
         loose = [m["name"] for m in trap.modes if m["stiffness"] <= 0]
         warnings.append("No stable trap: the particle is pushed away along " + ", ".join(loose) + ".")
@@ -171,7 +222,9 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
 
     wl = beams[0]["wavelength"]
     eff = mie_efficiencies(float(p["radius"]), wl, n_p, nm)
-    sc = optical.scattering(r_eq if r_eq is not None else np.zeros(3))
+    at = r_eq if r_eq is not None else centre
+    parts = [f.scattering(at) for f in optical]
+    sc = dict(P_sca=sum(x["P_sca"] for x in parts), P_abs=sum(x["P_abs"] for x in parts))
     result: dict[str, Any] = dict(
         version=RESULT_VERSION,
         engine=__version__,
@@ -182,7 +235,8 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
         particle=dict(n=p["n"], k=p["k"], density=p["density"], mass=mass),
         optical=dict(P_sca=sc["P_sca"], P_abs=sc["P_abs"], power=P,
                      Qext=eff["Qext"], Qsca=eff["Qsca"], Qabs=eff["Qabs"],
-                     size_parameter=eff["x"], Nmax=dict(beam=beam.Nmax, particle=T.Nmax[0])),
+                     size_parameter=eff["x"],
+                     Nmax=dict(beam=max(f.beam.Nmax for f in optical), particle=optical[0].T.Nmax[0])),
         models=[dict(quantity="modes", model="mie", validity="ok", notes=[]),
                 dict(quantity="optical", model="mie", validity="ok", notes=[])],
         warnings=warnings,
@@ -193,8 +247,11 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     result["rates"] = rates
     result["models"] += rate_models
     if "curves" in want:
-        result["curves"] = _curves(fields, r_eq if r_eq is not None else np.zeros(3), SCAN_RANGES, SCAN_POINTS)
+        result["curves"] = _curves(fields, at, ranges, SCAN_POINTS)
     if "pattern" in want:
+        if len(optical) > 1 or not is_simple(beams):
+            raise UnsupportedSetup("the radiation pattern is computed only for beams along +z "
+                                   "through one focus that interfere")
         result["pattern"] = pattern_result(s, r_eq if r_eq is not None else np.zeros(3))
         result["models"].append(dict(quantity="pattern", model="mie", validity="ok", notes=[]))
         if r_eq is None:

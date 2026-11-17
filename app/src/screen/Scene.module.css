@@ -1,0 +1,243 @@
+.scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--scene);
+}
+
+.scene[data-thumbnail] {
+  pointer-events: none;
+}
+
+.svg {
+  display: block;
+  font-family: var(--font-sans);
+  user-select: none;
+}
+
+.dot {
+  fill: var(--scene-dot);
+}
+
+.opticalAxis {
+  stroke: var(--scene-ink);
+  stroke-opacity: 0.38;
+  stroke-width: 1;
+  stroke-dasharray: 14 4 2 4;
+}
+
+/* ---- parts: every drawn thing that can be selected ---------------------- */
+
+.part {
+  cursor: pointer;
+}
+
+.shape {
+  stroke: transparent;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  transition: stroke 120ms;
+}
+
+.part[data-hover] .shape {
+  stroke: color-mix(in srgb, var(--select) 55%, transparent);
+}
+
+.part[data-selected] .shape {
+  stroke: var(--select);
+}
+
+/* the edges of a beam: drawn only when it is hovered or selected */
+.edge {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+
+.edgeStop {
+  stop-color: var(--select);
+}
+
+.part[data-hover] .edge {
+  opacity: 0.55;
+}
+
+.part[data-selected] .edge {
+  opacity: 1;
+}
+
+/* an invisible target around small things */
+.hit {
+  fill: transparent;
+}
+
+.glass {
+  fill: color-mix(in srgb, var(--glass) 30%, transparent);
+  stroke: var(--glass);
+  stroke-width: 2;
+}
+
+.metal {
+  fill: var(--metal);
+  stroke: var(--metal-edge);
+  stroke-width: 1;
+}
+
+.metalFace {
+  fill: var(--metal-face);
+  stroke: var(--metal-edge);
+  stroke-width: 1;
+}
+
+.rf .metal {
+  fill: var(--metal-rf);
+}
+
+.rf .metalFace {
+  fill: color-mix(in srgb, var(--metal-rf) 60%, var(--metal-face));
+}
+
+.cap .metal {
+  fill: color-mix(in srgb, var(--metal) 80%, var(--metal-edge));
+}
+
+.hole {
+  fill: var(--scene);
+}
+
+.particle {
+  stroke: color-mix(in srgb, var(--particle) 70%, #000000);
+  stroke-width: 1;
+}
+
+.particleLight {
+  stop-color: color-mix(in srgb, var(--particle) 45%, #ffffff);
+}
+
+.particleDark {
+  stop-color: var(--particle);
+}
+
+.enlarged {
+  fill: none;
+  stroke: var(--particle);
+  stroke-opacity: 0.7;
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+
+.leader {
+  stroke: var(--scene-ink);
+  stroke-opacity: 0.6;
+  stroke-width: 1;
+}
+
+/* ---- corner: scale bar, axes, gravity ------------------------------------ */
+
+.corner {
+  font-size: 11.5px;
+}
+
+.cornerText {
+  fill: var(--scene-ink);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.scaleBar {
+  fill: none;
+  stroke: var(--scene-ink);
+  stroke-width: 1.5;
+}
+
+.axisX,
+.axisY,
+.axisZ {
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.axisX {
+  stroke: var(--axis-x);
+}
+
+.axisY {
+  stroke: var(--axis-y);
+}
+
+.axisZ {
+  stroke: var(--axis-z);
+}
+
+.gravity {
+  stroke: var(--scene-ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.gravityHead {
+  fill: var(--scene-ink);
+  stroke: var(--scene-ink);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.part[data-selected] .gravity,
+.part[data-selected] .gravityHead {
+  stroke: var(--select);
+  fill: var(--select);
+}
+
+/* ---- labels: the name and key values of every part, as buttons ------------ */
+
+.labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 300px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--island);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+  font-size: 12.5px;
+  line-height: 1.35;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 120ms,
+    background 120ms;
+}
+
+.labelName {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.labelSummary {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.label[data-hover],
+.label:hover {
+  border-color: var(--select);
+}
+
+.label[data-selected] {
+  border-color: var(--select);
+  background: var(--select-soft);
+  box-shadow: 0 0 0 1px var(--select);
+}
