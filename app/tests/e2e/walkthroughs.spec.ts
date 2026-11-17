@@ -23,6 +23,7 @@ const VARIANTS: Variant[] = [
 ];
 
 const TWEEZER = ["227 kHz", "285 kHz", "96.8 kHz"];
+const COUNTER = ["329 kHz", "412 kHz", "139 kHz"];
 
 for (const v of VARIANTS) {
   const frame = async (page: Parameters<typeof shot>[0], name: string, key = false) => {
@@ -86,21 +87,31 @@ for (const v of VARIANTS) {
       await expect(page.getByTestId("field-beam1-power")).toHaveValue("200");
       await expect(page.getByTestId("scene").locator('g[data-part="lens:1"]')).toHaveCount(1);
 
-      // the engine cannot compute two opposing beams yet: no number is shown, and the strip says why
+      // the scattering forces cancel: the particle moves back to the focus, and the trap is stiffer
       const verdict = page.getByTestId("verdict");
-      await expect(verdict).toContainText("Not computed yet: beams that do not travel along +z through the origin.");
-      await expect(verdict.getByRole("link", { name: "Issue #10" })).toHaveAttribute("href", /\/issues\/10$/);
-      for (const axis of ["x", "y", "z"]) await expect(page.getByTestId(`freq-${axis}`)).toContainText("—");
+      await expect(verdict).toContainText("Stable trap. The particle rests at the focus.");
+      expect(await frequencies(page)).toEqual(COUNTER);
       await expectNoSidewaysScroll(page);
       await frame(page, "w2-2-beam-added", true);
 
-      // one undo takes the beam away and the numbers are back
+      // make them interfere: a standing wave, much stiffer along the beams
+      await page.getByTestId("field-beam1-coherent").selectOption("0");
+      await settled(page);
+      await expect(page.getByTestId("engine-status")).toContainText("Computed in");
+      await expect(verdict).toContainText("Stable trap. The particle rests at the focus.");
+      // along the beams 1.06 MHz, against 139 kHz without interference
+      expect(await frequencies(page)).toEqual(["519 kHz", "568 kHz", "1.06 MHz"]);
+      await frame(page, "w2-3-standing-wave");
+
+      // undo takes the interference away, a second undo the beam
+      await page.getByTestId("undo").click();
+      expect(await frequencies(page)).toEqual(COUNTER);
       await page.getByTestId("undo").click();
       await expect(inspector).toHaveCount(0);
       expect(await frequencies(page)).toEqual(TWEEZER);
       await page.getByTestId("redo").click();
       await expect(page.getByTestId("scene").locator('g[data-part="field:1"]')).toHaveCount(1);
-      await expect(verdict).toContainText("Not computed yet");
+      expect(await frequencies(page)).toEqual(COUNTER);
     });
 
     test("is my Paul trap stable at 5 kHz?", async ({ page }) => {

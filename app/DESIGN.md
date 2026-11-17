@@ -218,7 +218,7 @@ touch screen. Islands have a 12 px radius and one shadow.
 * **A note is one sentence.** It says what the reader needs to do or know,
   nothing else.
 * **Sentence case** everywhere. No exclamation marks.
-* **Say what is, not what went wrong inside.** "Not computed yet: Paul traps
+* **Say what is, not what went wrong inside.** "Not computed yet: a Paul trap
   together with a beam." Not "UnsupportedSetup".
 * **The engine's sentences are shown as they are.** The screen adds the name
   of the part in front, and nothing else.
@@ -326,7 +326,8 @@ shows them in order. Names end in the view and the theme.
 | `w1-3-beam-selected-*` | The beam selected, its three inputs. |
 | `w1-4-power-changed-*` | 100 mW typed with its unit; the strip has followed. |
 | `w2-1-add-field-*` | Task 2, "add a counter-propagating beam": the Add field menu. |
-| `w2-2-beam-added-*` | The second beam and its lens, selected. The engine cannot compute it yet (issue #10): no numbers, and the strip says why. |
+| `w2-2-beam-added-*` | The second beam and its lens, selected. The scattering forces cancel: the particle moves back to the focus and the trap is stiffer. |
+| `w2-3-standing-wave-*` | The two beams made to interfere: a standing wave, 1.06 MHz along the beams. |
 | `w3-1-presets-*` | Task 3, "is my Paul trap stable at 5 kHz?": the picker, opened from the file menu. |
 | `w3-2-answer-*` | The linear Paul trap at 5 kHz: "Stable trap. Mathieu q = 0.32 on x and y." |
 | `w3-3-unstable-*` | At 2.5 kHz: not stable, in the engine's words. |

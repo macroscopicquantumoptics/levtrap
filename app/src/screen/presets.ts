@@ -47,7 +47,6 @@ export const PRESETS: Preset[] = [
     name: "Counter-propagating beams",
     blurb: "Two opposing beams share one focus, so their scattering forces cancel.",
     source: EXAMPLE,
-    pending: 10,
     setup: addField(DEFAULT_SETUP, newBeam(DEFAULT_SETUP, "counter")),
   },
   {

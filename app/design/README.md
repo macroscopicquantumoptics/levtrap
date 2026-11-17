@@ -46,14 +46,19 @@ Add field, bottom left.
 ![The Add field menu](screens/w2-1-add-field-desktop-light.webp)
 
 The second beam and its lens arrive with working values, selected. The
-engine cannot compute two opposing beams yet (issue #10), so the strip shows
-no numbers and says why.
+scattering forces of the two beams cancel: the particle moves back to the
+focus, and the trap is stiffer (329, 412, 139 kHz against 227, 285, 96.8).
 
 ![The beam added](screens/w2-2-beam-added-desktop-light.webp)
 
 ![The beam added, dark](screens/w2-2-beam-added-desktop-dark.webp)
 
 <img width="250" alt="The beam added, phone" src="screens/w2-2-beam-added-phone-light.webp"> <img width="250" alt="The beam added, phone, dark" src="screens/w2-2-beam-added-phone-dark.webp">
+
+"Interferes with: Beam 1" makes a standing wave: the trap along the beams
+goes from 139 kHz to 1.06 MHz.
+
+![The standing wave](screens/w2-3-standing-wave-desktop-light.webp)
 
 ## 3. "Is my Paul trap stable at 5 kHz?"
 

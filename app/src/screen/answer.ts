@@ -40,11 +40,6 @@ export function pending(setup: Setup, engineMessage?: string): Notice {
   const pauls = fields.filter((f) => f.kind === "paul");
   if (pauls.length && beams.length) return { kind: "pending", text: "Not computed yet: a Paul trap together with a beam.", ticket: 12 };
   if (pauls.length > 1) return { kind: "pending", text: "Not computed yet: more than one Paul trap." };
-  if (beams.some((b) => directionOf(b).join() !== "0,0,1" || positionOf(b).some((c) => c !== 0))) {
-    return { kind: "pending", text: "Not computed yet: beams that do not travel along +z through the origin.", ticket: 10 };
-  }
-  if (beams.length === 2) return { kind: "pending", text: "Not computed yet: two beams that do not interfere.", ticket: 10 };
-  if (beams.length > 2) return { kind: "pending", text: "Not computed yet: more than two beams.", ticket: 10 };
   if (!beams.length && !pauls.length) return { kind: "pending", text: "Nothing holds the particle: add a beam or a Paul trap." };
   return { kind: "pending", text: sentence(`Not computed yet: ${(engineMessage ?? "this setup").replace(/^[\w.[\]]+: /, "")}`) };
 }

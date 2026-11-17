@@ -26,10 +26,15 @@ test("an edited setup asks the engine", () => {
   assert.equal(instantAnswer(withField<BeamField>(DEFAULT_SETUP, 0, { power: 0.1 })), null);
 });
 
-test("a preset the engine cannot compute shows no numbers and says what is missing", () => {
-  const a = instantAnswer(preset("counter"));
-  assert.equal(a?.result, null);
-  assert.deepEqual(a?.notice, { kind: "pending", text: "Not computed yet: beams that do not travel along +z through the origin.", ticket: 10 });
+test("every preset is computed by the engine and answers at once", () => {
+  for (const p of PRESETS) {
+    assert.equal(p.pending, undefined, p.id);
+    assert.equal(instantAnswer(p.setup)?.origin, "preset", p.id);
+  }
+  // two opposing beams (B1): the scattering forces cancel and the particle sits at the focus
+  const counter = instantAnswer(preset("counter"))!.result!;
+  assert.equal(counter.stable, true);
+  assert.ok(Math.hypot(...counter.equilibrium!) < 1e-12);
 });
 
 test("the engine's refusals become sentences", () => {
@@ -52,15 +57,17 @@ test("the engine's refusals become sentences", () => {
 });
 
 test("what the engine cannot compute yet, with its ticket", () => {
-  assert.equal(pending(preset("counter")).kind === "pending" && pending(preset("counter")).text, "Not computed yet: beams that do not travel along +z through the origin.");
-  const co = addField(DEFAULT_SETUP, newBeam(DEFAULT_SETUP, "co"));
-  assert.deepEqual(pending(co), { kind: "pending", text: "Not computed yet: two beams that do not interfere.", ticket: 10 });
+  const hybrid = addField(withParticle(DEFAULT_SETUP, { charge: 30 }), newPaulTrap("linear"));
+  assert.deepEqual(pending(hybrid), { kind: "pending", text: "Not computed yet: a Paul trap together with a beam.", ticket: 12 });
   const none = { ...DEFAULT_SETUP, trap: { fields: [] } };
   assert.deepEqual(pending(none), { kind: "pending", text: "Nothing holds the particle: add a beam or a Paul trap." });
   assert.deepEqual(pending(DEFAULT_SETUP, "trap.fields[0].mode: this mode is not computed yet"), {
     kind: "pending",
     text: "Not computed yet: this mode is not computed yet.",
   });
+  // beams in any direction are computed now (B1): only an engine message would make one pending
+  const co = addField(DEFAULT_SETUP, newBeam(DEFAULT_SETUP, "co"));
+  assert.equal(pending(co, "x: something new").text, "Not computed yet: something new.");
 });
 
 test("the verdict is a sentence", () => {
@@ -80,8 +87,8 @@ test("the verdict is a sentence", () => {
     more: [],
   });
   assert.deepEqual(verdict(instantAnswer(preset("counter"))!, preset("counter")), {
-    tone: "none",
-    text: "Not computed yet: beams that do not travel along +z through the origin.",
+    tone: "ok",
+    text: "Stable trap. The particle rests at the focus.",
     more: [],
   });
 });
