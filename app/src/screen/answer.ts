@@ -38,7 +38,6 @@ export function pending(setup: Setup, engineMessage?: string): Notice {
   const fields = setup.trap.fields;
   const beams = fields.filter((f): f is BeamField => f.kind === "beam");
   const pauls = fields.filter((f) => f.kind === "paul");
-  if (pauls.length && beams.length) return { kind: "pending", text: "Not computed yet: a Paul trap together with a beam.", ticket: 12 };
   if (pauls.length > 1) return { kind: "pending", text: "Not computed yet: more than one Paul trap." };
   if (!beams.length && !pauls.length) return { kind: "pending", text: "Nothing holds the particle: add a beam or a Paul trap." };
   return { kind: "pending", text: sentence(`Not computed yet: ${(engineMessage ?? "this setup").replace(/^[\w.[\]]+: /, "")}`) };
