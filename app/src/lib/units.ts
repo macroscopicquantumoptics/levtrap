@@ -12,6 +12,7 @@ export type Quantity =
   | "voltage"
   | "temperature"
   | "density"
+  | "mass"
   | "charge"
   | "angle"
   | "phase"
@@ -60,6 +61,13 @@ export const UNITS: Record<Quantity, UnitDef[]> = {
     { symbol: "g/cm³", factor: 1e3, aliases: ["g/cm3", "g/cm^3", "g/cc"] },
   ],
   charge: [{ symbol: "e", factor: 1 }],
+  // grams, so a 100 nm sphere reads "9.22 fg"
+  mass: [
+    { symbol: "g", factor: 1 },
+    { symbol: "pg", factor: 1e-12 },
+    { symbol: "fg", factor: 1e-15 },
+    { symbol: "ag", factor: 1e-18 },
+  ],
   angle: [
     { symbol: "°", factor: 1, aliases: ["deg", "degrees"] },
     { symbol: "rad", factor: 180 / Math.PI },

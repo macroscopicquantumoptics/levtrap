@@ -1,6 +1,6 @@
 /** The screen's rules (docs/ARCHITECTURE.md §7, app/DESIGN.md), one test each. */
 import { expect, test } from "@playwright/test";
-import { collectErrors, expectNoSidewaysScroll, frequencies, open, partButton, selectPart, setField, settled, shot, VIEWS } from "./helpers";
+import { collectErrors, local, expectNoSidewaysScroll, frequencies, open, partButton, selectPart, setField, settled, shot, VIEWS } from "./helpers";
 
 const TWEEZER = ["227 kHz", "285 kHz", "96.8 kHz"];
 
@@ -149,17 +149,85 @@ test("a field takes units as typed and answers mistakes with a sentence", async 
   await expect(page.getByTestId("undo")).toBeEnabled();
 });
 
-test("the two descriptions of a focus are the same lens", async ({ page }) => {
+test("NA, waist and half-angle are one focus", async ({ page }) => {
   await open(page, "preset=tweezer");
   await selectPart(page, "lens:0");
-  await page.getByTestId("field-lens0-by").selectOption("angle");
-  await expect(page.getByTestId("field-lens0-angle")).toHaveValue("53.1301");
-  await settled(page);
-  expect(await frequencies(page)).toEqual(TWEEZER);
-  await page.getByTestId("field-lens0-by").selectOption("waist");
+  await expect(page.getByTestId("field-lens0-NA")).toHaveValue("0.8");
   await expect(page.getByTestId("field-lens0-waist")).toHaveValue("0.254011");
+  // the waist typed back is the same lens: the same numbers
+  await setField(page, "lens0-waist", "0.254011 µm");
   await settled(page);
   expect(await frequencies(page)).toEqual(TWEEZER);
+  await expect(page.getByTestId("field-lens0-NA")).toHaveValue("0.8");
+  // a wider waist: a smaller NA, a softer trap
+  await setField(page, "lens0-waist", "0.3 µm");
+  await expect(page.getByTestId("field-lens0-NA")).not.toHaveValue("0.8");
+  await settled(page);
+  expect(await frequencies(page)).not.toEqual(TWEEZER);
+  await page.getByTestId("advanced").locator("summary").click();
+  await setField(page, "lens0-angle", "53.1301");
+  await expect(page.getByTestId("field-lens0-NA")).toHaveValue("0.8");
+  await settled(page);
+  expect(await frequencies(page)).toEqual(TWEEZER);
+});
+
+test("a radius edit changes the frequencies and undo brings both back", async ({ page }) => {
+  await open(page, "preset=tweezer");
+  await selectPart(page, "particle");
+  await setField(page, "particle-radius", "150 nm");
+  await settled(page);
+  const bigger = await frequencies(page);
+  expect(bigger).not.toEqual(TWEEZER);
+  await page.getByTestId("undo").click();
+  await expect(page.getByTestId("field-particle-radius")).toHaveValue("100");
+  await settled(page);
+  expect(await frequencies(page)).toEqual(TWEEZER);
+  await page.getByTestId("redo").click();
+  await expect(page.getByTestId("field-particle-radius")).toHaveValue("150");
+  await settled(page);
+  expect(await frequencies(page)).toEqual(bigger);
+});
+
+test("diameter and mass are the radius, said differently", async ({ page }) => {
+  await open(page, "preset=tweezer");
+  await selectPart(page, "particle");
+  // the material's values and their source, before any result
+  await expect(page.getByTestId("inspector")).toContainText("n = 1.450");
+  await expect(page.getByTestId("inspector")).toContainText("Source:");
+  await page.getByTestId("advanced").locator("summary").click();
+  await expect(page.getByTestId("field-particle-diameter")).toHaveValue("200");
+  await expect(page.getByTestId("field-particle-mass")).toHaveValue("9.21534");
+  await setField(page, "particle-diameter", "300 nm");
+  await expect(page.getByTestId("field-particle-radius")).toHaveValue("150");
+  await setField(page, "particle-mass", "9.21534 fg");
+  await expect(page.getByTestId("field-particle-radius")).toHaveValue("100");
+});
+
+test("the setup being edited survives a reload", async ({ page }) => {
+  await open(page, "preset=tweezer");
+  await selectPart(page, "field:0");
+  await setField(page, "beam0-power", "120 mW");
+  await settled(page);
+  const edited = await frequencies(page);
+  await page.goto(local());
+  await expect(page.getByTestId("screen")).toBeVisible();
+  await expect(page.getByTestId("presets")).not.toBeVisible();
+  await expect(partButton(page, "field:0")).toContainText("120 mW");
+  await settled(page);
+  expect(await frequencies(page)).toEqual(edited);
+});
+
+test("a saved setup that no longer validates is not opened, and the screen says why", async ({ page }) => {
+  await page.addInitScript(() => {
+    const setup = { version: 1, particle: { radius: -1e-7, material: "SiO2" }, trap: { fields: [{ kind: "gravity" }] } };
+    window.localStorage.setItem("levtrap.setup", JSON.stringify({ format: 1, setup, preset: "tweezer" }));
+  });
+  await open(page, "");
+  const notice = page.getByTestId("autosave-refused");
+  await expect(notice).toContainText("Your last setup could not be opened: particle.radius must be greater than 0.");
+  await expect(partButton(page, "field:0")).toContainText("200 mW");
+  await notice.getByRole("button", { name: "Dismiss" }).click();
+  await expect(notice).toHaveCount(0);
 });
 
 test("the Advanced fold names what differs from the default", async ({ page }) => {
