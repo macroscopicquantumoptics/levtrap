@@ -9,7 +9,8 @@
       "setup": "a Setup file (docs/ARCHITECTURE.md section 4); must pass levtrap.setup.parse unless schema_gaps is non-empty",
       "schema_gaps": "list of setup keys that the current schema does not support yet, written as ARCHITECTURE.md section 4 says the future schema will (e.g. focus.kind = 'parabolic_mirror')",
       "provenance": "map from setup key path to {value, source, flag}; flag is 'stated' or 'inferred'; source names page/section/figure/table",
-      "expected": "list of {quantity, value, unit, source, tolerance_rel, why}",
+      "expected": "list of {quantity, value, unit, source, tolerance_rel, why}; quantity is a name levtrap.validation.quantity reads (frequency.x|y|z|max|min, depth.kT|K, gas_damping, secular.exact|pseudopotential.<axis>, recoil_heating.<axis>)",
+      "known_disagreement": "optional {issue: N}: the entry disagrees with levtrap beyond its tolerance and issue #N tracks it; tests/test_literature.py marks it xfail. Never widen the tolerance instead (C4, issue #16)",
       "agreement_note": "what agreement to expect and why"
     },
     "wanted": {

@@ -36,6 +36,15 @@ Do not fill a gap from memory or from a review article's table. If a
 parameter is not in the paper, write "not stated" and say how the
 comparison is weakened.
 
+## Validation (C4)
+
+`tests/test_literature.py` solves every verified entry and compares it at
+its tolerance; `README.md` in this folder is the generated table
+(`python3 -m levtrap.validation`), with the cross-checks between levtrap's
+own models. An entry that disagrees gets an issue and
+`"known_disagreement": {"issue": N}`, which marks its test xfail; its
+tolerance is never widened to make it pass.
+
 ## How to read an entry
 
 | Field | Meaning |
