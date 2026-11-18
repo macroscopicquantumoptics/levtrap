@@ -111,6 +111,12 @@ for it).
   aligned focus), tilted and decentred as set, and the light converges to
   where the ray trace puts the focus. Zoomed in on the focus it is out of
   view; its label then waits at the edge of the view, towards it.
+* **A parabolic mirror** (E3) is drawn at its true size about the focus:
+  the paraboloid between its hole and its rim, faint (a deep mirror stands
+  all round the trap, which must stay in view through it), its rim and hole
+  outlined; the outline carries the selection. The light is drawn as the
+  cone of the beam's 1/e² edge on the mirror (at most 80°); the collimated
+  input coming down around the focus is not drawn.
 * **The light** is a volume: its brightness follows the intensity on the
   axis (1/w²), fades out past the focus, and fades upstream of the lens.
   Its colour is the wavelength's own when visible; infrared is the theme's
@@ -163,7 +169,9 @@ next. The reason each one is visible is in the last column.
 
 | Input | Where | Why visible |
 |---|---|---|
-| Type | visible | Ideal lens, or the ray-traced asphere Thorlabs 354330-C (E1; offered in a gas or vacuum, for a Gaussian beam). The parabolic mirror (E3) will appear here. |
+| Type | visible | Ideal lens, the ray-traced asphere Thorlabs 354330-C (E1) or a parabolic mirror (E3); the last two are offered in a gas or vacuum, for a Gaussian beam. The part is then called Mirror. |
+| Focal length, rim radius, beam diameter | visible: Mirror | They set the angles the light comes from (the rim's note says how far round, and whether the mirror is deep) and how much of the beam it catches. |
+| Hole radius | Advanced: Mirror | Most mirrors have none or a small one; the note says which angles it removes. |
 | NA and waist w₀ | visible, linked | Two descriptions of one focus: typing one updates the other (the waist through the mode's order). The setup keeps the one typed last. They set the trap's geometry, and with it every frequency. |
 | Half-angle | Advanced, linked | The third description of the same focus. |
 
@@ -209,11 +217,29 @@ The line at the right of the tabs says where the numbers came from:
 
 ## 7. The plots drawer
 
-| Tab | In the prototype |
+Opened on demand, one tab at a time. A tab asks the engine for its own data
+while it is open (the strip never waits for a plot): Forces and Potential for
+the force cuts, Radiation for the pattern. Heating and Spectrum draw from the
+result the strip already has, and Sweep runs one solve per value when asked.
+
+| Tab | What it draws |
 |---|---|
-| Forces | Real. The force along x, y and z through the equilibrium; hover or arrow keys read the values; the Table button lists them. |
-| Heating | Real, as a table: the rates the engine returns. The plot against pressure is D5. |
-| Potential, Sweep, Radiation | One sentence saying what the tab will show, and its issue. |
+| Forces | The force along each eigen-axis of the trap, through the equilibrium. "Dipole approximation" draws the same with the light as a point dipole, dashed: where Mie theory matters shows. |
+| Potential | The potential along each axis in k_BT (the force integrated from the equilibrium), and the harmonic trap of the same stiffness dashed: anharmonicity shows where they part. Its barriers are the depths in the strip. |
+| Sweep | Any input of the setup (power, wavelength, NA, radius, charge, RF voltage and frequency, pressure, temperature…) against a headline number (the frequencies, the depth, the position along the beam, the scattered power). One solve per value, with progress and Cancel; the values without a stable trap are shaded. |
+| Radiation | Where the scattered light goes, in two planes through the beam axis (polar); the fraction a lens of each NA collects, forward and backward; and the fraction of the position information a backward lens collects, per axis. The trapping lens's NA is marked. |
+| Heating | The reheating rate of each mode against pressure (10⁻⁹ to 10³ mbar), with photon recoil alone dashed, the setup's pressure marked, and a dot where recoil and gas heat equally. "At 1e-6 mbar" shows the rates as a table. |
+| Spectrum | The displacement spectrum each mode would show on an analyser (E4): a Lorentzian at its frequency, γ/2π wide, whose area is k_BT_eff/(mΩ²); T_eff balances the reheating against the damping, and is marked on each peak. "Feedback damping" adds linewidth to every mode (ideal cold damping: no added noise) and cools them. "Occupation" shows, per mode, the linewidth, phonon number, T_eff and rms displacement. Computed in the page from the result (`plots/spectrum.ts`, a copy of `levtrap.spectrum`); for traps with light, as the rates are. |
+
+Every plot is the same component (`src/screen/plots/Plot.tsx`, inline SVG
+in the theme's colours): SI-prefixed ticks, log axes where a quantity spans
+decades, a crosshair readout by pointer or arrow keys, drag to zoom and Fit
+to go back, a direct label on each line and a legend, a Table of the same
+data, and Export as PNG, SVG (the colours written in) or CSV (SI units).
+Series take the axis colours, or `--series-a` and `--series-b` for two
+series that are not axes; both sets pass the colour-vision checks in each
+theme. A dashed line is always a second version of the same quantity (a
+model, a fit, one part of a sum), said once in the legend.
 
 ## 8. Tokens
 
@@ -332,6 +358,7 @@ gravity, a beam's direction and focus position.
   and a verified entry the schema can hold replaces the example and is cited
   (`buildPresets`, tested), with no change to the screen.
 * The intensity slice in the Show menu is listed, greyed.
+* The Sweep sweeps one input at a time; a two-dimensional map is not built.
 
 ## 12. Decisions for a human
 

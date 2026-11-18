@@ -62,7 +62,25 @@ export interface AsphereFocus {
   angle_deg?: never;
 }
 
-export type Focus = IdealFocus | AsphereFocus;
+/**
+ * A parabolic mirror (levtrap.mirror): the collimated beam, `beam_diameter`
+ * [m] across (1/e² intensity), is reflected to the focus, the beam's
+ * `position`. Lengths in m; a rim beyond twice the focal length is above the
+ * focal plane (a deep mirror, light from beyond 90°). The beam's `direction`
+ * points from the mirror's vertex through the focus.
+ */
+export interface MirrorFocus {
+  kind: "parabolic_mirror";
+  focal_length: number;
+  rim_radius: number;
+  hole_radius?: number;
+  beam_diameter: number;
+  NA?: never;
+  waist?: never;
+  angle_deg?: never;
+}
+
+export type Focus = IdealFocus | AsphereFocus | MirrorFocus;
 
 export interface BeamMode {
   type?: "lg" | "hg";
@@ -136,7 +154,7 @@ export interface Setup {
 // ---------------------------------------------------------------------------
 
 /** Extra blocks `solve` computes only on request (solve.WANTS). */
-export type Want = "curves" | "pattern";
+export type Want = "curves" | "dipole" | "pattern";
 
 export interface TrapMode {
   /** the lab axis the eigen-axis is nearest to: "x" | "y" | "z" */
@@ -158,11 +176,40 @@ export interface ModelInfo {
   notes: string[];
 }
 
+/** A force cut through the equilibrium along one eigen-axis (solve._curves). */
 export interface Curve {
-  /** m */
+  /** unit vector; absent in results recorded before D5 (then the lab axis of its name) */
+  axis?: Vec3;
+  /** m, the coordinate along the axis */
   position: number[];
-  /** N */
+  /** N, along the axis */
   force: number[];
+  /** N, the same with the light in the dipole approximation (want "dipole") */
+  dipole?: number[];
+}
+
+/** The radiation pattern (levtrap.pattern.pattern_block). Grids are flat lists. */
+export interface Pattern {
+  frame: string;
+  grid: { theta: number[]; phi: number[]; weight: number[] };
+  /** W/sr */
+  scattered: number[];
+  total: number[];
+  /** W/(sr m²), per axis */
+  information: { x: number[]; y: number[]; z: number[] };
+  P_sca: number;
+  P_total: number;
+  information_total: { x: number; y: number; z: number };
+  /** numerical apertures of the collection lens */
+  NA: number[];
+  directions: Record<string, Vec3>;
+  /** fraction of P_sca collected by a lens of each NA, per direction */
+  collection: Record<string, number[]>;
+  /** fraction of the position information collected, per direction and axis */
+  information_efficiency: Record<string, { x: number[]; y: number[]; z: number[] }>;
+  /** NA of the trapping lens, and what it collects looking back at the particle */
+  trap_NA?: number | null;
+  at_trap_NA?: Record<string, unknown> | null;
 }
 
 /** Rates of one mode (rates.mode_rates). Heating rates are in phonons/s. */
@@ -266,6 +313,21 @@ export interface LensResult {
   pointing_mrad: [number, number];
 }
 
+/** What a parabolic mirror does to its beam (api.mirror_focus). */
+export interface MirrorResult {
+  /** index into trap.fields */
+  field: number;
+  /** fraction of the input beam's power reflected to the focus (inside the rim, outside the hole) */
+  reflected: number;
+  clipping_loss: number;
+  /** deg from the axis behind the focus, as seen from the focus */
+  rim_angle_deg: number;
+  hole_angle_deg: number;
+  /** the rim is above the focal plane */
+  deep: boolean;
+  Nmax: number;
+}
+
 /** One field's share at the equilibrium (solve.breakdown). */
 export interface FieldShare {
   kind: "beam" | "paul" | "gravity";
@@ -307,6 +369,8 @@ export interface Result {
   paul?: PaulResult | null;
   /** per beam focused by a real lens (focus.kind "asphere") */
   lenses?: LensResult[];
+  /** per beam focused by a parabolic mirror */
+  mirrors?: MirrorResult[];
   /** each field's force and stiffness at the equilibrium; absent without one */
   breakdown?: FieldShare[];
   /** null when the trap has no beam */
@@ -316,9 +380,10 @@ export interface Result {
   warnings: string[];
   /** s, engine wall time */
   time: number;
-  curves?: { x: Curve; y: Curve; z: Curve };
+  /** on request: keyed by mode name */
+  curves?: Record<string, Curve>;
   /** on request; see levtrap.pattern.pattern_block */
-  pattern?: Record<string, unknown>;
+  pattern?: Pattern;
 }
 
 /** What `solve_json` returns. */

@@ -110,3 +110,16 @@ test("a real lens adds what it does to the focus: moved, clipped, the trap axis 
   assert.equal(row("lens0-axis").explain().formula, "trap-axis-tilt");
   assert.match(row("lens0-axis").value, /mrad$/);
 });
+
+test("a parabolic mirror adds how much light it reflects and from how far round", async () => {
+  const { MIRROR_RESULT, MIRROR_SETUP } = await import("./mirror.fixture.ts");
+  const rows = secondaryNumbers(MIRROR_RESULT, MIRROR_SETUP);
+  const row = (id: string) => rows.find((r) => r.id === id)!;
+  const mirror = MIRROR_RESULT.mirrors![0];
+  assert.ok(mirror.deep && mirror.rim_angle_deg > 90);
+  assert.equal(row("mirror0-reflected").label, "Reflected by the mirror");
+  assert.equal(row("mirror0-reflected").value, "97.9 %");
+  assert.equal(row("mirror0-reflected").explain().formula, "mirror-reflected");
+  assert.equal(row("mirror0-rim").value, "112.6°");
+  assert.match(row("mirror0-rim").explain().title, /deep mirror/);
+});

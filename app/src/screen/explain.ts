@@ -361,6 +361,50 @@ export function secondaryNumbers(result: Result, setup: Setup): Secondary[] {
     }
   }
 
+  for (const mirror of result.mirrors ?? []) {
+    const beam = setup.trap.fields[mirror.field];
+    const which = setup.trap.fields.filter((f) => f.kind === "beam").length > 1 ? ` (mirror ${mirror.field + 1})` : "";
+    const focus = beam?.kind === "beam" && beam.focus.kind === "parabolic_mirror" ? beam.focus : null;
+    const mirrorModel = model(result, "mirror");
+    const value = `${formatNumber(100 * mirror.reflected, 3)} %`;
+    const length = (v: number | undefined) => (v == null ? "—" : formatSI(v, "m", 3, true));
+    out.push({
+      id: `mirror${mirror.field}-reflected`,
+      label: `Reflected by the mirror${which}`,
+      value,
+      explain: () => ({
+        title: "Light reflected to the focus",
+        value,
+        copy: String(mirror.reflected),
+        formula: "mirror-reflected",
+        inputs: [
+          { symbol: String.raw`\rho_\mathrm{h}`, value: length(focus?.hole_radius ?? 0), note: "radius of the mirror's hole" },
+          { symbol: "R", value: length(focus?.rim_radius), note: "radius of the mirror's rim" },
+          { symbol: "w", value: length(focus ? focus.beam_diameter / 2 : undefined), note: "the beam's radius (1/e² intensity)" },
+        ],
+        model: mirrorModel,
+      }),
+    });
+    const rim = `${formatNumber(mirror.rim_angle_deg, 4)}°`;
+    out.push({
+      id: `mirror${mirror.field}-rim`,
+      label: `Light from up to${which}`,
+      value: rim,
+      explain: () => ({
+        title: mirror.deep ? "Rim angle (a deep mirror: light from beyond 90°)" : "Rim angle",
+        value: rim,
+        copy: `${mirror.rim_angle_deg} deg`,
+        formula: "mirror-rim-angle",
+        inputs: [
+          { symbol: "R", value: length(focus?.rim_radius), note: "radius of the mirror's rim" },
+          { symbol: "f", value: length(focus?.focal_length), note: "focal length (vertex to focus)" },
+          { symbol: String.raw`\alpha_\mathrm{h}`, value: `${formatNumber(mirror.hole_angle_deg, 4)}°`, note: "the hole's edge, seen from the focus" },
+        ],
+        model: mirrorModel,
+      }),
+    });
+  }
+
   if (result.rates) {
     const r = result.rates;
     const value = formatSI(r.gas_damping / (2 * Math.PI), "Hz");

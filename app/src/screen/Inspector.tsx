@@ -1,8 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { AsphereFocus, BeamField, Field, Gas, GravityField, PaulField, Polarisation, Result, Setup, Vec3 } from "../engine/types.ts";
+import type { AsphereFocus, BeamField, MirrorFocus, Field, Gas, GravityField, PaulField, Polarisation, Result, Setup, Vec3 } from "../engine/types.ts";
 import { asphereHalfAngle, LENSES } from "../engine/lenses.ts";
+import { mirrorAngles, mirrorHalfAngle, mirrorReflected } from "../engine/mirrors.ts";
 import { formatNumber, formatSI } from "../lib/format.ts";
 import type { Notice } from "./answer.ts";
 import {
@@ -350,7 +351,22 @@ function BeamEditor({ setup, beam, index, prefix, onEdit }: EditorProps & { beam
 /** The aligned asphere a lens becomes: a 5 mm beam fills it (an NA of about 0.63), enough to hold the default sphere. */
 export const NEW_ASPHERE: AsphereFocus = { kind: "asphere", lens: "354330-C", beam_diameter: 5e-3, tilt_deg: [0, 0], decentre: [0, 0] };
 
+/**
+ * The parabolic mirror a lens becomes: f 3 mm, 18 mm across, its rim above the
+ * focus (light from up to 113°), filled by a 10 mm beam; no hole.
+ */
+export const NEW_MIRROR: MirrorFocus = { kind: "parabolic_mirror", focal_length: 3e-3, rim_radius: 9e-3, hole_radius: 0, beam_diameter: 1e-2 };
+
+/** The focus a beam gets when its optic changes kind; back to an ideal lens keeps about the same cone. */
+function switchFocus(kind: string, theta: number): BeamField["focus"] | null {
+  if (kind === "asphere") return { ...NEW_ASPHERE };
+  if (kind === "parabolic_mirror") return { ...NEW_MIRROR };
+  if (kind === "lens") return { kind: "lens", NA: Number(Math.sin(theta).toPrecision(3)) };
+  return null;
+}
+
 function LensEditor({ setup, beam, index, prefix, onEdit, result }: EditorProps & { beam: BeamField; index: number; result: Result | null }) {
+  if (beam.focus.kind === "parabolic_mirror") return <MirrorEditor setup={setup} beam={beam} focus={beam.focus} index={index} prefix={prefix} onEdit={onEdit} result={result} />;
   if (beam.focus.kind === "asphere") return <AsphereEditor setup={setup} beam={beam} focus={beam.focus} index={index} prefix={prefix} onEdit={onEdit} result={result} />;
   const focus = beam.focus;
   const n = environmentOf(setup).medium_index;
@@ -370,7 +386,10 @@ function LensEditor({ setup, beam, index, prefix, onEdit, result }: EditorProps 
           label="Type"
           value="lens"
           options={lensKinds(setup, beam)}
-          onChange={(kind) => kind === "asphere" && edit({ ...NEW_ASPHERE })}
+          onChange={(kind) => {
+            const next = kind !== "lens" && switchFocus(kind, angle);
+            if (next) edit(next);
+          }}
         />
         <NumberField
           id={`${prefix}-NA`}
@@ -407,7 +426,7 @@ function LensEditor({ setup, beam, index, prefix, onEdit, result }: EditorProps 
   );
 }
 
-/** The focusing optics; the asphere is traced in a gas or vacuum, for a Gaussian beam. */
+/** The focusing optics; the asphere and the mirror are computed in a gas or vacuum, for a Gaussian beam. */
 function lensKinds(setup: Setup, beam: BeamField) {
   const gaussian = (beam.mode?.type ?? "lg") === "lg" && (beam.mode?.indices ?? [0, 0]).every((i) => i === 0);
   const air = environmentOf(setup).medium_index === 1;
@@ -415,7 +434,7 @@ function lensKinds(setup: Setup, beam: BeamField) {
   return [
     { value: "lens", label: "Ideal lens" },
     { value: "asphere", label: `Asphere ${LENSES["354330-C"].name.replace("Thorlabs ", "")}${why}`, disabled: Boolean(why) },
-    { value: "parabolic_mirror", label: "Parabolic mirror (later)", disabled: true },
+    { value: "parabolic_mirror", label: `Parabolic mirror${why}`, disabled: Boolean(why) },
   ];
 }
 
@@ -437,8 +456,10 @@ function AsphereEditor({ setup, beam, focus, index, prefix, onEdit, result }: Ed
           label="Type"
           value="asphere"
           options={lensKinds(setup, beam)}
-          // back to an ideal lens of about the same cone
-          onChange={(kind) => kind === "lens" && onEdit(withField<BeamField>(setup, index, { focus: { kind: "lens", NA: Number(Math.sin(theta).toPrecision(3)) } }))}
+          onChange={(kind) => {
+            const next = kind !== "asphere" && switchFocus(kind, theta);
+            if (next) onEdit(withField<BeamField>(setup, index, { focus: next }));
+          }}
           note={`Ray traced: f ${formatSI(lens.efl, "m", 3, true)}, NA ${lens.NA}. The beam's position is where the aligned lens focuses.`}
         />
         <NumberField
@@ -470,6 +491,75 @@ function AsphereEditor({ setup, beam, focus, index, prefix, onEdit, result }: Ed
         </dl>
       )}
       <p className={styles.aside}>Drawn at its true size and distance, with its tilt and decentre.</p>
+    </>
+  );
+}
+
+/** A parabolic mirror: its focal length, rim and hole, the beam on it; and how much of the beam it reflects. */
+function MirrorEditor({ setup, beam, focus, index, prefix, onEdit, result }: EditorProps & { beam: BeamField; focus: MirrorFocus; index: number; result: Result | null }) {
+  const edit = (patch: Partial<MirrorFocus>) => onEdit(withField<BeamField>(setup, index, { focus: { ...focus, ...patch } }));
+  const [aHole, aRim] = mirrorAngles(focus);
+  const deg = (a: number) => `${formatNumber((a * 180) / Math.PI, 4, true)}°`;
+  const hole = focus.hole_radius ?? 0;
+  const done = result?.mirrors?.find((m) => m.field === index);
+  const upTo100mm = (v: number) => (v > 0 && v <= 0.1 ? null : "Between 0 and 100 mm.");
+  return (
+    <>
+      <Fields>
+        <SelectField
+          id={`${prefix}-kind`}
+          label="Type"
+          value="parabolic_mirror"
+          options={lensKinds(setup, beam)}
+          onChange={(kind) => {
+            const next = kind !== "parabolic_mirror" && switchFocus(kind, mirrorHalfAngle(focus));
+            if (next) onEdit(withField<BeamField>(setup, index, { focus: next }));
+          }}
+          note="The collimated beam comes down around the focus and the mirror sends it back up to it. The beam's position is the focus."
+        />
+        <NumberField id={`${prefix}-focal_length`} label="Focal length" value={focus.focal_length} quantity="length" unit="mm" check={upTo100mm} onCommit={(v) => edit({ focal_length: v })} />
+        <NumberField
+          id={`${prefix}-rim_radius`}
+          label="Rim radius"
+          value={focus.rim_radius}
+          quantity="length"
+          unit="mm"
+          check={(v) => upTo100mm(v) ?? (v > hole ? null : "Must be larger than the hole.")}
+          onCommit={(v) => edit({ rim_radius: v })}
+          note={`Light from up to ${deg(aRim)} off the axis${aRim > Math.PI / 2 ? ": the rim is above the focus (a deep mirror)" : ""}.`}
+        />
+        <NumberField
+          id={`${prefix}-beam_diameter`}
+          label="Beam diameter"
+          value={focus.beam_diameter}
+          quantity="length"
+          unit="mm"
+          check={(v) => (v > 0 && v <= 0.1 ? null : "Between 0 and 100 mm (1/e² intensity).")}
+          onCommit={(v) => edit({ beam_diameter: v })}
+        />
+      </Fields>
+      <Advanced changed={hole ? [`hole ${formatSI(hole, "m", 3, true)}`] : []}>
+        <NumberField
+          id={`${prefix}-hole_radius`}
+          label="Hole radius"
+          value={hole}
+          quantity="length"
+          unit="mm"
+          check={(v) => (v >= 0 && v < focus.rim_radius ? null : "From 0 up to the rim radius.")}
+          onCommit={(v) => edit({ hole_radius: v })}
+          note={hole ? `No light from within ${deg(aHole)} of the axis.` : "A central hole, for the light to leave or the particle to be loaded."}
+        />
+      </Advanced>
+      <dl className={styles.readout} data-testid={`${prefix}-readout`}>
+        <dt>Reflected to the focus</dt>
+        <dd>{formatNumber(100 * (done?.reflected ?? mirrorReflected(focus)), 3)} %</dd>
+        <dt>Light from</dt>
+        <dd>
+          {hole ? `${deg(aHole)} to ` : "the axis to "}
+          {deg(aRim)}
+        </dd>
+      </dl>
+      <p className={styles.aside}>Drawn at its true size, around the focus. Geometric optics on the mirror: no diffraction at its rim or hole.</p>
     </>
   );
 }

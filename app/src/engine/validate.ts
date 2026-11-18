@@ -136,10 +136,25 @@ function asphere(f: Json, path: string): Json {
   return out;
 }
 
+/** setup._parabolic_mirror: focal length, rim and hole radii [m], the beam's diameter on it. */
+function parabolicMirror(f: Json, path: string): Json {
+  const out: Json = { ...f };
+  const extra = ["NA", "waist", "angle_deg"].filter((k) => f[k] !== null && f[k] !== undefined);
+  if (extra.length) throw new SetupError(`${path}.${extra[0]}`, "is set by the mirror and the beam diameter; remove it");
+  out.focal_length = num(get(f, "focal_length", path), `${path}.focal_length`, { exclusiveMin: 0, max: 0.1 });
+  out.rim_radius = num(get(f, "rim_radius", path), `${path}.rim_radius`, { exclusiveMin: 0, max: 0.1 });
+  out.hole_radius = num(get(f, "hole_radius", path, 0), `${path}.hole_radius`, { min: 0 });
+  if ((out.hole_radius as number) >= (out.rim_radius as number)) throw new SetupError(`${path}.hole_radius`, "must be smaller than the rim radius");
+  out.beam_diameter = num(get(f, "beam_diameter", path), `${path}.beam_diameter`, { exclusiveMin: 0, max: 0.1 });
+  for (const key of ["NA", "waist", "angle_deg"]) delete out[key];
+  return out;
+}
+
 function focus(f: Json, path: string): Json {
   const out: Json = { ...f };
-  out.kind = choice(get(f, "kind", path, "lens"), `${path}.kind`, ["lens", "asphere"]);
+  out.kind = choice(get(f, "kind", path, "lens"), `${path}.kind`, ["lens", "asphere", "parabolic_mirror"]);
   if (out.kind === "asphere") return asphere(f, path);
+  if (out.kind === "parabolic_mirror") return parabolicMirror(f, path);
   const given = ["NA", "waist", "angle_deg"].filter((k) => f[k] !== null && f[k] !== undefined);
   if (given.length !== 1) throw new SetupError(path, "give exactly one of NA, waist or angle_deg");
   const key = given[0];

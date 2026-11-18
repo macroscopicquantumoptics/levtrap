@@ -146,11 +146,36 @@ def _asphere(f: dict, path: str) -> dict:
     return out
 
 
+def _parabolic_mirror(f: dict, path: str) -> dict:
+    """A parabolic mirror (:mod:`levtrap.mirror`): the collimated beam,
+    ``beam_diameter`` [m] across (1/e^2 intensity), is reflected to the focus
+    by a paraboloid of ``focal_length`` [m] with its rim ``rim_radius`` [m]
+    from the axis and a central hole of ``hole_radius`` [m]. A rim beyond
+    twice the focal length is above the focal plane (a deep mirror). The
+    beam's ``position`` is the focus; its ``direction`` points from the
+    mirror's vertex through the focus."""
+    out = dict(f)
+    extra = [k for k in ("NA", "waist", "angle_deg") if f.get(k) is not None]
+    if extra:
+        raise SetupError(f"{path}.{extra[0]}", "is set by the mirror and the beam diameter; remove it")
+    out["focal_length"] = _num(_get(f, "focal_length", path), f"{path}.focal_length", exclusive_min=0, max=0.1)
+    out["rim_radius"] = _num(_get(f, "rim_radius", path), f"{path}.rim_radius", exclusive_min=0, max=0.1)
+    out["hole_radius"] = _num(_get(f, "hole_radius", path, 0.0), f"{path}.hole_radius", min=0)
+    if out["hole_radius"] >= out["rim_radius"]:
+        raise SetupError(f"{path}.hole_radius", "must be smaller than the rim radius")
+    out["beam_diameter"] = _num(_get(f, "beam_diameter", path), f"{path}.beam_diameter", exclusive_min=0, max=0.1)
+    for key in ("NA", "waist", "angle_deg"):
+        out.pop(key, None)
+    return out
+
+
 def _focus(f: dict, path: str) -> dict:
     out = dict(f)
-    out["kind"] = _choice(_get(f, "kind", path, "lens"), f"{path}.kind", ("lens", "asphere"))
+    out["kind"] = _choice(_get(f, "kind", path, "lens"), f"{path}.kind", ("lens", "asphere", "parabolic_mirror"))
     if out["kind"] == "asphere":
         return _asphere(f, path)
+    if out["kind"] == "parabolic_mirror":
+        return _parabolic_mirror(f, path)
     given = [k for k in ("NA", "waist", "angle_deg") if f.get(k) is not None]
     if len(given) != 1:
         raise SetupError(path, "give exactly one of NA, waist or angle_deg")
@@ -314,7 +339,8 @@ _KNOWN = {
     "trap": {"fields"},
     "beam": {"kind", "id", "wavelength", "power", "focus", "mode", "polarisation", "direction",
              "position", "phase", "coherent_with"},
-    "focus": {"kind", "NA", "waist", "angle_deg", "lens", "beam_diameter", "tilt_deg", "decentre"},
+    "focus": {"kind", "NA", "waist", "angle_deg", "lens", "beam_diameter", "tilt_deg", "decentre",
+              "focal_length", "rim_radius", "hole_radius"},
     "mode": {"type", "indices"},
     "paul": {"kind", "id", "geometry", "rf_voltage", "rf_frequency", "dc_voltage", "endcap_voltage",
              "r0", "z0", "geometry_factors"},

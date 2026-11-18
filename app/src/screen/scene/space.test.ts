@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULT_SETUP } from "../../engine/setup.ts";
-import type { BeamField, PaulField, Setup } from "../../engine/types.ts";
+import type { BeamField, PaulField, Setup, Vec3 } from "../../engine/types.ts";
 import { newPaulTrap } from "../model.ts";
 import { PRESETS } from "../presets.ts";
 import { beamRadius, coneHalfAngle, dot, norm } from "./geometry.ts";
@@ -174,4 +174,16 @@ test("a real lens is placed as the engine traces it", async () => {
   const d = beamRotation([1, 2, 3]);
   const z = [d[0][2], d[1][2], d[2][2]];
   near(z[0] * Math.sqrt(14), 1, 1e-12);
+});
+
+test("a parabolic mirror stands about its focus, opening along the beam", async () => {
+  const { beamToLab } = await import("./space.ts");
+  const { mirrorSag } = await import("../../engine/mirrors.ts");
+  const m = { kind: "parabolic_mirror" as const, focal_length: 3e-3, rim_radius: 9e-3, beam_diameter: 1e-2 };
+  // a beam along +x focused at p: the vertex is f behind p along x, the rim's centre 3.75 mm ahead
+  const at = { direction: [1, 0, 0] as Vec3, position: [1e-6, 0, 0] as Vec3 };
+  const vertex = beamToLab([0, 0, mirrorSag(m, 0)], at);
+  assert.ok(Math.abs(vertex[0] - (1e-6 - 3e-3)) < 1e-15 && Math.abs(vertex[1]) < 1e-15 && Math.abs(vertex[2]) < 1e-15);
+  const rim = beamToLab([0, 9e-3, mirrorSag(m, 9e-3)], at);
+  assert.ok(Math.abs(rim[0] - (1e-6 + 3.75e-3)) < 1e-12 && Math.abs(rim[1] - 9e-3) < 1e-15);
 });

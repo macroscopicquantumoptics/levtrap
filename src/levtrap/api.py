@@ -530,6 +530,31 @@ def asphere_focus(b: dict) -> dict:
     return dict(beam=lr.beam * math.sqrt(lr.transmitted), offset=offset, info=info)
 
 
+_MIRROR_BEAMS: dict = {}
+
+
+def mirror_focus(b: dict) -> dict:
+    """A beam field focused by a parabolic mirror (``focus.kind =
+    "parabolic_mirror"``, :mod:`levtrap.mirror`): its beam about the focus,
+    for 1 W in the input beam (its power is the fraction reflected), and the
+    ``mirrors`` block of a Result for it."""
+    from .mirror import focused_beam
+    focus = b["focus"]
+    key = json.dumps(dict(focus=focus, wl=b["wavelength"], pol=b["polarisation"]), sort_keys=True)
+    hit = _MIRROR_BEAMS.get(key)
+    if hit is None:
+        if len(_MIRROR_BEAMS) > 16:
+            _MIRROR_BEAMS.clear()
+        r = focused_beam(float(focus["focal_length"]), float(focus["rim_radius"]), float(focus["beam_diameter"]) / 2,
+                         float(b["wavelength"]), hole_radius=float(focus["hole_radius"]),
+                         polarisation=_pol(b["polarisation"]))
+        info = dict(reflected=float(r.reflected), clipping_loss=float(1 - r.reflected),
+                    rim_angle_deg=math.degrees(r.alpha_rim), hole_angle_deg=math.degrees(r.alpha_hole),
+                    deep=bool(r.alpha_rim > math.pi / 2), Nmax=int(r.beam.Nmax))
+        hit = _MIRROR_BEAMS[key] = dict(beam=r.beam, info=info)
+    return hit
+
+
 def _lens_trap(req: dict, lens_req: dict, detail: bool, r_start=None):
     """Trap analysis for the beam behind the (tilted) lens.  Positions are
     relative to the best focus P* of that beam; the caller adds P*."""

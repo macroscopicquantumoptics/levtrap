@@ -1,0 +1,209 @@
+/* The drawer's tabs: a plot, or a sentence when there is nothing to draw. */
+.tab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  transition: opacity 150ms;
+}
+
+.tab[data-pending] {
+  opacity: 0.55;
+}
+
+.note {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  height: 100%;
+  max-width: 60ch;
+  padding: 0 8px;
+}
+
+.noteTitle {
+  margin: 0;
+  font-weight: 600;
+}
+
+.noteText {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.busy::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  border: 2px solid var(--border);
+  border-top-color: var(--focus-ring);
+  border-radius: 50%;
+  vertical-align: -1px;
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .busy::before {
+    animation: none;
+  }
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.error {
+  margin: 0 6px;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+/* ---- sweep ------------------------------------------------------------------------- */
+
+.sweep {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+}
+
+.sweepControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px 12px;
+  padding: 0 4px;
+}
+
+/* the fields of the inspector, made compact for one row */
+.sweepControls > * {
+  min-width: 0;
+}
+
+.sweepControls :global(label) {
+  font-size: 12px;
+}
+
+.primary {
+  background: var(--focus-ring);
+  border-color: var(--focus-ring);
+  color: #ffffff;
+}
+
+.progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress progress {
+  width: 90px;
+  height: 6px;
+  accent-color: var(--focus-ring);
+}
+
+/* ---- heating table ------------------------------------------------------------- */
+
+.heatingHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.heating {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+}
+
+.heatingTitle {
+  margin: 0;
+  padding: 4px 6px 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.tableWrap {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.table th,
+.table td {
+  padding: 6px 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.table thead th {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.table tbody th {
+  font-weight: 600;
+}
+
+.table th:first-child {
+  text-align: left;
+}
+
+.table td {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.table tbody tr + tr > * {
+  border-top: 1px solid var(--border);
+}
+
+.key {
+  display: inline-block;
+  width: 12px;
+  height: 2px;
+  margin-right: 4px;
+  border-radius: 1px;
+  vertical-align: middle;
+}
+
+.key[data-axis="x"] {
+  background: var(--axis-x);
+}
+
+.key[data-axis="y"] {
+  background: var(--axis-y);
+}
+
+.key[data-axis="z"] {
+  background: var(--axis-z);
+}
+

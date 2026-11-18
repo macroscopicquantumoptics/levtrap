@@ -35,7 +35,9 @@ import type { PartId } from "../model.ts";
 import { beamRadius } from "../scene/geometry.ts";
 import { lightColor } from "../scene/light.ts";
 import { sag, type LensData } from "../../engine/lenses.ts";
-import { beamProfile, type BeamGeometry, electrodes, type Electrode, lensToLab, type LensPlacement, toWorld, WORLD } from "../scene/space.ts";
+import { mirrorSag } from "../../engine/mirrors.ts";
+import type { MirrorFocus } from "../../engine/types.ts";
+import { beamProfile, beamToLab, type BeamGeometry, electrodes, type Electrode, lensToLab, type LensPlacement, toWorld, WORLD } from "../scene/space.ts";
 import type { Palette } from "./palette.ts";
 
 /** What a drawable needs to answer the pointer. */
@@ -275,6 +277,60 @@ export function AsphereLens({ id, data, placement, beam, palette, picking }: { i
         side={DoubleSide}
       />
     </mesh>
+  );
+}
+
+/**
+ * A parabolic mirror (focus.kind "parabolic_mirror"): the paraboloid between
+ * its hole and its rim, at its true size about the focus. Faint, so the trap
+ * inside a deep mirror stays in view.
+ */
+export function ParabolicMirror({ id, focus, beam, palette, picking }: { id: PartId; focus: MirrorFocus; beam: { direction: Vec3; position: Vec3 }; palette: Palette; picking: Picking }) {
+  const where = JSON.stringify([focus, beam]);
+  const { geometry, edges } = useMemo(() => {
+    const [m, at] = JSON.parse(where) as [MirrorFocus, { direction: Vec3; position: Vec3 }];
+    const inner = m.hole_radius ?? 0;
+    const toScene = (p: Vec3) => beamToLab(p, at).map((c) => c * WORLD) as Vec3;
+    const n = 48;
+    const points: Vector2[] = [];
+    for (let i = 0; i <= n; i += 1) {
+      const rho = inner + ((m.rim_radius - inner) * i) / n;
+      points.push(new Vector2(rho, mirrorSag(m, rho)));
+    }
+    const lathe = new LatheGeometry(points, 72);
+    // lathe (x, y, z), axis y -> the beam's own frame (axis z) -> the lab, in scene units
+    const pos = lathe.getAttribute("position");
+    for (let i = 0; i < pos.count; i += 1) {
+      const lab = toScene([pos.getX(i), pos.getZ(i), pos.getY(i)]);
+      pos.setXYZ(i, lab[0], lab[1], lab[2]);
+    }
+    lathe.computeVertexNormals();
+    // the rim and the hole's edge, as segments: they carry the outline and the selection
+    const segs: number[] = [];
+    for (const rho of inner > 0 ? [m.rim_radius, inner] : [m.rim_radius]) {
+      for (let i = 0; i < 96; i += 1) {
+        const [a, b] = [(2 * Math.PI * i) / 96, (2 * Math.PI * (i + 1)) / 96];
+        const z = mirrorSag(m, rho);
+        segs.push(...toScene([rho * Math.cos(a), rho * Math.sin(a), z]), ...toScene([rho * Math.cos(b), rho * Math.sin(b), z]));
+      }
+    }
+    const edges = new BufferGeometry();
+    edges.setAttribute("position", new Float32BufferAttribute(segs, 3));
+    return { geometry: lathe, edges };
+  }, [where]);
+  const state = picking.selected === id ? 1 : picking.hover === id ? 0.5 : 0;
+  const edge = useMemo(() => new LineSegments(edges, new LineBasicMaterial({ transparent: true })), [edges]);
+  const material = edge.material as LineBasicMaterial;
+  material.color = state ? palette.color("select") : palette.color("metal-edge");
+  material.opacity = 0.7 + 0.3 * state;
+  return (
+    <group>
+      {/* faint: a deep mirror stands all round the trap, which stays in view through it */}
+      <mesh geometry={geometry} renderOrder={3} {...handlers(id, 1, picking)} data-mirror="parabolic">
+        <meshStandardMaterial color={palette.color("metal")} transparent opacity={0.16 + 0.08 * state} roughness={0.3} metalness={0.5} depthWrite={false} side={DoubleSide} />
+      </mesh>
+      <primitive object={edge} />
+    </group>
   );
 }
 

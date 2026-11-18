@@ -54,8 +54,10 @@ export const drawnPart = (page: Page, id: string) => page.getByTestId("scene-anc
  */
 export async function selectPart(page: Page, id: string) {
   const label = page.getByTestId("scene").locator(`button[data-part="${id}"]`);
-  if (await label.count()) await label.click();
-  else await page.getByTestId("parts").locator(`button[data-part="${id}"]`).click();
+  const chip = page.getByTestId("parts").locator(`button[data-part="${id}"]`);
+  // the scene's labels come a moment after the scene is drawn: wait for either, not just a count
+  await expect(label.or(chip).first()).toBeVisible();
+  await (label.or(chip).first()).click();
   await expect(page.getByTestId("inspector")).toHaveAttribute("data-part", id);
 }
 

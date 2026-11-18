@@ -4,7 +4,7 @@
  * engine; nothing is made up for a setup it cannot compute.
  */
 import { EngineError } from "../engine/client.ts";
-import type { BeamField, Result, Setup, TrapMode } from "../engine/types.ts";
+import type { BeamField, Result, Setup, TrapMode, Want } from "../engine/types.ts";
 import { formatNumber, formatSI } from "../lib/format.ts";
 import { directionOf, partForPath, partsOf, positionOf, type PartId } from "./model.ts";
 import { presetForSetup } from "./presets.ts";
@@ -50,12 +50,19 @@ export function pending(setup: Setup, engineMessage?: string): Notice {
  * engine. `recorded: false` always asks the engine (the tests of the engine
  * path use it).
  */
-export function instantAnswer(setup: Setup, recorded = true): Answer | null {
+export function instantAnswer(setup: Setup, recorded = true, want: readonly Want[] = []): Answer | null {
   const preset = presetForSetup(setup);
   if (!preset) return null;
   if (preset.pending) return { result: null, origin: null, notice: pending(setup) };
   const result = recorded ? RECORDED[preset.id] : undefined;
-  return result ? { result, origin: "preset", notice: null } : null;
+  return result && hasBlocks(result, want) ? { result, origin: "preset", notice: null } : null;
+}
+
+/** Whether a result carries the blocks asked for (a recorded one has the curves, not the pattern). */
+export function hasBlocks(result: Result, want: readonly Want[]): boolean {
+  return want.every((w) =>
+    w === "curves" ? Boolean(result.curves) : w === "dipole" ? Boolean(result.curves && Object.values(result.curves).every((c) => c.dipole)) : Boolean(result.pattern),
+  );
 }
 
 /** The answer for a solve that was refused or failed. */

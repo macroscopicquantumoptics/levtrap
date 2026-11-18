@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "test": "node --test \"src/**/*.test.ts\" \"scripts/*.test.ts\"",
     "wheel": "node scripts/stage-wheel.mjs",
-    "record": "python3 scripts/record-materials.py && python3 scripts/record-asphere.py && node scripts/record-references.mjs && node scripts/record-presets.ts",
+    "record": "python3 scripts/record-materials.py && python3 scripts/record-asphere.py && python3 scripts/record-mirror.py && node scripts/record-references.mjs && node scripts/record-presets.ts",
     "test:e2e": "BASE_PATH=/levtrap/next next build && playwright test --trace off",
     "shots": "python3 scripts/review-shots.py"
   },

@@ -1,0 +1,106 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { gasDamping, gasHeating, KB, logSpace, meanFreePath } from "../../lib/gas.ts";
+import { PRESETS } from "../presets.ts";
+import { RECORDED } from "../recorded.ts";
+import { axisCuts, harmonic, heatingCurves, polarCut, potential } from "./data.ts";
+
+const near = (a: number, b: number, rel = 1e-6) => assert.ok(Math.abs(a - b) <= rel * Math.abs(b), `${a} != ${b}`);
+const tweezer = PRESETS.find((p) => p.id === "tweezer")!;
+const r = RECORDED.tweezer!;
+
+test("the cuts run along the eigen-axes, from the equilibrium", () => {
+  const cuts = axisCuts(r);
+  assert.deepEqual(
+    cuts.map((c) => c.name),
+    ["x", "y", "z"],
+  );
+  const z = cuts[2];
+  assert.deepEqual(z.axis, [0, 0, 1]);
+  // the middle sample is the equilibrium
+  near(Math.abs(z.s[30]) + 1, 1, 1e-9);
+  assert.equal(z.stiffness, r.modes[2].stiffness);
+});
+
+test("the potential integrates the force from the equilibrium, and is harmonic near it", () => {
+  for (const c of axisCuts(r)) {
+    const U = potential(c.s, c.force, 300);
+    const H = harmonic(c.s, c.stiffness!, 300);
+    const mid = c.s.findIndex((x) => Math.abs(x) < 1e-12);
+    assert.ok(Math.abs(U[mid]) < 1e-9, `${c.name}: zero at the equilibrium`);
+    // one sample out (50 nm), the trap is still harmonic to a few percent
+    for (const i of [mid - 1, mid + 1]) near(U[i], H[i], 0.05);
+    // the depth along the axis is the highest barrier on the lower side, as the engine reports it
+    const mode = r.modes.find((m) => m.name === c.name)!;
+    const barrier = Math.min(Math.max(...U.slice(0, mid + 1)), Math.max(...U.slice(mid)));
+    near(barrier, mode.depth! / (KB * 300), 1e-4);
+  }
+});
+
+test("a linear force gives a parabola exactly", () => {
+  const s = [-2, -1, 0, 1, 2];
+  const U = potential(
+    s,
+    s.map((x) => -3 * KB * x),
+    1,
+  );
+  [6, 1.5, 0, 1.5, 6].forEach((u, i) => assert.ok(Math.abs(U[i] - u) < 1e-12, `${U[i]} != ${u}`));
+});
+
+test("the gas damping port agrees with the engine", () => {
+  const g = r.rates!.gas;
+  const R = tweezer.setup.particle.radius;
+  near(meanFreePath(g.pressure, g.viscosity, g.molecular_mass, g.temperature), g.mean_free_path, 1e-5);
+  near(gasDamping(g.pressure, R, r.particle.mass, g.viscosity, g.molecular_mass, g.temperature), r.rates!.gas_damping, 1e-5);
+  // and the gas heating of each mode
+  for (const m of r.rates!.modes) {
+    const f = r.modes.find((x) => x.name === m.name)!.frequency!;
+    near(gasHeating(r.rates!.gas_damping, g.temperature, 2 * Math.PI * f), m.gas_heating!, 1e-5);
+  }
+});
+
+test("heating against pressure: gas grows with pressure, recoil does not, and they cross where the engine says", () => {
+  const h = heatingCurves(r, tweezer.setup)!;
+  assert.equal(h.pressure.length, 121);
+  near(h.pressure[0], 1e-7);
+  near(h.pressure[120], 1e5);
+  for (const m of h.modes) {
+    for (let i = 1; i < h.pressure.length; i += 1) assert.ok(m.gas[i] > m.gas[i - 1]);
+    // at the crossover pressure the gas heating equals the recoil heating
+    const p = m.crossover!;
+    const R = tweezer.setup.particle.radius;
+    const g = r.rates!.gas;
+    const f = r.modes.find((x) => x.name === m.name)!.frequency!;
+    const gas = gasHeating(gasDamping(p, R, r.particle.mass, g.viscosity, g.molecular_mass, g.temperature), g.temperature, 2 * Math.PI * f);
+    near(gas, m.recoil, 1e-3);
+  }
+  assert.equal(heatingCurves(RECORDED["paul-linear"]!, PRESETS.find((p) => p.id === "paul-linear")!.setup), null);
+});
+
+test("log spacing", () => {
+  assert.deepEqual(
+    logSpace(1, 1000, 4).map((x) => Math.round(x)),
+    [1, 10, 100, 1000],
+  );
+});
+
+test("a polar cut takes both halves of a plane through the axis", () => {
+  // a grid of 3 polar angles and 4 azimuths
+  const theta: number[] = [];
+  const phi: number[] = [];
+  const value: number[] = [];
+  for (const t of [0.5, 1.5, 2.5])
+    for (const p of [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2]) {
+      theta.push(t);
+      phi.push(p);
+      value.push(t * 10 + p);
+    }
+  const xz = polarCut(theta, phi, value, "xz");
+  assert.deepEqual(xz.angle, [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]);
+  assert.deepEqual(
+    xz.value,
+    [25 + Math.PI, 15 + Math.PI, 5 + Math.PI, 5, 15, 25],
+  );
+  const yz = polarCut(theta, phi, value, "yz");
+  assert.deepEqual(yz.value.slice(3), [5 + Math.PI / 2, 15 + Math.PI / 2, 25 + Math.PI / 2]);
+});
