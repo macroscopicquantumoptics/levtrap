@@ -158,6 +158,14 @@ and gas heat equally.
 
 ![Heating](screens/plot-heating-desktop-light.webp)
 
+The displacement spectrum (E4): a peak per mode, each marked with its
+effective temperature; and, with 10 Hz of feedback linewidth, each mode's
+occupation.
+
+![Spectrum](screens/plot-spectrum-desktop-light.webp)
+
+![Occupation with feedback](screens/spectrum-table-desktop-light.webp)
+
 Dark:
 
 ![Forces, dark](screens/plot-forces-desktop-dark.webp)
