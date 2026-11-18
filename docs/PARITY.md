@@ -13,10 +13,13 @@ row is one of:
 `web/` is deleted only after this list is approved (issue #24, acceptance).
 Until then the old site stays online at `/classic/`.
 
-Open pull requests this list counts on: D5, the plots drawer
+The pull requests this list counts on are merged: D5, the plots drawer
 ([#41](https://github.com/macroscopicquantumoptics/levtrap/pull/41)), and E1,
 the asphere ([#43](https://github.com/macroscopicquantumoptics/levtrap/pull/43)).
-This one should merge after both.
+Since then the app has also gained what the old site never had: the parabolic
+mirror (E3, [#45](https://github.com/macroscopicquantumoptics/levtrap/pull/45))
+and the displacement spectrum with feedback cooling (E4,
+[#46](https://github.com/macroscopicquantumoptics/levtrap/pull/46)).
 
 ## The trap simulator (`web/index.html`)
 
@@ -81,7 +84,7 @@ This one should merge after both.
 | Beam pointing, back focal distance, Strehl ratio | In the app, in part | Pointing is in the trap-axis explanation; the back focal length is in the Result; the Strehl estimate is not shown (drop: the wavefront error is the number). |
 | 3D view: tilted lens, traced rays, magnified focus | In the app, in part | The real lens at true size and distance, tilted, and the light to the traced focus (E1, #43). **To ticket**: the individual rays. |
 | Wavefront-error map across the lens | **To ticket** | The engine has it (`lens_trap` → `wavefront`); a plot in the drawer. |
-| Sweep of tilt, diameter, decentre, power, with continuation and "jump" flags | **To ticket** | The Sweep covers any input once E1 and D5 are both in, but it does not follow one equilibrium from value to value (continuation) or flag jumps. |
+| Sweep of tilt, diameter, decentre, power, with continuation and "jump" flags | **To ticket** | The Sweep covers the beam diameter, the tilts and the power of a real lens (E1 and D5, merged), but it does not follow one equilibrium from value to value (continuation) or flag jumps. |
 | "Model and limitations" text | In the app | The lens explanation names the model and source (E1); `src/levtrap/lens.py` documents the rest. |
 
 ## Outside `web/`
