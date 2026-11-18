@@ -219,8 +219,8 @@ The line at the right of the tabs says where the numbers came from:
 
 Opened on demand, one tab at a time. A tab asks the engine for its own data
 while it is open (the strip never waits for a plot): Forces and Potential for
-the force cuts, Radiation for the pattern. Heating draws from the result the
-strip already has, and Sweep runs one solve per value when asked.
+the force cuts, Radiation for the pattern. Heating and Spectrum draw from the
+result the strip already has, and Sweep runs one solve per value when asked.
 
 | Tab | What it draws |
 |---|---|
@@ -229,6 +229,7 @@ strip already has, and Sweep runs one solve per value when asked.
 | Sweep | Any input of the setup (power, wavelength, NA, radius, charge, RF voltage and frequency, pressure, temperature…) against a headline number (the frequencies, the depth, the position along the beam, the scattered power). One solve per value, with progress and Cancel; the values without a stable trap are shaded. |
 | Radiation | Where the scattered light goes, in two planes through the beam axis (polar); the fraction a lens of each NA collects, forward and backward; and the fraction of the position information a backward lens collects, per axis. The trapping lens's NA is marked. |
 | Heating | The reheating rate of each mode against pressure (10⁻⁹ to 10³ mbar), with photon recoil alone dashed, the setup's pressure marked, and a dot where recoil and gas heat equally. "At 1e-6 mbar" shows the rates as a table. |
+| Spectrum | The displacement spectrum each mode would show on an analyser (E4): a Lorentzian at its frequency, γ/2π wide, whose area is k_BT_eff/(mΩ²); T_eff balances the reheating against the damping, and is marked on each peak. "Feedback damping" adds linewidth to every mode (ideal cold damping: no added noise) and cools them. "Occupation" shows, per mode, the linewidth, phonon number, T_eff and rms displacement. Computed in the page from the result (`plots/spectrum.ts`, a copy of `levtrap.spectrum`); for traps with light, as the rates are. |
 
 Every plot is the same component (`src/screen/plots/Plot.tsx`, inline SVG
 in the theme's colours): SI-prefixed ticks, log axes where a quantity spans

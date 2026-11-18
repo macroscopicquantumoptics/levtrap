@@ -149,7 +149,7 @@ test.describe("at 375 px", () => {
   test("every tab fits without sideways scroll", async ({ page }) => {
     test.setTimeout(180_000);
     await open(page, "preset=tweezer", "phone");
-    for (const id of ["forces", "potential", "heating", "sweep", "radiation"]) {
+    for (const id of ["forces", "potential", "heating", "spectrum", "sweep", "radiation"]) {
       await tab(page, id);
       await expectNoSidewaysScroll(page);
     }

@@ -46,6 +46,7 @@ src/levtrap/setup.py     parse, validate, migrate a Setup
 src/levtrap/solve.py     Setup -> Result; picks models, runs them
 src/levtrap/fields/      one module per field kind (optical, paul, gravity)
 src/levtrap/rates.py     gas damping, recoil, heating
+src/levtrap/spectrum.py  displacement spectrum, occupation, effective temperature (E4)
 src/levtrap/pattern.py   scattered far field, collection efficiency
 src/levtrap/{bsc,tmatrix,force,translate,…}.py   the OTT port (unchanged)
 ```
@@ -168,7 +169,7 @@ One page, the Tabletop idea applied to a trap.
 │ ┌──────────────────────────────────────────────────────────┐ │
 │ │ fx 152 kHz   fy 171 kHz   fz 48 kHz   depth 72 kT  ● stable│
 │ └──────────────────────────────────────────────────────────┘ │
-│ [Forces] [Potential] [Sweep] [Radiation] [Heating]   drawer  │
+│ [Forces] [Potential] [Sweep] [Radiation] [Heating] [Spectrum]│
 └──────────────────────────────────────────────────────────────┘
 ```
 

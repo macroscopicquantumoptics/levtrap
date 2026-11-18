@@ -3,14 +3,14 @@
 /**
  * The drawer's tabs. Each asks the engine for what it draws, and only while
  * it is open: Forces and Potential the force cuts (and the dipole overlay on
- * request), Radiation the pattern. Heating draws from the result the strip
- * already has; Sweep runs one solve per value, on demand.
+ * request), Radiation the pattern. Heating and Spectrum draw from the result
+ * the strip already has; Sweep runs one solve per value, on demand.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Engine } from "../../engine/client.ts";
 import { isAbortError } from "../../engine/client.ts";
 import type { Result, Setup } from "../../engine/types.ts";
-import { formatNumber, formatSci } from "../../lib/format.ts";
+import { formatNumber, formatSci, formatSI } from "../../lib/format.ts";
 import { toFieldText } from "../../lib/units.ts";
 import { answerFromError } from "../answer.ts";
 import { useAnswer } from "../hooks.ts";
@@ -20,6 +20,7 @@ import ui from "../ui/ui.module.css";
 import { axisCuts, harmonic, heatingCurves, polarCut, potential } from "./data.ts";
 import { Plot, type PlotSeries, type Tone } from "./Plot.tsx";
 import { PolarPlot } from "./PolarPlot.tsx";
+import { spectrum } from "./spectrum.ts";
 import { defaultRange, OUTPUTS, sweepParams, sweepValues, unstableRuns } from "./sweep.ts";
 import styles from "./tabs.module.css";
 
@@ -205,6 +206,91 @@ function HeatingTable({ setup, result, toggle }: { setup: Setup; result: Result;
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// --- Spectrum --------------------------------------------------------------------------------
+
+export function SpectrumTab({ setup, result }: { setup: Setup; result: Result | null }) {
+  const [table, setTable] = useState(false);
+  // feedback damping, as the linewidth it adds, γ_fb / 2π [Hz]; the same on every mode
+  const [feedback, setFeedback] = useState(0);
+  if (!result) return <Note title="Spectrum">The spectrum appears here once the trap is computed.</Note>;
+  const s = spectrum(result, 2 * Math.PI * feedback);
+  if (!s) {
+    return <Note title="Spectrum">{result.rates ? "There is no stable trap: no mode to oscillate." : "The spectrum needs the heating rates, which are computed for traps with a beam. This trap has no light."}</Note>;
+  }
+  const env = environmentOf(setup);
+  const controls = (
+    <div className={styles.sweepControls} data-testid="spectrum-controls">
+      <NumberField
+        id="spectrum-feedback"
+        label="Feedback damping γ_fb/2π"
+        value={feedback}
+        quantity="frequency"
+        unit="Hz"
+        check={(v) => (v >= 0 ? null : "0 or more: feedback damps.")}
+        onCommit={setFeedback}
+      />
+      <button type="button" className={ui.button} aria-pressed={table} onClick={() => setTable((t) => !t)} data-testid="spectrum-table-toggle">
+        {table ? "Spectrum" : "Occupation"}
+      </button>
+    </div>
+  );
+  const cooled = feedback > 0 ? `, feedback adding ${toFieldText(feedback, "frequency", "Hz", 3)} Hz of linewidth` : "";
+  if (table) {
+    return (
+      <div className={styles.heating} data-testid="spectrum">
+        <div className={styles.heatingHead}>
+          <p className={styles.heatingTitle}>
+            Each mode in its steady state at {pressureText(env.pressure)} and {formatNumber(env.temperature, 3, true)} K{cooled}
+          </p>
+        </div>
+        {controls}
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th scope="col">Axis</th>
+                <th scope="col">Frequency</th>
+                <th scope="col">Linewidth γ/2π</th>
+                <th scope="col">Phonons</th>
+                <th scope="col">T_eff</th>
+                <th scope="col">rms displacement</th>
+              </tr>
+            </thead>
+            <tbody>
+              {s.modes.map((m) => (
+                <tr key={m.name} data-testid={`spectrum-row-${m.name}`}>
+                  <th scope="row">
+                    <span className={styles.key} data-axis={m.name} aria-hidden="true" /> {m.name}
+                  </th>
+                  <td>{formatSI(m.frequency, "Hz")}</td>
+                  <td>{formatSI(m.linewidth, "Hz")}</td>
+                  <td>{formatSci(m.occupation)}</td>
+                  <td>{formatSI(m.temperature, "K")}</td>
+                  <td>{formatSI(m.rms, "m")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+  const series: PlotSeries[] = s.modes.map((m) => ({ id: m.name, label: `along ${m.name}`, tone: tone(m.name), points: s.frequency.map((f, i) => [f, m.psd[i]] as [number, number]) }));
+  return (
+    <div className={styles.tab} data-testid="spectrum">
+      <Plot
+        id="spectrum"
+        title={`Displacement spectrum at ${pressureText(env.pressure)}${cooled}; each peak's area is k_BT_eff/(mΩ²)`}
+        x={{ label: "Frequency", unit: "Hz" }}
+        y={{ label: "Displacement PSD", unit: "m²/Hz", log: true, display: { unit: "m²/Hz", factor: 1 } }}
+        series={series}
+        markers={s.modes.map((m) => ({ x: m.frequency, label: `${m.name}: ${formatSI(m.frequency, "Hz", 3)}, T_eff ${formatSI(m.temperature, "K", 3)}` }))}
+        controls={controls}
+      />
     </div>
   );
 }
