@@ -7,17 +7,25 @@ Regenerate everything with
 
 ```bash
 pip install -e . matplotlib
-python examples/paper_2607_09896.py      # ~1.5 min, writes docs/paper/*.png + paper_figures.json
+python examples/paper_2607_09896.py      # ~6 min, writes docs/paper/*.png + paper_figures.json
 ```
 
-Every figure can also be explored interactively on the website: choose the
-**WS₂ bottle-beam** preset, then use the force map (Fig. 1a), the multipole
-toggles (Fig. S1b: MQ only), and parameter sweeps over radius
-(Figs. 2, 3, 4b) or wavelength (Fig. 1b).
+The script computes every trap with `levtrap.solve.solve` (equilibrium,
+frequencies, depths, scattered and absorbed power). The force map over the
+intensity (Fig. 1a/S1) and the scattered power per multipole (Figs. 1b, 2c)
+are not part of a Result; the script computes them from the same beam and
+T-matrix (`levtrap.api.build_beam`, `build_tmatrix`), and the MQ-only case
+with the engine's multipole mask, which the app does not offer. The power
+split that darkens the focus is computed in the script (`dark_split`); the
+app has no such helper.
+
+The trap itself can be built in the app (two coherent LG beams, circular
+polarisation, phase π); it is not a preset until a dark-trap reference is
+verified (#52).
 
 | Paper figure | levtrap output | In scope? |
 |---|---|---|
-| 1(a) intensity + force arrows | `fig1a_S1.png` (left), website force map | yes |
+| 1(a) intensity + force arrows | `fig1a_S1.png` (left); in the app later (#48) | yes |
 | 1(b) multipole amplitudes vs λ | `fig1b.png` (scattered **power** per multipole, not signed Im amplitudes) | yes |
 | 2(a–d) z_eq, Ω, Q_sca by multipole, depth vs radius | `fig2.png` | yes |
 | 3 Γ/Ω_z vs radius (WS₂) | `fig3.png` (WS₂ only) | partly — the SiO₂ bright-trap comparison needs its beam parameters; the electrostatic compensating force is out of scope |
@@ -41,7 +49,7 @@ numbers stated in the text.
 * **z_eq:** levtrap minimum ≈ 0.15 λ₀; paper ≈ 0.05 λ₀.
 * **Frequencies (0.8 W):** levtrap gives radial > axial (≈ 24–43 kHz radial,
   ≈ 13–28 kHz axial). The paper reports axial > radial (≈ 18 kHz axial).
-* **Depths:** levtrap radial ≈ 3000–6300 k_BT and axial up to ≈ 1300 k_BT;
+* **Depths:** levtrap radial ≈ 3800–7700 k_BT and axial up to ≈ 1370 k_BT;
   paper radial ≈ 6000–7000 k_BT and axial ≈ 1000 k_BT.
 * **Γ/Ω_z at R = 298 nm:** levtrap ≈ 0.24; paper 0.025.
 * **MQ-only map (S1b):** the paper finds a stable point with MQ alone. In

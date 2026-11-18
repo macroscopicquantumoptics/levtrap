@@ -37,8 +37,9 @@ through [Pyodide](https://pyodide.org) and locally for research scripts.
 > entry point is `levtrap.solve.solve(setup)` (architecture in
 > [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), work in
 > [issue #6](https://github.com/macroscopicquantumoptics/levtrap/issues/6)).
-> The old site (`web/`) is served at `/classic/` until it is retired; what
-> it did and where that went is in [`docs/PARITY.md`](docs/PARITY.md).
+> The old site (`web/`) is retired; what it did and where that went is in
+> [`docs/PARITY.md`](docs/PARITY.md). Its addresses (`/next/`, `/classic/`,
+> `lens.html`) lead to the app.
 
 ## Quick start — web
 
@@ -63,14 +64,11 @@ for that, build the wheel and stage it with `npm run wheel` first. Checks:
 `npm run typecheck`, `npm run lint`, `npm test` (unit tests; some call the
 Python engine) and `npm run test:e2e` (builds, then drives a browser).
 
-The old site still runs from `web/` the old way (`python -m http.server -d
-web 8000` after staging a wheel in `web/wheels/`) until it is retired.
-
 ## Quick start — Python
 
 ```bash
 pip install -e ".[test]"   # numpy + scipy only
-pytest -q                  # ~85 tests, ~30 s
+pytest -q                  # ~280 tests, ~2 min
 ```
 
 ```python
@@ -130,9 +128,7 @@ app/           the screen: Next static export, React, TypeScript, three.js.
                src/engine (typed engine client, Pyodide worker, setup
                validation), src/screen (the one screen), tests/e2e
                (Playwright), DESIGN.md
-web/           the old site, served at /classic/ until it is retired
-               (docs/PARITY.md)
-scripts/       devserver.py (native backend), pyodide_check.mjs, ui_check.js (CI)
+scripts/       devserver.py (the native engine for ?backend=local), pyodide_check.mjs (CI)
 ci/workflows/  test.yml, app.yml, pages.yml — a copy of .github/workflows/
 examples/      paper_2607_09896.py
 docs/paper/    reproduced figures and notes
@@ -151,9 +147,9 @@ cp ci/workflows/*.yml .github/workflows/
 In **Settings → Pages**, **Source** is **GitHub Actions**. `pages.yml` runs
 on every push to `main`: it runs the tests, builds the wheel, checks it in
 Pyodide (OTT benchmark), builds `app/` for the site's root with the
-redirects of the old addresses (`/next/`, `lens.html`;
+redirects of the old addresses (`/next/`, `/classic/`, `lens.html`;
 `app/scripts/redirects.ts`), checks it in a headless browser with the
-engine in Pyodide, and deploys it with the old site at `/classic/`.
+engine in Pyodide, and deploys it.
 `app.yml` checks `app/` on every push and pull request.
 
 ## Adding a feature

@@ -25,3 +25,9 @@ test("the preview address of levtrap 2 leads to the main one", async ({ page }) 
   await expect(page.getByTestId("screen")).toBeVisible();
   expect(new URL(page.url()).pathname.endsWith("/next/")).toBe(false);
 });
+
+test("the retired classic site's address leads to the app", async ({ page }) => {
+  await page.goto(`classic/${local}`);
+  await expect(page.getByTestId("screen")).toBeVisible();
+  expect(new URL(page.url()).pathname.endsWith("/classic/")).toBe(false);
+});

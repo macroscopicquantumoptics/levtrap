@@ -1,4 +1,6 @@
-"""JSON-in / JSON-out entry points for the web worker (and scripts).
+"""JSON-in / JSON-out entry points for the engine (the app's worker and
+local server, and scripts), and the beam and T-matrix builders ``solve``
+uses.
 
 All inputs and outputs are SI.  Internally the OTT conventions are used
 (see :mod:`levtrap.derived` for the conversions):
@@ -7,26 +9,14 @@ All inputs and outputs are SI.  Internally the OTT conventions are used
   for a beam whose coefficients are scaled so that ``beam.power`` equals
   the total power in watts (the beams of a superposition are scaled to
   their individual powers before the coherent sum).
-* k [N/m] = -dQ/dx n P / c,  Omega = sqrt(k/m).
-* U [J] = -integral F dx;  depth in k_B T at the given temperature.
 
-Request schema (``compute`` / ``sweep`` / ``field3d``)::
+Entry points (:func:`handle` dispatches them by name):
 
-    {
-      "setup": {...},                    # a version-1 setup file, see levtrap.setup
-      "options": {                       # how to compute and what to return
-        "dark_focus": false,             # 2 beams: re-split power to null the focal field
-        "multipoles": {"ED": true, "MD": true, "EQ": true, "MQ": true, "higher": true},
-        "dipole_overlay": false,
-        "scan": {"z_range": 3e-6, "z_points": 61, "x_range": 1.5e-6, "x_points": 41,
-                 "map_nx": 13, "map_nz": 17, "intensity_n": 60}
-      }
-    }
-
-The setup must be one this page computes (see :func:`levtrap.solve.check_simple`):
-one beam, or two coherent beams, along +z with the focus at the origin.  With
-two beams the sum of their ``power`` entries is the power of the coherent
-superposition; the entries set the ratio of the components.
+* ``solve``: :func:`levtrap.solve.solve_json`, the Setup -> Result contract;
+* ``field3d``: intensity volumes (and force arrows) for a request
+  ``{"setup": …, "options": {"scan": …, "multipoles": …}}``;
+* ``lens_trap`` / ``lens_sweep``: the ray-traced asphere (levtrap.lens);
+* ``materials``, ``benchmark``.
 
 Each response contains plain lists / floats only (``json.dumps``-able).
 """
@@ -36,29 +26,22 @@ from __future__ import annotations
 import json
 import math
 import time
-from typing import Any
 
 import numpy as np
 
-from . import __version__
 from .bsc import Bsc, BscPmGauss
-from .derived import (
-    C, KB, mie_efficiencies, power_balance, recoil_ratio, sphere_mass, trap_frequency,
-)
-from .dipole import dipole_force
+from .derived import C, KB, power_balance, recoil_ratio, sphere_mass
 from .force import forcetorque
 from .materials import MATERIALS, get_material
 from .special import paraxial_beam_waist
 from .tmatrix import TmatrixMie
-from .traps import NoStableTrap, axial_equilibrium, find_traps, trap_depth
+from .traps import axial_equilibrium, find_traps, trap_depth
 
-__all__ = ["compute", "sweep", "presets", "materials", "benchmark", "field3d", "handle"]
+__all__ = ["materials", "benchmark", "field3d", "lens_trap", "lens_sweep", "handle"]
 
-DEFAULT_SCAN = dict(z_range=3e-6, z_points=61, x_range=1.5e-6, x_points=41,
-                    map_nx=13, map_nz=17, intensity_n=60)
+DEFAULT_SCAN = dict(z_range=3e-6, x_range=1.5e-6)  # field3d's box [m], unless the request's options.scan says
 
 _BEAM_CACHE: dict = {}
-_INTENSITY_CACHE: dict = {}
 
 
 # ---------------------------------------------------------------------------
@@ -136,18 +119,12 @@ def build_beam(s: dict, options: dict | None = None) -> tuple[Bsc, float]:
     """Coherent superposition of the setup's beams, scaled to watts.
 
     Returns ``(beam, P_total)`` with ``beam.power == P_total`` [W].
+    ``options`` is accepted for the request shape and not used.
     """
-    options = options or {}
     nm = float(s["environment"]["medium_index"])
     specs = s["trap"]["fields"]
     powers = [max(float(b["power"]), 0.0) for b in specs]
     beams = [_single_beam(b, nm) for b in specs]
-    if options.get("dark_focus") and len(beams) == 2:
-        # choose the power split that nulls the field at the focus,
-        # keeping the total power: P1 |E1(0)|^2 = P2 |E2(0)|^2 (unit-power beams)
-        e = [float(np.sum(np.abs(b.em_field_xyz(np.zeros((1, 3)))) ** 2)) for b in beams]
-        ptot = sum(powers)
-        powers = [ptot * e[1] / (e[0] + e[1]), ptot * e[0] / (e[0] + e[1])]
     total = None
     for spec, b, p in zip(specs, beams, powers):
         b = b * (math.sqrt(p) * np.exp(1j * float(spec["phase"])))
@@ -200,170 +177,8 @@ def _finite(x):
     return x
 
 
-def _multipole_powers(sbeam: Bsc, pin: float) -> dict:
-    """Scattered power fraction per multipole: 4 sum_m |p_nm|^2 / P_inc."""
-    n, _ = sbeam.get_mode_indices()
-    pm = 4 * np.sum(np.abs(sbeam.a) ** 2, axis=1)  # M waves: magnetic
-    pe = 4 * np.sum(np.abs(sbeam.b) ** 2, axis=1)  # N waves: electric
-    out = {}
-    for order, (le, lm) in {1: ("ED", "MD"), 2: ("EQ", "MQ"), 3: ("EO", "MO")}.items():
-        out[le] = float(pe[n == order].sum() / pin)
-        out[lm] = float(pm[n == order].sum() / pin)
-    out["higher"] = float((pe[n > 3].sum() + pm[n > 3].sum()) / pin)
-    return out
-
-
 # ---------------------------------------------------------------------------
-# core analysis
-# ---------------------------------------------------------------------------
-
-
-def _axial_scan(beam: Bsc, T, zs: np.ndarray) -> np.ndarray:
-    """Q_z (and full Q) along the beam axis at positions zs [m]."""
-    f = forcetorque(beam, T, position=np.vstack([0 * zs, 0 * zs, zs]))[0]
-    return np.atleast_2d(f.T).T if f.ndim == 1 else f
-
-
-def analyse(s: dict, options: dict | None = None, detail: bool = True) -> dict:
-    """Full single-point analysis of a setup prepared by :func:`prepare`."""
-    t0 = time.perf_counter()
-    options = options or {}
-    scan = {**DEFAULT_SCAN, **options.get("scan", {})}
-    wl = wavelength_of(s)
-    nm = float(s["environment"]["medium_index"])
-    temp = float(s["environment"]["temperature"])
-    part = s["particle"]
-    radius = float(part["radius"])
-    density = float(part["density"])
-    mass = sphere_mass(radius, density)
-    beam, P = build_beam(s, options)
-    T, n_p = build_tmatrix(s, options)
-    unit = nm / C  # Q (with beam.power in W) -> N
-    t_beam = time.perf_counter()
-
-    # --- axial scan and equilibrium ------------------------------------
-    zs = np.linspace(-scan["z_range"], scan["z_range"], int(scan["z_points"]))
-    fz_line = _axial_scan(beam, T, zs)  # (3, N) in Q*W units
-    traps = find_traps(zs, fz_line[2])
-    stable = None
-    z_eq = kz = None
-    notes = []
-    if traps:
-        # prefer the trap with the deepest restoring force
-        stable = max(traps, key=lambda t: t["depth"])
-        try:
-            z_eq, kzq = axial_equilibrium(T, beam, stable["position"])
-            kz = -kzq * unit * P  # axial_equilibrium normalises to power 1
-            if not (zs[0] <= z_eq <= zs[-1]):
-                raise NoStableTrap
-        except (NoStableTrap, np.linalg.LinAlgError, ValueError):
-            z_eq = float(stable["position"])
-            kz = -float(stable["stiffness"]) * unit
-            notes.append("axial_equilibrium refinement failed; using scan estimate")
-    result: dict[str, Any] = dict(version=__version__, wavelength=wl, power=P, mass=mass,
-                                  beam_powers=beam.info.get("powers"))
-
-    eff = mie_efficiencies(radius, wl, n_p, nm)
-    result["mie"] = dict(Qext=eff["Qext"], Qsca=eff["Qsca"], Qabs=eff["Qabs"], x=eff["x"],
-                         multipoles=eff["Qsca_multipoles"])
-    result["Nmax"] = dict(beam=beam.Nmax, particle=T.Nmax[0])
-
-    z_ref = z_eq if z_eq is not None else 0.0
-    beam_ref = beam.translate_z(z_ref) if z_ref != 0 else beam
-    sbeam, _ = beam_ref.scatter(T)
-    pb = power_balance(beam_ref, sbeam)
-    if abs(pb["abs"]) < 1e-12:  # round-off for (nearly) lossless particles
-        pb["abs"] = max(pb["abs"], 0.0)
-    result["at"] = dict(z=z_ref, P_sca=pb["sca"] * P, P_abs=pb["abs"] * P,
-                        Qsca_beam=pb["sca"], Qabs_beam=pb["abs"],
-                        multipoles=_multipole_powers(sbeam, beam_ref.power))
-
-    # --- lateral stiffness at z_eq ----------------------------------------
-    stable_3d = False
-    kx = ky = None
-    if z_eq is not None:
-        dx = wl / nm / 200
-        pos = np.array([[-dx, 0, 0], [dx, 0, 0], [0, -dx, 0], [0, dx, 0]]).T
-        f = forcetorque(beam_ref, T, position=pos)[0]
-        kx = -(f[0, 1] - f[0, 0]) / (2 * dx) * unit
-        ky = -(f[1, 3] - f[1, 2]) / (2 * dx) * unit
-        stable_3d = bool(kz > 0 and kx > 0 and ky > 0)
-    result["stable"] = stable_3d
-    result["z_eq"] = z_eq
-    result["stiffness"] = dict(x=kx, y=ky, z=kz)
-    Om = {a: (trap_frequency(k, mass) if k is not None else None) for a, k in (("x", kx), ("y", ky), ("z", kz))}
-    result["Omega"] = Om
-    result["freq"] = {a: (o / 2 / math.pi if o is not None and np.isfinite(o) else None) for a, o in Om.items()}
-    result["recoil_ratio"] = {a: (recoil_ratio(result["at"]["P_sca"], wl, mass, o)
-                                  if o is not None and np.isfinite(o) and o > 0 else None)
-                              for a, o in Om.items()}
-
-    # --- line cuts through the trap ---------------------------------------
-    xs = np.linspace(-scan["x_range"], scan["x_range"], int(scan["x_points"]))
-    fx_line = forcetorque(beam_ref, T, position=np.vstack([xs, 0 * xs, 0 * xs]))[0]
-    fy_line = forcetorque(beam_ref, T, position=np.vstack([0 * xs, xs, 0 * xs]))[0]
-    lines = dict(z=zs, Fz=fz_line * unit, x=xs, Fx=fx_line * unit, y=xs, Fy=fy_line * unit,
-                 z_ref=z_ref)
-
-    # --- trap depth ----------------------------------------------------------
-    depth = {}
-    if z_eq is not None:
-        dz_, bz = trap_depth(zs, fz_line[2] * unit, z_eq)
-        dx_, bx = trap_depth(xs, fx_line[0] * unit, 0.0)
-        dy_, by = trap_depth(xs, fy_line[1] * unit, 0.0)
-        depth = dict(z=dz_, x=dx_, y=dy_, bounded=dict(z=bz, x=bx, y=by))
-        U = min(dz_, dx_, dy_) if stable_3d else 0.0
-        depth.update(U=U, kT=U / (KB * temp), K=U / KB, temperature=temp)
-    result["depth"] = depth
-
-    if detail:
-        t_lines = time.perf_counter()
-        # --- xz force map over intensity -----------------------------------
-        nx, nz = int(scan["map_nx"]), int(scan["map_nz"])
-        mx = np.linspace(-scan["x_range"], scan["x_range"], nx)
-        mz = np.linspace(-scan["z_range"], scan["z_range"], nz)
-        FX = np.zeros((nz, nx))
-        FZ = np.zeros((nz, nx))
-        for i, zz in enumerate(mz):
-            bz_ = beam.translate_z(zz) if zz != 0 else beam
-            f = forcetorque(bz_, T, position=np.vstack([mx, 0 * mx, 0 * mx]))[0]
-            FX[i] = f[0] * unit
-            FZ[i] = f[2] * unit
-        ni = int(scan["intensity_n"])
-        ix = np.linspace(-scan["x_range"], scan["x_range"], ni)
-        iz = np.linspace(-scan["z_range"], scan["z_range"], int(ni * 1.4))
-        ikey = (json.dumps(s["trap"]["fields"], sort_keys=True), bool(options.get("dark_focus")), wl, nm,
-                float(scan["x_range"]), float(scan["z_range"]), ni)
-        I = _INTENSITY_CACHE.get(ikey)
-        if I is None:
-            XX, ZZ = np.meshgrid(ix, iz)
-            pts = np.stack([XX.ravel(), 0 * XX.ravel(), ZZ.ravel()], axis=1)
-            E = beam.em_field_xyz(pts)
-            # W/m^2, since beam.power = P [W] (see levtrap.derived)
-            I = 4 * beam.k_medium**2 * np.sum(np.abs(E) ** 2, axis=1).reshape(XX.shape)
-            if len(_INTENSITY_CACHE) > 8:
-                _INTENSITY_CACHE.clear()
-            _INTENSITY_CACHE[ikey] = I
-        result["map"] = dict(x=mx, z=mz, Fx=FX, Fz=FZ, Ix=ix, Iz=iz, I=I)
-        if options.get("dipole_overlay"):
-            m_rel = n_p / nm
-            zpts = np.stack([0 * zs, 0 * zs, zs], 1)
-            xpts = np.stack([xs, 0 * xs, z_ref + 0 * xs], 1)
-            ypts = np.stack([0 * xs, xs, z_ref + 0 * xs], 1)
-            lines["dipole"] = dict(
-                Fz=dipole_force(beam, radius, m_rel, zpts)[2] * unit * P,
-                Fx=dipole_force(beam, radius, m_rel, xpts)[0] * unit * P,
-                Fy=dipole_force(beam, radius, m_rel, ypts)[1] * unit * P)
-        result["timing"] = dict(beam=t_beam - t0, lines=t_lines - t_beam,
-                                map=time.perf_counter() - t_lines)
-    result["lines"] = lines
-    result["notes"] = notes
-    result["time"] = time.perf_counter() - t0
-    return _finite(result)
-
-
-# ---------------------------------------------------------------------------
-# 3D view (visual aid)
+# 3D view (the field map)
 # ---------------------------------------------------------------------------
 
 
@@ -729,112 +544,9 @@ def lens_sweep(req_json: str, variable: str, values_json: str, start_json: str =
     return json.dumps(_finite(dict(ok=True, variable=variable, points=pts)))
 
 
-def compute(req_json: str) -> str:
-    """JSON wrapper around :func:`analyse`: ``{"ok": true, "result": …}`` or
-    ``{"ok": false, "error": …}`` (with ``"path"`` for an invalid setup)."""
-    from .setup import SetupError
-    try:
-        s, options = prepare(req_json)
-        return json.dumps(dict(ok=True, result=analyse(s, options)))
-    except SetupError as exc:
-        return json.dumps(dict(ok=False, path=exc.path, error=exc.message))
-    except Exception as exc:  # report to the UI rather than crash the worker
-        return json.dumps(dict(ok=False, error=f"{type(exc).__name__}: {exc}"))
-
-
-def sweep_point(s: dict, options: dict | None = None) -> dict:
-    """Reduced analysis for one sweep point (no maps)."""
-    r = analyse(s, options, detail=False)
-    return dict(stable=r["stable"], z_eq=r["z_eq"], freq=r["freq"], depth_kT=r["depth"].get("kT"),
-                recoil_ratio=r["recoil_ratio"], P_sca=r["at"]["P_sca"], P_abs=r["at"]["P_abs"],
-                multipoles=r["at"]["multipoles"], Qsca=r["mie"]["Qsca"], Qabs=r["mie"]["Qabs"])
-
-
-def _set_param(s: dict, variable: str, value: float) -> dict:
-    """Copy of a prepared setup with one quantity changed."""
-    s = json.loads(json.dumps(s))
-    beams = s["trap"]["fields"]
-    if variable == "radius":
-        s["particle"]["radius"] = value
-    elif variable == "wavelength":
-        for b in beams:
-            b["wavelength"] = value
-        mat = s["particle"].get("material")
-        if mat and mat in MATERIALS:
-            m = get_material(mat, value)
-            if m["valid"]:
-                s["particle"].update(n=m["n"], k=m["k"])
-    elif variable == "power":
-        tot = sum(float(b["power"]) for b in beams)
-        for b in beams:
-            b["power"] = float(b["power"]) * value / tot
-    else:
-        raise ValueError(f"Unknown sweep variable {variable}")
-    return s
-
-
-def sweep(req_json: str, variable: str, values_json: str) -> str:
-    """Sweep ``variable`` in {'radius', 'wavelength', 'power'} over values."""
-    s, options = prepare(req_json)
-    values = json.loads(values_json)
-    pts = []
-    for v in values:
-        try:
-            pts.append(dict(value=v, **sweep_point(_set_param(s, variable, float(v)), options)))
-        except Exception as exc:
-            pts.append(dict(value=v, stable=False, error=str(exc)))
-    return json.dumps(_finite(dict(ok=True, variable=variable, points=pts)))
-
-
 # ---------------------------------------------------------------------------
-# presets / materials / benchmark
+# materials / benchmark
 # ---------------------------------------------------------------------------
-
-
-def _silica(wl: float, radius: float) -> dict:
-    m = get_material("SiO2", wl)
-    return dict(material="SiO2", radius=radius, n=m["n"], k=m["k"], density=m["density"])
-
-
-def _beam(wavelength: float, power: float, *, focus: dict, mode=(0, 0), polarisation="x",
-          phase: float = 0.0, **extra) -> dict:
-    return dict(kind="beam", wavelength=wavelength, power=power, focus=dict(kind="lens", **focus),
-                mode=dict(type="lg", indices=list(mode)), polarisation=polarisation,
-                direction=[0, 0, 1], position=[0, 0, 0], phase=phase, **extra)
-
-
-def _setup(particle: dict, *beams: dict) -> dict:
-    return dict(version=1, particle=particle, environment=dict(medium_index=1.0, temperature=300.0),
-                trap=dict(fields=list(beams)))
-
-
-PRESETS = {
-    "silica_1064": dict(
-        label="Silica bright tweezer @ 1064 nm", validated=True,
-        setup=_setup(_silica(1064e-9, 100e-9),
-                     _beam(1064e-9, 0.2, focus=dict(NA=0.9))),
-        options=dict(scan=dict(z_range=2.5e-6, x_range=1.2e-6))),
-    "silica_1550": dict(
-        label="Silica bright tweezer @ 1550 nm", validated=True,
-        setup=_setup(_silica(1550e-9, 100e-9),
-                     _beam(1550e-9, 0.2, focus=dict(NA=0.9))),
-        options=dict(scan=dict(z_range=3e-6, x_range=1.6e-6))),
-    "ws2_bottle_1550": dict(
-        label="WS₂ bottle-beam dark trap @ 1550 nm (illustrative, not validated)", validated=False,
-        note=("Two coherent circularly polarised LG beams (p=0, w=1.59 um) and (p=1, w=0.866 um) "
-              "with relative phase pi and 0.8 W total, after arXiv:2607.09896. The power split is "
-              "not given in the paper; it is chosen so the field vanishes at the focus. "
-              "No OTT reference covers this case."),
-        setup=_setup(dict(material="WS2", radius=300e-9, n=3.79, k=2.83e-10, density=7500.0),
-                     _beam(1550e-9, 0.4, focus=dict(waist=1.59e-6), polarisation="circular+", id="b1"),
-                     _beam(1550e-9, 0.4, focus=dict(waist=0.866e-6), mode=(1, 0), polarisation="circular+",
-                           phase=math.pi, id="b2", coherent_with="b1")),
-        options=dict(dark_focus=True, scan=dict(z_range=3.1e-6, x_range=2.0e-6))),
-}
-
-
-def presets() -> str:
-    return json.dumps(PRESETS)
 
 
 def materials(wavelength) -> str:
@@ -858,10 +570,9 @@ def benchmark() -> str:
 
 
 def handle(method: str, *args) -> str:
-    """Dispatch used by the web worker."""
+    """Dispatch by name, for the app's worker and local server."""
     from .solve import solve_json
-    return {"solve": solve_json, "compute": compute, "sweep": sweep, "presets": presets, "field3d": field3d,
-            "lens_trap": lens_trap, "lens_sweep": lens_sweep,
+    return {"solve": solve_json, "field3d": field3d, "lens_trap": lens_trap, "lens_sweep": lens_sweep,
             "materials": materials, "benchmark": benchmark}[method](*args)
 
 

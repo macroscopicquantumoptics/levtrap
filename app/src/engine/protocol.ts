@@ -1,6 +1,6 @@
 /** Messages between the engine client and the Pyodide worker. */
 
-/** Must match web/worker.js (a unit test checks). */
+/** Must match the pyodide CI checks the wheel with (contract.test.ts checks). */
 export const PYODIDE_VERSION = "0.29.5";
 export const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
 

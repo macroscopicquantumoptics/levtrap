@@ -1,108 +1,19 @@
-"""M5: api.py JSON round trips and consistency with the low-level port."""
+"""api.py: the JSON entry points that remain after E2 (the old site's
+``compute`` / ``sweep`` / ``presets`` went with web/), and the builders
+``solve`` uses."""
 
+import base64
 import json
-import math
 
 import numpy as np
 import pytest
 
 from levtrap import api
-from levtrap.derived import C, recoil_ratio
 from levtrap.materials import get_material
 
-
-@pytest.fixture(scope="module")
-def presets():
-    return json.loads(api.presets())
-
-
-def request(preset: dict) -> dict:
-    """The compute request of a preset (a fresh copy)."""
-    return json.loads(json.dumps(dict(setup=preset["setup"], options=preset["options"])))
-
-
-def test_presets_round_trip(presets):
-    assert set(presets) == {"silica_1064", "silica_1550", "ws2_bottle_1550"}
-    assert presets["ws2_bottle_1550"]["validated"] is False
-    out = json.loads(api.compute(json.dumps(request(presets["silica_1064"]))))
-    assert out["ok"], out
-    r = out["result"]
-    json.dumps(r)  # serialisable
-    assert r["stable"]
-    for key in ("z_eq", "stiffness", "freq", "depth", "mie", "at", "lines", "map", "Nmax"):
-        assert key in r
-    assert r["depth"]["kT"] > 1
-    assert len(r["lines"]["Fz"][2]) == len(r["lines"]["z"])
-
-
-def test_units_match_low_level(presets):
-    """z_eq/kz from the API equal axial_equilibrium on the same beam (SI)."""
-    from levtrap.traps import axial_equilibrium
-    req = request(presets["silica_1064"])
-    r = json.loads(api.compute(json.dumps(req)))["result"]
-    s, options = api.prepare(req)
-    beam, P = api.build_beam(s, options)
-    T, _ = api.build_tmatrix(s, options)
-    z, kzq = axial_equilibrium(T, beam, r["z_eq"])
-    assert r["z_eq"] == pytest.approx(z, abs=1e-12)
-    assert r["stiffness"]["z"] == pytest.approx(-kzq * P / C, rel=1e-9)  # n_medium = 1
-    m = r["mass"]
-    assert r["freq"]["z"] == pytest.approx(math.sqrt(r["stiffness"]["z"] / m) / 2 / math.pi, rel=1e-12)
-    assert r["recoil_ratio"]["z"] == pytest.approx(
-        recoil_ratio(r["at"]["P_sca"], api.wavelength_of(s), m, 2 * math.pi * r["freq"]["z"]), rel=1e-12)
-
-
-def test_force_scales_with_power(presets):
-    req = request(presets["silica_1550"])
-    r1 = json.loads(api.compute(json.dumps(req)))["result"]
-    req["setup"]["trap"]["fields"][0]["power"] *= 2
-    r2 = json.loads(api.compute(json.dumps(req)))["result"]
-    F1 = np.array(r1["lines"]["Fz"])
-    np.testing.assert_allclose(np.array(r2["lines"]["Fz"]), 2 * F1, rtol=1e-8, atol=1e-10 * np.abs(F1).max())
-    assert r2["z_eq"] == pytest.approx(r1["z_eq"], abs=1e-12)
-
-
-def test_dark_focus_preset(presets):
-    beam, P = api.build_beam(*api.prepare(request(presets["ws2_bottle_1550"])))
-    assert P == pytest.approx(0.8, rel=1e-9) or P > 0  # coherent sum: interference changes total
-    E0 = np.sum(np.abs(beam.em_field_xyz(np.zeros((1, 3)))) ** 2)
-    E_ring = np.max(np.sum(np.abs(beam.em_field_xyz(np.array([[x, 0, 0] for x in np.linspace(0.2e-6, 1.5e-6, 8)]))) ** 2, 1))
-    assert E0 < 1e-20 * E_ring
-
-
-def test_no_trap_reported():
-    # a strongly scattering high-index sphere in a weak focus: no 3D trap
-    req = dict(
-        setup=dict(version=1, particle=dict(radius=400e-9, n=3.5, k=0.0, density=2330),
-                   trap=dict(fields=[dict(kind="beam", wavelength=1064e-9, power=0.1,
-                                          focus=dict(NA=0.3), polarisation="x")])),
-        options=dict(scan=dict(z_range=2e-6, z_points=21, x_points=11, map_nx=3, map_nz=3, intensity_n=5)))
-    r = json.loads(api.compute(json.dumps(req)))
-    assert r["ok"]
-    assert r["result"]["stable"] is False
-
-
-def test_sweep_round_trip(presets):
-    req = request(presets["silica_1064"])
-    req["options"]["scan"].update(z_points=31, x_points=11)
-    out = json.loads(api.sweep(json.dumps(req), "power", json.dumps([0.1, 0.2])))
-    pts = out["points"]
-    assert len(pts) == 2 and all(p["stable"] for p in pts)
-    assert pts[1]["freq"]["z"] == pytest.approx(math.sqrt(2) * pts[0]["freq"]["z"], rel=1e-6)
-
-
-def test_invalid_setup_names_the_key(presets):
-    req = request(presets["silica_1064"])
-    req["setup"]["trap"]["fields"][0]["power"] = -1
-    out = json.loads(api.compute(json.dumps(req)))
-    assert not out["ok"] and out["path"] == "trap.fields[0].power"
-
-
-def test_unsupported_setup_is_reported(presets):
-    req = request(presets["silica_1064"])
-    req["setup"]["trap"]["fields"][0]["direction"] = [1, 0, 0]
-    out = json.loads(api.compute(json.dumps(req)))
-    assert not out["ok"] and "direction" in out["error"]
+SILICA = dict(setup=dict(version=1, particle=dict(material="SiO2", radius=100e-9),
+                         trap=dict(fields=[dict(kind="beam", wavelength=1064e-9, power=0.2, focus=dict(NA=0.9))])),
+              options=dict(scan=dict(z_range=2.5e-6, x_range=1.2e-6)))
 
 
 def test_material_fills_n_and_k():
@@ -128,15 +39,12 @@ def test_benchmark_endpoint():
     assert abs(b["z"] - b["expected"]["z"]) < 1e-9
 
 
-def test_field3d_volume(presets):
-    """3D view data: decodes to the right size and matches direct field evaluation."""
-    import base64
-    req = request(presets["ws2_bottle_1550"])
-    out = json.loads(api.field3d(json.dumps(req), json.dumps({"nxy": 24, "nz": 32, "forces": True,
-                                                              "force_n": [3, 3]})))
+def test_field3d_volume():
+    """The field map's data: decodes to the right size and matches direct field evaluation."""
+    out = json.loads(api.field3d(json.dumps(SILICA), json.dumps({"nxy": 24, "nz": 32, "forces": True, "force_n": [3, 3]})))
     assert len(base64.b64decode(out["I"])) == 24 * 24 * 32
     assert len(out["forces"]["pos"]) == 27
-    beam, _ = api.build_beam(*api.prepare(req))
+    beam, _ = api.build_beam(*api.prepare(SILICA))
     I, x, y, z = api.intensity_volume(beam, 1e-6, 2e-6, 48, 64)
     rng = np.random.default_rng(1)
     ijk = [tuple(int(rng.integers(0, s)) for s in I.shape) for _ in range(40)]
@@ -144,3 +52,25 @@ def test_field3d_volume(presets):
     direct = 4 * beam.k_medium**2 * np.sum(np.abs(beam.em_field_xyz(pts)) ** 2, 1)
     vol = np.array([I[t] for t in ijk])
     assert np.max(np.abs(vol - direct)) < 0.02 * I.max()  # interpolated: visual accuracy
+
+
+def test_two_coherent_beams_carry_the_total_power():
+    """build_beam: the sum of the power entries is the power of the coherent
+    superposition (the beams are not orthogonal), split as the entries say."""
+    beams = [dict(kind="beam", id="a", wavelength=1550e-9, power=0.3, focus=dict(waist=1.59e-6)),
+             dict(kind="beam", id="b", coherent_with="a", wavelength=1550e-9, power=0.5, focus=dict(waist=0.866e-6),
+                  mode=dict(type="lg", indices=[1, 0]), phase=np.pi)]
+    req = dict(setup=dict(version=1, particle=dict(radius=300e-9, n=3.79, density=7500), trap=dict(fields=beams)))
+    beam, P = api.build_beam(*api.prepare(req))
+    assert P == pytest.approx(0.8, rel=1e-9)
+    p = beam.info["powers"]
+    assert p[0] / p[1] == pytest.approx(0.3 / 0.5)
+
+
+def test_dispatch():
+    out = json.loads(api.handle("materials", 1550e-9))
+    assert out["SiO2"]["valid"]
+    # the old site's entry points are gone
+    for gone in ("compute", "sweep", "presets"):
+        with pytest.raises(KeyError):
+            api.handle(gone)

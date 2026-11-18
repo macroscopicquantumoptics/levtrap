@@ -2,8 +2,9 @@
  * Redirect pages for the old site's URLs, written into the app's static
  * export (E2, issue #24). The app is served at the site's root:
  *
- *   next/index.html  -> the app      (the preview address of levtrap 2)
- *   lens.html        -> the app, opened on the tilted asphere (E1)
+ *   next/index.html     -> the app   (the preview address of levtrap 2)
+ *   classic/index.html  -> the app   (where the old site stayed until it was retired)
+ *   lens.html           -> the app, opened on the tilted asphere (E1)
  *
  * The query and fragment are kept, so a link with ?backend=local still works.
  *   node scripts/redirects.ts out /levtrap
@@ -52,6 +53,7 @@ export function writeRedirects(outDir: string, basePath: string): string[] {
   const root = `${basePath.replace(/\/+$/, "")}/`;
   const pages: [string, string | null, string][] = [
     ["next/index.html", null, "levtrap 2 has moved to the site's main address."],
+    ["classic/index.html", null, "The classic site has been retired; everything it did is in levtrap now (docs/PARITY.md in the repository)."],
     ["lens.html", linkFragment(LENS_SETUP), "The lens-tilt page is now a lens of the main screen: Lens → Asphere 354330-C."],
   ];
   for (const [path, fragment, what] of pages) {

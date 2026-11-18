@@ -8,7 +8,7 @@ import { LENS_SETUP, writeRedirects } from "./redirects.ts";
 
 test("the old site's addresses lead to the app", () => {
   const out = mkdtempSync(join(tmpdir(), "levtrap-redirects-"));
-  assert.deepEqual(writeRedirects(out, "/levtrap"), ["next/index.html", "lens.html"]);
+  assert.deepEqual(writeRedirects(out, "/levtrap"), ["next/index.html", "classic/index.html", "lens.html"]);
   const next = readFileSync(join(out, "next/index.html"), "utf8");
   assert.match(next, /location\.replace\("\/levtrap\/" \+ location\.search \+ location\.hash\)/);
   assert.match(next, /<meta http-equiv="refresh" content="0; url=\/levtrap\/">/);

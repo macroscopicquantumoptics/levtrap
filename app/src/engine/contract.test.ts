@@ -1,6 +1,7 @@
 /**
- * The app and the Python engine must agree: same default setup, same
- * Pyodide as web/worker.js. Needs `python3` with numpy importable (as in CI).
+ * The app and the Python engine must agree: same default setup, and the
+ * same Pyodide as CI's wheel check (scripts/pyodide_check.mjs under the
+ * workflows' pinned pyodide). Needs `python3` with numpy importable (as in CI).
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -12,11 +13,13 @@ import { DEFAULT_SETUP } from "./setup.ts";
 
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
 
-test("Pyodide is pinned to the version web/worker.js uses", () => {
-  const worker = readFileSync(`${repo}web/worker.js`, "utf8");
-  const m = worker.match(/PYODIDE_VERSION\s*=\s*"([^"]+)"/);
-  assert.ok(m, "PYODIDE_VERSION not found in web/worker.js");
-  assert.equal(PYODIDE_VERSION, m[1]);
+test("Pyodide is pinned to the version CI checks the wheel with", () => {
+  for (const workflow of ["test.yml", "pages.yml"]) {
+    const text = readFileSync(`${repo}.github/workflows/${workflow}`, "utf8");
+    const pins = [...text.matchAll(/pyodide@([\d.]+)/g)].map((m) => m[1]);
+    assert.ok(pins.length, `no pyodide@ pin in ${workflow}`);
+    for (const v of pins) assert.equal(v, PYODIDE_VERSION, workflow);
+  }
 });
 
 test("DEFAULT_SETUP matches levtrap.setup.DEFAULT_SETUP", () => {
