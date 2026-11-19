@@ -226,6 +226,14 @@ afresh, and a line marks the jump.
 
 ![Sweep, following one trap](screens/plot-sweep-follow-desktop-light.webp)
 
+## 10. Compare with the aligned lens (#51)
+
+The 354330-C tilted 0.3°: the particle moved 1.5 µm (mostly along the axis)
+from where the aligned lens holds it, and each frequency against the aligned
+lens's.
+
+![Compare with the aligned lens](screens/aligned-compare-desktop-light.webp)
+
 ## Other states
 
 A number explaining itself: the formula, the values that went in, the model

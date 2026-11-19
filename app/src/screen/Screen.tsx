@@ -202,7 +202,17 @@ function ScreenBody({ engine }: ScreenProps) {
 
       {part && (
         <div className={styles.inspector}>
-          <Inspector key={part.id} setup={setup} part={part} result={answer.result} notice={answer.notice} onEdit={edit} onClose={() => select(null)} />
+          <Inspector
+            key={part.id}
+            setup={setup}
+            part={part}
+            result={answer.result}
+            notice={answer.notice}
+            onEdit={edit}
+            onClose={() => select(null)}
+            engine={engine}
+            recorded={params.recorded}
+          />
         </div>
       )}
 

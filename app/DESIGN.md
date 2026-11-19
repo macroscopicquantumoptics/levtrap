@@ -111,6 +111,12 @@ for it).
   aligned focus), tilted and decentred as set, and the light converges to
   where the ray trace puts the focus. Zoomed in on the focus it is out of
   view; its label then waits at the edge of the view, towards it.
+* **Compare with the aligned lens** (lens inspector, #51): for a tilted or
+  decentred asphere, a button solves the same setup with the lens aligned,
+  starting from the particle's equilibrium so both describe the same trap
+  (continuation, #50), and shows how far the particle moved (and along
+  x, y, z) and each trap frequency against the aligned lens's. It updates
+  with each edit while open; for an aligned lens the button is disabled.
 * **A parabolic mirror** (E3) is drawn at its true size about the focus:
   the paraboloid between its hole and its rim, faint (a deep mirror stands
   all round the trap, which must stay in view through it), its rim and hole
