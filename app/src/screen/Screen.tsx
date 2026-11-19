@@ -94,7 +94,9 @@ function ScreenBody({ engine }: ScreenProps) {
   const { setup, selected } = state;
   const { answer, pending, status } = useAnswer(setup, engine, params.recorded);
   const narrow = useMedia(NARROW);
-  const [show, setShow] = useState<ShowOptions>({ labels: true, grid: true, axes: false, forces: false, trueSize: false });
+  const [show, setShow] = useState<ShowOptions>({ labels: true, grid: true, axes: false, forces: false, trueSize: false, slice: false });
+  // the intensity slice asks the engine for the field, only while it is shown
+  const sliced = useAnswer(setup, engine, params.recorded, ["field"], show.slice);
   const [tab, setTab] = useState<TabId | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [picker, setPicker] = useState(params.firstVisit);
@@ -168,7 +170,17 @@ function ScreenBody({ engine }: ScreenProps) {
   return (
     <div className={styles.screen} data-selected={inspectorOpen || undefined} data-testid="screen">
       <div className={styles.stage}>
-        <Scene setup={setup} result={answer.result} selected={selected} onSelect={select} inset={inset} labels={show.labels && !narrow} grid={show.grid} overlays={show} />
+        <Scene
+          setup={setup}
+          result={answer.result}
+          selected={selected}
+          onSelect={select}
+          inset={inset}
+          labels={show.labels && !narrow}
+          grid={show.grid}
+          overlays={show}
+          field={show.slice ? { block: sliced.answer.result?.field ?? null, pending: sliced.pending, notice: sliced.answer.notice?.text ?? null } : null}
+        />
         <TopBar
           name={name}
           canUndo={state.past.length > 0}
