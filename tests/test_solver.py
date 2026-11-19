@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from levtrap.fields import GravityField, ModelInfo, total_force
-from levtrap.solver import find_trap
+from levtrap.solver import _lab_aligned, find_trap
 from levtrap.special import rotation_matrix
 
 MASS = 1e-17  # kg
@@ -108,3 +108,27 @@ def test_nonconservative_force_is_flagged():
     K[0, 1], K[1, 0] = 0.2e-6, -0.2e-6  # curl: a rotational force
     t = find_trap([Harmonic(K)], MASS)
     assert any("not conservative" in w for w in t.warnings)
+
+
+@pytest.mark.parametrize("angle", [0.0, 0.3, 0.7854, 1.2, 2.9])
+def test_degenerate_axes_do_not_depend_on_round_off(angle):
+    """A trap symmetric about z has equal x and y stiffness, so any basis of
+    that plane diagonalises it, and eigh's choice follows round-off (it
+    differed between machines for the WS2 preset, #57). The basis returned
+    is the one along the lab axes, whichever basis came in."""
+    c, s = math.cos(angle), math.sin(angle)
+    evec = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+    ev = np.array([3.0e-5, 3.0e-5 * (1 + 1e-12), 4.0e-5])
+    out = _lab_aligned(ev, evec)
+    assert np.allclose(np.abs(out), np.eye(3), atol=1e-12)
+    # a basis of the same plane, so still eigenvectors
+    K = evec @ np.diag(ev) @ evec.T
+    assert np.allclose(K @ out, out * ev, rtol=1e-9, atol=1e-14)
+
+
+def test_distinct_eigenvalues_keep_their_axes():
+    """Only degenerate eigenspaces are touched: a tilted, non-degenerate
+    trap keeps its tilted axes."""
+    R = rotation_matrix([0.0, 0.0, 1.0], 0.4)
+    ev = np.array([1.0, 2.0, 3.0])
+    assert np.array_equal(_lab_aligned(ev, R), R)
