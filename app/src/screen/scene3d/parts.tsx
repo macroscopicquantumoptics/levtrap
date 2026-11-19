@@ -13,6 +13,7 @@ import {
   ArrowHelper,
   BufferAttribute,
   BufferGeometry,
+  type Color,
   DoubleSide,
   Float32BufferAttribute,
   Group,
@@ -36,7 +37,7 @@ import { beamRadius } from "../scene/geometry.ts";
 import { lightColor } from "../scene/light.ts";
 import { sag, type LensData } from "../../engine/lenses.ts";
 import { mirrorSag } from "../../engine/mirrors.ts";
-import type { MirrorFocus } from "../../engine/types.ts";
+import type { MirrorFocus, TracedRay } from "../../engine/types.ts";
 import { beamProfile, beamToLab, type BeamGeometry, electrodes, type Electrode, lensToLab, type LensPlacement, toWorld, WORLD } from "../scene/space.ts";
 import type { Palette } from "./palette.ts";
 
@@ -332,6 +333,30 @@ export function ParabolicMirror({ id, focus, beam, palette, picking }: { id: Par
       <primitive object={edge} />
     </group>
   );
+}
+
+/**
+ * Rays traced through a real lens (#49): each a polyline from the incoming
+ * beam, through the lens's two surfaces, to the plane of its best focus;
+ * brighter where the beam is more intense.
+ */
+export function TracedRays({ rays, color }: { rays: TracedRay[]; color: Color }) {
+  const lines = useMemo(() => {
+    const pos: number[] = [];
+    const col: number[] = [];
+    for (const r of rays) {
+      const a = 0.25 + 0.75 * Math.min(1, r.weight);
+      for (let k = 0; k + 1 < r.points.length; k += 1) {
+        pos.push(...toWorld(r.points[k]), ...toWorld(r.points[k + 1]));
+        col.push(color.r * a, color.g * a, color.b * a, color.r * a, color.g * a, color.b * a);
+      }
+    }
+    const g = new BufferGeometry();
+    g.setAttribute("position", new Float32BufferAttribute(pos, 3));
+    g.setAttribute("color", new Float32BufferAttribute(col, 3));
+    return new LineSegments(g, new LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false }));
+  }, [rays, color]);
+  return <primitive object={lines} renderOrder={4} />;
 }
 
 // --- Paul trap -----------------------------------------------------------------------

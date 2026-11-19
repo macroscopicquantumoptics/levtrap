@@ -5,13 +5,13 @@ import type { Result, Setup } from "../engine/types.ts";
 import { formatSI } from "../lib/format.ts";
 import type { Answer } from "./answer.ts";
 import type { PartId } from "./model.ts";
-import { ForcesTab, HeatingTab, PotentialTab, RadiationTab, SpectrumTab, SweepTab } from "./plots/tabs.tsx";
+import { ForcesTab, HeatingTab, PotentialTab, RadiationTab, SpectrumTab, SweepTab, WavefrontTab } from "./plots/tabs.tsx";
 import { ResultsStrip } from "./ResultsStrip.tsx";
 import { Icon } from "./ui/Icon.tsx";
 import ui from "./ui/ui.module.css";
 import styles from "./Dock.module.css";
 
-export type TabId = "forces" | "potential" | "sweep" | "radiation" | "heating" | "spectrum";
+export type TabId = "forces" | "potential" | "sweep" | "radiation" | "heating" | "spectrum" | "wavefront";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "forces", label: "Forces" },
@@ -20,6 +20,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "radiation", label: "Radiation" },
   { id: "heating", label: "Heating" },
   { id: "spectrum", label: "Spectrum" },
+  { id: "wavefront", label: "Wavefront" },
 ];
 
 export interface DockProps {
@@ -108,5 +109,6 @@ function Panel({ tab, setup, result, engine, recorded }: { tab: TabId; setup: Se
   if (tab === "sweep") return <SweepTab setup={setup} engine={engine} recorded={recorded} />;
   if (tab === "radiation") return <RadiationTab setup={setup} engine={engine} recorded={recorded} />;
   if (tab === "spectrum") return <SpectrumTab setup={setup} result={result} />;
+  if (tab === "wavefront") return <WavefrontTab setup={setup} engine={engine} recorded={recorded} />;
   return <HeatingTab setup={setup} result={result} />;
 }

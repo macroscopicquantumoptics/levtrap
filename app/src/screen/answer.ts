@@ -61,7 +61,13 @@ export function instantAnswer(setup: Setup, recorded = true, want: readonly Want
 /** Whether a result carries the blocks asked for (a recorded one has the curves, not the pattern). */
 export function hasBlocks(result: Result, want: readonly Want[]): boolean {
   return want.every((w) =>
-    w === "curves" ? Boolean(result.curves) : w === "dipole" ? Boolean(result.curves && Object.values(result.curves).every((c) => c.dipole)) : Boolean(result.pattern),
+    w === "curves"
+      ? Boolean(result.curves)
+      : w === "dipole"
+        ? Boolean(result.curves && Object.values(result.curves).every((c) => c.dipole))
+        : w === "lens"
+          ? (result.lenses ?? []).every((l) => l.rays && l.wavefront)
+          : Boolean(result.pattern),
   );
 }
 

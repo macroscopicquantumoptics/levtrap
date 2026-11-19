@@ -94,7 +94,10 @@ function ScreenBody({ engine }: ScreenProps) {
   const { setup, selected } = state;
   const { answer, pending, status } = useAnswer(setup, engine, params.recorded);
   const narrow = useMedia(NARROW);
-  const [show, setShow] = useState<ShowOptions>({ labels: true, grid: true, axes: false, forces: false, trueSize: false });
+  const [show, setShow] = useState<ShowOptions>({ labels: true, grid: true, axes: false, forces: false, trueSize: false, rays: false });
+  // traced rays: asked of the engine only while shown, and only for a setup with a real lens
+  const realLens = setup.trap.fields.some((f) => f.kind === "beam" && f.focus.kind === "asphere");
+  const traced = useAnswer(setup, engine, params.recorded, ["lens"], show.rays && realLens);
   const [tab, setTab] = useState<TabId | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [picker, setPicker] = useState(params.firstVisit);
@@ -168,7 +171,17 @@ function ScreenBody({ engine }: ScreenProps) {
   return (
     <div className={styles.screen} data-selected={inspectorOpen || undefined} data-testid="screen">
       <div className={styles.stage}>
-        <Scene setup={setup} result={answer.result} selected={selected} onSelect={select} inset={inset} labels={show.labels && !narrow} grid={show.grid} overlays={show} />
+        <Scene
+          setup={setup}
+          result={answer.result}
+          selected={selected}
+          onSelect={select}
+          inset={inset}
+          labels={show.labels && !narrow}
+          grid={show.grid}
+          overlays={show}
+          rays={show.rays ? { lenses: realLens ? (traced.answer.result?.lenses ?? null) : null, realLens, pending: traced.pending } : null}
+        />
         <TopBar
           name={name}
           canUndo={state.past.length > 0}

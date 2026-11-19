@@ -139,7 +139,8 @@ Models per field:
   "optical": {"P_sca": …, "P_abs": …, "Qsca": …, "Qabs": …},
   "paul": {"q": {...}, "a": {...}, "stable": true, "secular": {...}, "micromotion": [...]},
   "rates": {"gas_damping": …, "recoil_heating": [...], "reheating_phonons_per_s": [...]},
-  "lenses": [{"field": 0, "focus_shift": [...], "clipping_loss": …, …}],     // per beam through an asphere (E1)
+  "lenses": [{"field": 0, "focus_shift": [...], "clipping_loss": …, …,      // per beam through an asphere (E1)
+              "rays": [...], "wavefront": {...}}],                         // with want "lens": traced rays, W map (#49)
   "mirrors": [{"field": 0, "reflected": 0.98, "rim_angle_deg": 112.6,     // per beam from a parabolic mirror (E3)
                "hole_angle_deg": 9.5, "deep": true, "clipping_loss": …, "Nmax": 25}],
   "pattern": {...},                       // on request
