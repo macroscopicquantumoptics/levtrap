@@ -40,7 +40,7 @@ export function workerTransport(makeWorker: () => Worker, wheelBase: string): Tr
       worker.onerror = (ev) => onStatus({ state: "failed", error: ev.message || "the engine worker failed" });
       send({ type: "init", wheelBase });
     },
-    request(setup, want, signal) {
+    request(setup, want, signal, start = "null") {
       const id = nextId++;
       return new Promise<SolveResponse>((resolve, reject) => {
         pending.set(id, { resolve, reject });
@@ -53,7 +53,7 @@ export function workerTransport(makeWorker: () => Worker, wheelBase: string): Tr
           },
           { once: true },
         );
-        send({ type: "solve", id, setup, want });
+        send({ type: "solve", id, setup, want, start });
       });
     },
     dispose() {
@@ -74,11 +74,11 @@ export function localTransport(apiUrl: string, fetchFn: typeof fetch = (...a) =>
     start(onStatus: (s: EngineStatus) => void) {
       onStatus({ state: "ready", versions: { backend: "local" } });
     },
-    async request(setup, want, signal) {
+    async request(setup, want, signal, start = "null") {
       const res = await fetchFn(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ method: "solve", args: [setup, want] }),
+        body: JSON.stringify({ method: "solve", args: [setup, want, start] }),
         signal,
       });
       if (!res.ok) throw new Error(`local engine: HTTP ${res.status}`);

@@ -218,6 +218,14 @@ rim 3.75 mm above it.
 
 ![The mirror in the scene](screens/mirror-scene-desktop-light.webp)
 
+## 9. A sweep that follows one trap (#50)
+
+The real lens's tilt swept from −1° to 1°, each value starting from the trap
+found at the one before: where that trap vanished the engine searched
+afresh, and a line marks the jump.
+
+![Sweep, following one trap](screens/plot-sweep-follow-desktop-light.webp)
+
 ## Other states
 
 A number explaining itself: the formula, the values that went in, the model

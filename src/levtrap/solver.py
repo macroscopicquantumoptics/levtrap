@@ -43,6 +43,7 @@ class Trap:
     K: np.ndarray | None                    # symmetrised stiffness [N/m]
     modes: list[dict] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    jumped: bool = False  # a start was given and the equilibrium followed from it vanished
 
 
 def _scale(fields) -> float:
@@ -114,7 +115,7 @@ def _clean_axis(v: np.ndarray) -> np.ndarray:
 
 
 def find_trap(fields, mass: float, *, centre=(0.0, 0.0, 0.0), ranges=(1.5e-6, 1.5e-6, 3e-6),
-              points: int = 61, depth_points: int | None = None) -> Trap:
+              points: int = 61, depth_points: int | None = None, start=None) -> Trap:
     """Equilibrium, modes and depth of the summed force of ``fields``.
 
     ``ranges`` are the half-widths [m] of the scan along x, y, z around
@@ -123,6 +124,11 @@ def find_trap(fields, mass: float, *, centre=(0.0, 0.0, 0.0), ranges=(1.5e-6, 1.
     ``stiffness`` [N/m], ``frequency`` [Hz] (``None`` unless the stiffness
     is positive), ``depth`` [J] and ``bounded`` (False: the barrier lies
     beyond the scan and the depth is a lower bound).
+
+    ``start`` (continuation, as a sweep follows one trap): Newton from this
+    point first; if it converges to a stable equilibrium that is the trap.
+    Otherwise the followed equilibrium has vanished: ``jumped`` is set and
+    the search starts afresh from the scan.
     """
     centre = np.asarray(centre, dtype=float)
     ranges = np.asarray(ranges, dtype=float)
@@ -131,10 +137,23 @@ def find_trap(fields, mass: float, *, centre=(0.0, 0.0, 0.0), ranges=(1.5e-6, 1.
     h = L / 200
     out = Trap(stable=False, converged=False, equilibrium=None, K=None)
 
-    r0 = _seed(fields, centre, ranges, points)
-    if r0 is None:
-        return out
-    r_eq, ok = _newton(fields, r0, h, max_step=L / 4, tol=L * 1e-7, bounds=(centre, ranges))
+    followed = None
+    if start is not None:
+        s0 = np.asarray(start, dtype=float)
+        r_eq, ok = _newton(fields, s0, h, max_step=L / 4, tol=L * 1e-7, bounds=(s0, ranges))
+        if ok:
+            Kf, _ = stiffness(fields, r_eq, h)
+            if np.all(np.linalg.eigvalsh(0.5 * (Kf + Kf.T)) > 0):
+                followed = r_eq
+        if followed is None:
+            out.jumped = True
+    if followed is not None:
+        r_eq, ok = followed, True
+    else:
+        r0 = _seed(fields, centre, ranges, points)
+        if r0 is None:
+            return out
+        r_eq, ok = _newton(fields, r0, h, max_step=L / 4, tol=L * 1e-7, bounds=(centre, ranges))
     if not ok:
         out.warnings.append("The equilibrium search did not converge inside the scanned region.")
         return out

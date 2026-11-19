@@ -17,8 +17,8 @@ export interface Versions {
 export type WorkerRequest =
   /** Absolute URL of the folder holding manifest.json and the wheel. */
   | { type: "init"; wheelBase: string }
-  /** setup and want are JSON text, handed to levtrap.solve.solve_json as is. */
-  | { type: "solve"; id: number; setup: string; want: string }
+  /** setup, want and start are JSON text, handed to levtrap.solve.solve_json as is (start: null, or a lab position to follow). */
+  | { type: "solve"; id: number; setup: string; want: string; start?: string }
   /** Drop a queued solve; a solve already running finishes and is ignored. */
   | { type: "cancel"; id: number };
 
