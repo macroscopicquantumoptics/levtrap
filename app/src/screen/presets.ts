@@ -16,7 +16,7 @@ import { addField, canonical, newBeam, newGravity, newPaulTrap } from "./model.t
 import type { Reference, Slot } from "./referenceTypes.ts";
 import { REFERENCES } from "./references.ts";
 
-export type PresetId = "tweezer" | "counter" | "paul-linear" | "paul-ring";
+export type PresetId = "tweezer" | "counter" | "paul-linear" | "paul-ring" | "ws2-bottle";
 
 export interface Preset {
   id: PresetId;
@@ -25,8 +25,10 @@ export interface Preset {
   blurb: string;
   /** where the values come from */
   source: string;
-  /** the trap type, as references.json names it */
-  slot: Slot;
+  /** the trap type, as references.json names it ("dark_trap" has no reference entry yet) */
+  slot: Slot | "dark_trap";
+  /** shown as an illustration only: not validated against any paper */
+  illustrative?: boolean;
   /** the paper the values are from (verified), or the papers they will come from (wanted) */
   references: Reference[];
   /** the issue that makes the engine compute this trap type, while it cannot */
@@ -77,6 +79,37 @@ const BASE: Base[] = [
     blurb: "A charged nanosphere at the centre of an RF ring electrode.",
     source: EXAMPLE,
     setup: addField(addField(charged, newPaulTrap("ring")), newGravity()),
+  },
+  {
+    // #52: as the old site had it, after arXiv:2607.09896 (examples/paper_2607_09896.py, docs/paper)
+    id: "ws2-bottle",
+    slot: "dark_trap",
+    name: "WS₂ bottle beam (dark trap)",
+    blurb: "A 300 nm WS₂ sphere held above a dark focus: two coherent circularly polarised LG beams, opposite in phase.",
+    source:
+      "Illustrative, not validated: after Illetschek et al., arXiv:2607.09896. The paper does not give the power split; the one that darkens the focus is used",
+    illustrative: true,
+    setup: {
+      version: 1,
+      particle: { radius: 3e-7, material: "WS2" },
+      environment: DEFAULT_SETUP.environment,
+      trap: {
+        fields: [
+          { kind: "beam", id: "b1", wavelength: 1.55e-6, power: 0.2966, focus: { kind: "lens", waist: 1.59e-6 }, mode: { type: "lg", indices: [0, 0] }, polarisation: "circular+" },
+          {
+            kind: "beam",
+            id: "b2",
+            coherent_with: "b1",
+            wavelength: 1.55e-6,
+            power: 0.5034,
+            focus: { kind: "lens", waist: 8.66e-7 },
+            mode: { type: "lg", indices: [1, 0] },
+            polarisation: "circular+",
+            phase: Math.PI,
+          },
+        ],
+      },
+    },
   },
 ];
 
