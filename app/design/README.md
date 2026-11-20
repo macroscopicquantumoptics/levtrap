@@ -229,6 +229,21 @@ Opened: two coherent LG beams, the sphere held 237 nm above the dark focus.
 
 ![The WS₂ bottle beam](screens/scene-ws2-desktop-light.webp)
 
+## 10. The intensity slice (#48)
+
+Show → Intensity slice: the light on the plane through the trap that faces
+the camera, from the engine. From the side, the tweezer's focus:
+
+![Intensity slice, side](screens/slice-side-desktop-light.webp)
+
+Looking along the beam, its cross-section:
+
+![Intensity slice, along](screens/slice-along-desktop-light.webp)
+
+Counter-propagating beams made coherent: the standing wave's fringes.
+
+![Standing wave](screens/slice-counter-desktop-light.webp)
+
 ## Other states
 
 A number explaining itself: the formula, the values that went in, the model

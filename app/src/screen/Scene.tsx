@@ -19,7 +19,7 @@ import {
   type Point,
 } from "./scene/geometry.ts";
 import { lightColor } from "./scene/light.ts";
-import type { Overlays } from "./scene3d/Scene3D.tsx";
+import type { Overlays, SliceData } from "./scene3d/Scene3D.tsx";
 import styles from "./Scene.module.css";
 
 export interface SceneProps {
@@ -37,6 +37,8 @@ export interface SceneProps {
   thumbnail?: boolean;
   /** the 3D scene's overlays (Show menu) */
   overlays?: Overlays;
+  /** the intensity slice's data, while it is shown (Show → Intensity slice) */
+  field?: SliceData | null;
 }
 
 interface LabelSpot {
@@ -84,7 +86,7 @@ class Fallback extends Component<{ fallback: ReactNode; children: ReactNode }, {
  * that loads, where it does not, and for the preset cards' thumbnails.
  */
 export function Scene(props: SceneProps) {
-  const { setup, result, selected, onSelect, inset, labels, grid, thumbnail, overlays } = props;
+  const { setup, result, selected, onSelect, inset, labels, grid, thumbnail, overlays, field } = props;
   const [ref, size] = useSize();
   const [hover, setHover] = useState<PartId | null>(null);
   const [drawn, setDrawn] = useState(false);
@@ -128,6 +130,7 @@ export function Scene(props: SceneProps) {
               width={size.width}
               height={size.height}
               overlays={overlays ?? NO_OVERLAYS}
+              field={thumbnail ? null : (field ?? null)}
               onReady={() => setDrawn(true)}
             />
           </Suspense>

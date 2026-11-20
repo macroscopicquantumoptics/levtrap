@@ -135,7 +135,16 @@ for it).
 * **Overlays** (Show menu): the trap's eigen-axes through the equilibrium,
   and each field's force on the particle as an arrow (length on a log
   scale; only when more than one field shares the load, since with one the
-  force at the equilibrium is zero). The intensity slice is later.
+  force at the equilibrium is zero).
+* **Intensity slice** (Show menu, #48): the light's intensity, from the
+  engine (`solve(…, want=["field"])`), on the lab plane through the trap
+  that faces the camera: x–z or y–z from the side, x–y looking along a beam
+  on z. It follows the view as the scene turns. It is drawn in the light's
+  colour, opacity growing with the intensity, and while it is on it replaces
+  the schematic light: interference (a standing wave's fringes) shows. A
+  note by the scale bar names the plane and the peak intensity. It covers
+  the box the force curves cover; the page asks for it only while it is
+  shown.
 * **Narrow screens.** There is no room for labels, so the parts become a row
   of buttons under the results.
 
@@ -363,7 +372,6 @@ gravity, a beam's direction and focus position.
   does not give the power split (the split that darkens the focus is used,
   0.37 : 0.63 of 0.8 W, as `examples/paper_2607_09896.py` computes). It
   becomes a cited setup once C3 verifies a dark-trap reference.
-* The intensity slice in the Show menu is listed, greyed.
 * The Sweep sweeps one input at a time; a two-dimensional map is not built.
 
 ## 12. Decisions for a human

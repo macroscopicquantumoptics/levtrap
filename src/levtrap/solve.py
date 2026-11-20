@@ -28,7 +28,7 @@ __all__ = ["solve", "solve_json", "check_supported", "check_simple", "scan_box",
            "RESULT_VERSION", "WANTS", "pattern_result"]
 
 RESULT_VERSION = 1
-WANTS = ("curves", "dipole", "pattern")
+WANTS = ("curves", "dipole", "pattern", "field")
 SCAN_RANGES = (1.5e-6, 1.5e-6, 3e-6)  # half-widths [m] searched for the equilibrium (x, y, z)
 SCAN_POINTS = 61
 
@@ -300,6 +300,8 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
             return sum((f.dipole_force(line, radius) if f in optical else f.force(line)) for f in fields)
 
         result["curves"] = _curves(fields, at, ranges, SCAN_POINTS, modes, dipole if "dipole" in want else None)
+    if "field" in want:
+        result["field"] = _field_block(optical, at, ranges)
     if "pattern" in want:
         if lensed or mirrored:
             raise UnsupportedSetup("the radiation pattern is not computed yet for a beam focused by an asphere "
@@ -367,6 +369,43 @@ def _lens_block(s: dict, lensed: dict, modes: list[dict]) -> list[dict]:
     return out
 
 
+FIELD_POINTS = 81
+
+
+def _field_block(optical, centre, ranges, points: int | None = None) -> dict:
+    """The ``field`` block: the light's intensity [W/m^2] on the three lab
+    planes through ``centre`` (the equilibrium, or the searched centre),
+    over the box the force curves cover.
+
+    ``planes`` maps "xz", "yz" and "xy" to ``{u, v, I}``: ``u`` and ``v``
+    [m] are the coordinates along the plane's first and second lab axes
+    (absolute, not from the centre), and ``I[j][i]`` is the intensity at
+    ``(u[i], v[j])``. Beams that do not interfere add their intensities; a
+    coherent group is one field. ``I = 4 k^2 sum |E|^2`` with each beam
+    scaled to watts, as :func:`levtrap.api.field3d`.
+    """
+    points = points or FIELD_POINTS
+    centre = np.asarray(centre, dtype=float)
+    axes = {"xz": (0, 2), "yz": (1, 2), "xy": (0, 1)}
+    out: dict[str, Any] = dict(centre=[float(v) for v in centre], planes={})
+    peak = 0.0
+    for name, (a, b) in axes.items():
+        u = centre[a] + np.linspace(-ranges[a], ranges[a], points)
+        v = centre[b] + np.linspace(-ranges[b], ranges[b], points)
+        U, V = np.meshgrid(u, v)  # rows: v
+        pts = np.tile(centre, (U.size, 1))
+        pts[:, a], pts[:, b] = U.ravel(), V.ravel()
+        I = np.zeros(U.size)
+        for f in optical:
+            E = f.beam.em_field_xyz(f._own(pts))
+            I += 4 * f.beam.k_medium ** 2 * np.sum(np.abs(E) ** 2, axis=1)
+        I = I.reshape(U.shape)
+        peak = max(peak, float(I.max()))
+        out["planes"][name] = dict(u=u.tolist(), v=v.tolist(), I=I.tolist())
+    out["max"] = peak
+    return out
+
+
 def _curves(fields, centre, ranges, points, modes=(), dipole=None) -> dict:
     """The ``curves`` block: force cuts through ``centre`` along each eigen-axis
     of the trap (along x, y and z when there are no modes, or two share a name).
@@ -405,7 +444,7 @@ def _solve_paul(s, f, gravity, mass, p, warnings, want, t0) -> dict:
     from .fields.paul import E_CHARGE, PaulField
     from .solver import find_trap
 
-    bad = [w for w in want if w not in ("curves", "dipole")]
+    bad = [w for w in want if w not in ("curves", "dipole", "field")]
     if bad:
         raise UnsupportedSetup(f"{bad[0]} needs a beam; a Paul trap alone has no light")
     temp = float(s["environment"]["temperature"])
@@ -459,6 +498,8 @@ def _solve_paul(s, f, gravity, mass, p, warnings, want, t0) -> dict:
         # no light: nothing to approximate, the curves have no dipole key
         result["curves"] = _curves(fields, r_eq if r_eq is not None else np.zeros(3), ranges, SCAN_POINTS, modes)
     result["time"] = time.perf_counter() - t0
+    if "field" in want:
+        result["field"] = None  # no light
     return result
 
 
