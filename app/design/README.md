@@ -229,6 +229,18 @@ Opened: two coherent LG beams, the sphere held 237 nm above the dark focus.
 
 ![The WS₂ bottle beam](screens/scene-ws2-desktop-light.webp)
 
+## 10. A real lens's rays and wavefront (#49)
+
+Show → Traced rays, zoomed out to millimetres from the side: the 354330-C
+tilted 0.3°, the rays refracted at both surfaces and meeting at its focus.
+
+![Traced rays](screens/lens-rays-desktop-light.webp)
+
+Plots → Wavefront: the error the rays carry about the best focus, rms
+0.237 λ as in the lens's readout.
+
+![Wavefront](screens/plot-wavefront-desktop-light.webp)
+
 ## Other states
 
 A number explaining itself: the formula, the values that went in, the model

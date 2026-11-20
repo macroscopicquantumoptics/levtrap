@@ -136,6 +136,13 @@ for it).
   and each field's force on the particle as an arrow (length on a log
   scale; only when more than one field shares the load, since with one the
   force at the equilibrium is zero). The intensity slice is later.
+* **Traced rays** (Show menu, #49): with a real lens (the asphere), two fans
+  of rays traced through it (across x and across y, within the beam's 1/e²
+  diameter), from the incoming beam, refracted at both surfaces, to the
+  plane of its best focus; brighter where the beam is more intense. Zoomed
+  out to millimetres they show the lens at work; the marginal rays miss the
+  focus by its spherical aberration. Asked of the engine
+  (`want=["lens"]`) only while shown.
 * **Narrow screens.** There is no room for labels, so the parts become a row
   of buttons under the results.
 
@@ -229,6 +236,7 @@ result the strip already has, and Sweep runs one solve per value when asked.
 | Sweep | Any input of the setup (power, wavelength, NA, radius, charge, RF voltage and frequency, pressure, temperature…) against a headline number (the frequencies, the depth, the position along the beam, the scattered power). One solve per value, with progress and Cancel; the values without a stable trap are shaded. |
 | Radiation | Where the scattered light goes, in two planes through the beam axis (polar); the fraction a lens of each NA collects, forward and backward; and the fraction of the position information a backward lens collects, per axis. The trapping lens's NA is marked. |
 | Heating | The reheating rate of each mode against pressure (10⁻⁹ to 10³ mbar), with photon recoil alone dashed, the setup's pressure marked, and a dot where recoil and gas heat equally. "At 1e-6 mbar" shows the rates as a table. |
+| Wavefront | For a real lens (#49): the wavefront error about its best focus across the beam on the lens, on a diverging scale (red ahead, blue behind a perfect converging wave), with its intensity-weighted rms, the lens readout's number. Tilt and defocus are taken out (the focus moved instead). Without a real lens the tab says how to choose one. |
 | Spectrum | The displacement spectrum each mode would show on an analyser (E4): a Lorentzian at its frequency, γ/2π wide, whose area is k_BT_eff/(mΩ²); T_eff balances the reheating against the damping, and is marked on each peak. "Feedback damping" adds linewidth to every mode (ideal cold damping: no added noise) and cools them. "Occupation" shows, per mode, the linewidth, phonon number, T_eff and rms displacement. Computed in the page from the result (`plots/spectrum.ts`, a copy of `levtrap.spectrum`); for traps with light, as the rates are. |
 
 Every plot is the same component (`src/screen/plots/Plot.tsx`, inline SVG

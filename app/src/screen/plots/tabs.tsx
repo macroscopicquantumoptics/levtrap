@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Engine } from "../../engine/client.ts";
 import { isAbortError } from "../../engine/client.ts";
-import type { Result, Setup } from "../../engine/types.ts";
+import type { LensResult, Result, Setup } from "../../engine/types.ts";
 import { formatNumber, formatSci, formatSI } from "../../lib/format.ts";
 import { toFieldText } from "../../lib/units.ts";
 import { answerFromError } from "../answer.ts";
@@ -21,6 +21,7 @@ import { axisCuts, harmonic, heatingCurves, polarCut, potential } from "./data.t
 import { Plot, type PlotSeries, type Tone } from "./Plot.tsx";
 import { PolarPlot } from "./PolarPlot.tsx";
 import { spectrum } from "./spectrum.ts";
+import { waveRange, wavefrontPixels, weightedRms } from "./wavefront.ts";
 import { defaultRange, OUTPUTS, sweepParams, sweepValues, unstableRuns } from "./sweep.ts";
 import styles from "./tabs.module.css";
 
@@ -292,6 +293,72 @@ export function SpectrumTab({ setup, result }: { setup: Setup; result: Result | 
         controls={controls}
       />
     </div>
+  );
+}
+
+// --- Wavefront --------------------------------------------------------------------------------
+
+export function WavefrontTab({ setup, engine, recorded }: TabProps) {
+  const realLens = setup.trap.fields.some((f) => f.kind === "beam" && f.focus.kind === "asphere");
+  const solving = useAnswer(setup, engine, recorded, ["lens"], realLens);
+  if (!realLens) return <Note title="Wavefront">The wavefront error is traced for a real lens: choose Lens → Type → Asphere 354330-C.</Note>;
+  const wait = waiting("Wavefront", solving, "the rays through the lens");
+  const lenses = (solving.answer.result?.lenses ?? []).filter((l) => l.wavefront);
+  if (wait) return wait;
+  if (!lenses.length) return <Note title="Wavefront">The wavefront was not traced for this result.</Note>;
+  return (
+    <div className={styles.wavefronts} data-pending={solving.pending || undefined} data-testid="wavefront">
+      {lenses.map((l) => (
+        <WavefrontMap key={l.field} lens={l} name={lenses.length > 1 ? `Lens ${l.field + 1}` : "The lens"} />
+      ))}
+    </div>
+  );
+}
+
+function WavefrontMap({ lens, name }: { lens: LensResult; name: string }) {
+  const wf = lens.wavefront!;
+  const canvas = useRef<HTMLCanvasElement | null>(null);
+  const range = waveRange(wf);
+  const rms = weightedRms(wf);
+  useEffect(() => {
+    const c = canvas.current;
+    if (!c) return;
+    const img = wavefrontPixels(wf, range);
+    const off = document.createElement("canvas");
+    off.width = img.width;
+    off.height = img.height;
+    off.getContext("2d")!.putImageData(new ImageData(img.data, img.width, img.height), 0, 0);
+    const ctx = c.getContext("2d")!;
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.imageSmoothingEnabled = true;
+    // y up: the first row of the map at the bottom
+    ctx.save();
+    ctx.translate(0, c.height);
+    ctx.scale(1, -1);
+    ctx.drawImage(off, 0, 0, c.width, c.height);
+    ctx.restore();
+  }, [wf, range]);
+  const half = (wf.x[wf.x.length - 1] - wf.x[0]) / 2;
+  return (
+    <figure className={styles.wavefrontFigure}>
+      <canvas ref={canvas} width={240} height={240} className={styles.wavefrontCanvas} role="img" aria-label={`${name}: wavefront error map, rms ${formatNumber(rms, 3)} waves`} data-testid={`wavefront-map-${lens.field}`} />
+      <figcaption className={styles.wavefrontCaption}>
+        <p className={styles.noteTitle}>{name}: wavefront error about its best focus</p>
+        <p className={styles.noteText}>
+          Across the beam on the lens, ±{formatSI(half, "m", 2, true)} (x right, y up): how far each ray&apos;s wave runs ahead of (red) or behind (blue) a perfect
+          spherical wave converging on the focus. Tilt and defocus are taken out: the focus moved instead.
+        </p>
+        <dl className={styles.wavefrontNumbers} data-testid={`wavefront-numbers-${lens.field}`}>
+          <dt>rms</dt>
+          <dd>{formatNumber(rms, 3)} λ</dd>
+          <dt>scale</dt>
+          <dd>
+            <span className={styles.wavefrontScale} aria-hidden="true" /> −{formatNumber(range, 2)} to +{formatNumber(range, 2)} λ
+          </dd>
+        </dl>
+        <p className={styles.noteText}>The rms is weighted by the beam&apos;s intensity, as in the lens&apos;s readout; the map shows where the beam is above 1 % of its peak.</p>
+      </figcaption>
+    </figure>
   );
 }
 
