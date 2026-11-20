@@ -14,8 +14,8 @@ row is one of:
 accepted as written (issue #24's acceptance). `web/` and the old site's
 engine entry points are deleted; its addresses (`/next/`, `/classic/`,
 `lens.html`) redirect to the app. The rows to ticket are issues
-[#48](https://github.com/macroscopicquantumoptics/levtrap/issues/48), [#49](https://github.com/macroscopicquantumoptics/levtrap/issues/49), [#50](https://github.com/macroscopicquantumoptics/levtrap/issues/50) and [#51](https://github.com/macroscopicquantumoptics/levtrap/issues/51); the WS₂ preset waits on
-[#52](https://github.com/macroscopicquantumoptics/levtrap/issues/52).
+[#48](https://github.com/macroscopicquantumoptics/levtrap/issues/48), [#49](https://github.com/macroscopicquantumoptics/levtrap/issues/49), [#50](https://github.com/macroscopicquantumoptics/levtrap/issues/50) and [#51](https://github.com/macroscopicquantumoptics/levtrap/issues/51); the WS₂ preset is in the app as an illustrative
+preset ([#52](https://github.com/macroscopicquantumoptics/levtrap/issues/52)).
 
 The pull requests this list counts on are merged: D5, the plots drawer
 ([#41](https://github.com/macroscopicquantumoptics/levtrap/pull/41)), and E1,
@@ -33,7 +33,7 @@ and the displacement spectrum with feedback cooling (E4,
 |---|---|---|
 | Preset: silica 1064 nm, NA 0.9 | In the app | Preset "Optical tweezer" (NA 0.8). NA 0.9 is one edit away. |
 | Preset: silica 1550 nm | In the app | The same preset with the wavelength changed; not a preset of its own. |
-| Preset: WS₂ bottle-beam dark trap (illustrative, not validated) | **Decided** | Not a preset yet: added when C3 verifies a dark-trap reference ([#52](https://github.com/macroscopicquantumoptics/levtrap/issues/52)). The setup can be built in the app (two coherent LG beams, circular, phase π). |
+| Preset: WS₂ bottle-beam dark trap (illustrative, not validated) | In the app | Preset "WS₂ bottle beam (dark trap)", tagged illustrative: not validated, and the power split (not given in the paper) is the one that darkens the focus ([#57](https://github.com/macroscopicquantumoptics/levtrap/pull/57), issue [#52](https://github.com/macroscopicquantumoptics/levtrap/issues/52)). It becomes a cited setup when C3 verifies a dark-trap reference. |
 | Material, radius, n, k, density | In the app | Particle; n, k, density under Advanced, following the material (D2). |
 | Medium index | In the app | Environment, Advanced. |
 | Wavelength, total power | In the app | Beam: wavelength and power per beam. |
