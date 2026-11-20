@@ -360,6 +360,12 @@ gravity, a beam's direction and focus position.
   verified paper yet. Each card names the paper its trap type is waiting for,
   and a verified entry the schema can hold replaces the example and is cited
   (`buildPresets`, tested), with no change to the screen.
+* One preset is illustrative only (#52): the WS₂ bottle beam, a dark trap
+  after Illetschek et al., arXiv:2607.09896, as the old site had it. Its card
+  is tagged "illustrative" and says it is not validated, and that the paper
+  does not give the power split (the split that darkens the focus is used,
+  0.37 : 0.63 of 0.8 W, as `examples/paper_2607_09896.py` computes). It
+  becomes a cited setup once C3 verifies a dark-trap reference.
 * The intensity slice in the Show menu is listed, greyed.
 * The Sweep sweeps one input at a time; a two-dimensional map is not built.
 

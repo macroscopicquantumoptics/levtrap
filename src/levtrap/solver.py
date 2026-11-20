@@ -114,6 +114,40 @@ def _clean_axis(v: np.ndarray) -> np.ndarray:
     return -v if v[np.argmax(np.abs(v))] < 0 else v
 
 
+DEGENERATE = 1e-6  # eigenvalues closer than this (relative to the largest) share an eigenspace
+
+
+def _lab_aligned(ev: np.ndarray, evec: np.ndarray) -> np.ndarray:
+    """Eigenvectors with each degenerate eigenspace given the basis closest to
+    the lab axes.  In a degenerate eigenspace (a trap symmetric about z, say)
+    any orthonormal basis is an equally valid answer, and which one
+    ``eigh`` returns depends on round-off, so on the machine; this one does
+    not: the lab axes are projected onto the eigenspace and orthonormalised,
+    those with the largest projection first (ties in x, y, z order)."""
+    evec = evec.copy()
+    scale = max(float(np.max(np.abs(ev))), 1e-300)
+    i = 0
+    while i < len(ev):
+        j = i + 1
+        while j < len(ev) and ev[j] - ev[j - 1] <= DEGENERATE * scale:
+            j += 1
+        if j - i > 1:
+            V = evec[:, i:j]
+            P = V @ V.T
+            basis: list[np.ndarray] = []
+            for lab in sorted(range(3), key=lambda a: (-round(float(np.linalg.norm(P[:, a])), 9), a)):
+                v = P[:, lab].copy()
+                for b in basis:
+                    v -= (b @ v) * b
+                if np.linalg.norm(v) > 1e-6:
+                    basis.append(v / np.linalg.norm(v))
+                if len(basis) == j - i:
+                    break
+            evec[:, i:j] = np.column_stack(basis)
+        i = j
+    return evec
+
+
 def find_trap(fields, mass: float, *, centre=(0.0, 0.0, 0.0), ranges=(1.5e-6, 1.5e-6, 3e-6),
               points: int = 61, depth_points: int | None = None, start=None) -> Trap:
     """Equilibrium, modes and depth of the summed force of ``fields``.
@@ -165,6 +199,7 @@ def find_trap(fields, mass: float, *, centre=(0.0, 0.0, 0.0), ranges=(1.5e-6, 1.
                             f"stiffness matrix is {asym:.0%} of the symmetric part, so the depth "
                             f"and frequencies are approximate.")
     ev, evec = np.linalg.eigh(Ks)
+    evec = _lab_aligned(ev, evec)
     axes = [_clean_axis(evec[:, i]) for i in range(3)]
     # name each mode by the lab axis it is closest to; order x, y, z when that is unique
     dom = [int(np.argmax(np.abs(a))) for a in axes]
