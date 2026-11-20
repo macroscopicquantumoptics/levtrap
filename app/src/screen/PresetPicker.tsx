@@ -66,6 +66,11 @@ export function PresetPicker({ open, current, onPick, onClose }: PresetPickerPro
                     <span className={styles.name}>
                       {preset.name}
                       {preset.id === current.id && <span className={ui.tag}>open now</span>}
+                      {preset.illustrative && (
+                        <span className={ui.tag} data-testid={`preset-${preset.id}-illustrative`}>
+                          illustrative
+                        </span>
+                      )}
                     </span>
                     <span className={styles.blurb}>{preset.blurb}</span>
                     <span className={styles.source} data-testid={`preset-${preset.id}-source`}>
