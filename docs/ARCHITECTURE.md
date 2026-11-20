@@ -146,6 +146,7 @@ Models per field:
                "hole_angle_deg": 9.5, "deep": true, "clipping_loss": …, "Nmax": 25}],
   "pattern": {...},                       // on request
   "curves": {...},                        // on request: force cuts, potential, map
+  "followed": {"start": [...], "jumped": false},  // with solve(..., start=r): the trap followed from r, or a jump (#50)
   "models": [{"quantity": "modes", "model": "mie", "validity": "ok", "notes": []}],
   "warnings": ["Paul q = 0.62: pseudopotential is inaccurate, using Mathieu"]
 }

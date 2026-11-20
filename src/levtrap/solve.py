@@ -141,12 +141,17 @@ def _particle_at(given: dict, wavelength: float) -> dict:
     return p
 
 
-def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
+def solve(setup: dict | str, want: Iterable[str] = (), start=None) -> dict:
     """Compute the result of a setup.
 
     Parameters
     ----------
     setup : dict or JSON text, see :mod:`levtrap.setup`.
+    start : a lab position [m] to follow the equilibrium from (continuation,
+        as a sweep does): the search starts there, and the result's
+        ``followed`` block says whether the trap stayed (``jumped`` false) or
+        the followed equilibrium vanished and the trap was searched afresh.
+        A Paul trap alone ignores it.
     want : extra blocks to compute, from :data:`WANTS`.  ``"curves"`` adds the
         force along each eigen-axis of the trap through the equilibrium
         (:func:`_curves`); ``"dipole"`` adds to each curve the same force with
@@ -231,7 +236,7 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     centre, ranges = scan_box(beams)
     along_z = all(b["direction"][0] == 0 and b["direction"][1] == 0 for b in beams)
 
-    trap = find_trap(fields, mass, centre=centre, ranges=ranges, points=SCAN_POINTS)
+    trap = find_trap(fields, mass, centre=centre, ranges=ranges, points=SCAN_POINTS, start=start)
     if paul is not None and not trap.stable:
         # Two scales: the optical focus (um) was searched first. Now scan the
         # electrodes (mm) for a seed, and search a box of the optical size
@@ -286,6 +291,8 @@ def solve(setup: dict | str, want: Iterable[str] = ()) -> dict:
     )
     if paul_block is not None:
         result["paul"] = paul_block
+    if start is not None:
+        result["followed"] = dict(start=[float(v) for v in start], jumped=bool(trap.jumped))
     if r_eq is not None:
         result["breakdown"] = breakdown(s, fields, optical, paul, r_eq, modes, trap)
     q = eff["Qsca_multipoles"]
@@ -576,11 +583,12 @@ def pattern_result(s: dict, r) -> dict:
     return pattern_block(ref, T, n_medium=nm, trap_NA=nm * math.sin(angle))
 
 
-def solve_json(setup_json: str, want_json: str = "[]") -> str:
+def solve_json(setup_json: str, want_json: str = "[]", start_json: str = "null") -> str:
     """JSON wrapper for the web worker: ``{"ok": true, "result": …}`` or
-    ``{"ok": false, "error": …, "kind": "setup" | "unsupported" | "internal", "path": …}``."""
+    ``{"ok": false, "error": …, "kind": "setup" | "unsupported" | "internal", "path": …}``.
+    ``start_json``: null, or a lab position [m] to follow (see :func:`solve`)."""
     try:
-        return json.dumps(dict(ok=True, result=solve(setup_json, json.loads(want_json))))
+        return json.dumps(dict(ok=True, result=solve(setup_json, json.loads(want_json), json.loads(start_json))))
     except SetupError as exc:
         return json.dumps(dict(ok=False, kind="setup", path=exc.path, error=exc.message))
     except UnsupportedSetup as exc:

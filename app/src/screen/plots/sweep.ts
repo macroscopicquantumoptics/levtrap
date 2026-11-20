@@ -2,7 +2,7 @@
  * The Sweep tab's model: which inputs of a setup can be swept, which numbers
  * can be read off each result, and the values to try. Pure; sweep.test.ts.
  */
-import type { BeamField, PaulField, Result, Setup } from "../../engine/types.ts";
+import type { BeamField, PaulField, Result, Setup, Vec3 } from "../../engine/types.ts";
 import type { Quantity } from "../../lib/units.ts";
 import { shownFrequency } from "../answer.ts";
 import { directionOf, environmentOf, partsOf, positionOf, withEnvironment, withField, withParticle } from "../model.ts";
@@ -208,7 +208,33 @@ export const OUTPUTS: SweepOutput[] = [
     unit: "W",
     read: (r) => [{ name: "scattered", value: r.optical?.P_sca ?? null }],
   },
+  {
+    id: "absorbed",
+    label: "Absorbed power",
+    unit: "W",
+    read: (r) => [{ name: "absorbed", value: r.optical?.P_abs ?? null }],
+  },
+  {
+    id: "recoil",
+    label: "Recoil heating (phonons/s)",
+    unit: "",
+    read: (r) => (r.rates?.modes ?? []).map((m) => ({ name: m.name, value: r.stable ? m.recoil_heating : null })),
+  },
 ];
+
+/** Where the next solve of a sweep starts (continuation): the last stable equilibrium so far, or null. */
+export function followFrom(results: readonly (Result | null)[]): Vec3 | null {
+  for (let i = results.length - 1; i >= 0; i -= 1) {
+    const r = results[i];
+    if (r?.stable && r.equilibrium) return r.equilibrium;
+  }
+  return null;
+}
+
+/** The swept values where the followed trap vanished (the engine searched afresh). */
+export function jumpsAt(xs: readonly number[], results: readonly (Result | null)[]): number[] {
+  return results.flatMap((r, i) => (r?.followed?.jumped ? [xs[i]] : []));
+}
 
 /** `n` values from `from` to `to`, evenly or in log. */
 export function sweepValues(from: number, to: number, n: number, log: boolean): number[] {

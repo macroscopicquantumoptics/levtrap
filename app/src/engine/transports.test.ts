@@ -14,7 +14,7 @@ test("the local transport posts a solve to the devserver and unwraps its answer"
   assert.deepEqual(res, { ok: true, result: { version: 1 } });
   assert.deepEqual(seen, {
     url: "http://127.0.0.1:8000/api",
-    body: { method: "solve", args: ['{"version":1}', "[]"] },
+    body: { method: "solve", args: ['{"version":1}', "[]", "null"] },
   });
 });
 
