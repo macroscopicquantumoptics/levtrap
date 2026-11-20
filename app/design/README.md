@@ -218,7 +218,18 @@ rim 3.75 mm above it.
 
 ![The mirror in the scene](screens/mirror-scene-desktop-light.webp)
 
-## 9. A sweep that follows one trap (#50)
+## 9. An illustrative preset: the WS₂ bottle beam (#52)
+
+The picker's fifth card, tagged "illustrative": not validated, after
+arXiv:2607.09896, with the power split that darkens the focus.
+
+![The WS₂ card](screens/presets-ws2-desktop-light.webp)
+
+Opened: two coherent LG beams, the sphere held 237 nm above the dark focus.
+
+![The WS₂ bottle beam](screens/scene-ws2-desktop-light.webp)
+
+## 10. A sweep that follows one trap (#50)
 
 The real lens's tilt swept from −1° to 1°, each value starting from the trap
 found at the one before: where that trap vanished the engine searched
