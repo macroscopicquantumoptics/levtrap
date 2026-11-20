@@ -26,54 +26,41 @@ jobs:
         run: |
           pip install -e ".[test]" build
           pytest -q
-      - name: Build wheel and stage site
-        run: |
-          python -m build --wheel --outdir dist
-          mkdir -p web/wheels
-          cp dist/*.whl web/wheels/
-          WHEEL=$(basename dist/*.whl)
-          echo "{\"wheel\": \"$WHEEL\"}" > web/wheels/manifest.json
-          VERSION=$(python -c "import levtrap; print(levtrap.__version__)")
-          echo "{\"version\": \"$VERSION\", \"commit\": \"$GITHUB_SHA\", \"date\": \"$(date -u +%Y-%m-%d)\"}" > web/version.json
+      - name: Build the wheel
+        run: python -m build --wheel --outdir dist
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Pyodide check (wheel loads, OTT benchmark reproduces)
+      - name: Pyodide check (wheel loads, OTT benchmark reproduces, solve runs)
         run: |
           npm install --no-save pyodide@0.29.5
-          node scripts/pyodide_check.mjs web/wheels/*.whl
-      - name: Browser check (real page, Pyodide worker)
-        run: |
-          npm install --no-save playwright@1.48.2
-          npx playwright install --with-deps chromium
-          python -m http.server -d web 8000 &
-          sleep 1
-          node scripts/ui_check.js http://127.0.0.1:8000/
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: ui-screenshot
-          path: ui_check.png
-          if-no-files-found: ignore
-      - name: Build the new app (app/) for /next/
+          node scripts/pyodide_check.mjs dist/*.whl
+      - name: Build the app (app/) for the site's root
         working-directory: app
         env:
-          BASE_PATH: /${{ github.event.repository.name }}/next
+          BASE_PATH: /${{ github.event.repository.name }}
         run: |
           npm ci
-          mkdir -p public/wheels
-          cp ../web/wheels/* public/wheels/
+          npm run wheel
           npm run build
-      - name: Browser check of the new app (Pyodide worker)
+          # the old site's addresses lead to the app: next/, classic/ and lens.html (E2, docs/PARITY.md)
+          node scripts/redirects.ts out "$BASE_PATH"
+      - name: Browser check of the app (Pyodide worker)
         working-directory: app
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}
         run: |
           npx playwright install --with-deps chromium
           E2E_PYODIDE=1 npx playwright test --trace off
-      - name: Stage the new app next to the current site
-        run: cp -r app/out web/next
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app-screenshots
+          path: app/test-results/screenshots/
+          if-no-files-found: ignore
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: web
+          path: app/out
 
   deploy:
     needs: build
