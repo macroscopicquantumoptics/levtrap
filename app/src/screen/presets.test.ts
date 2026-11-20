@@ -3,10 +3,12 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_SETUP } from "../engine/setup.ts";
+import type { BeamField } from "../engine/types.ts";
 import { withParticle } from "./model.ts";
 import { buildPresets, PRESETS } from "./presets.ts";
 import type { Reference } from "./referenceTypes.ts";
 import { shortCitation } from "./referenceTypes.ts";
+import { RECORDED } from "./recorded.ts";
 import { REFERENCES } from "./references.ts";
 
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
@@ -27,7 +29,7 @@ test("references.ts is generated from docs/validation/references.json", () => {
 });
 
 test("today every preset is example values, waiting for its paper", () => {
-  for (const p of PRESETS) {
+  for (const p of PRESETS.filter((x) => !x.illustrative)) {
     assert.equal(p.source, "Example values, not from a paper yet");
     assert.ok(p.references.length > 0, `${p.id} names a paper to check`);
     assert.ok(p.references.every((r) => r.status === "wanted" && r.slot === p.slot));
@@ -55,4 +57,19 @@ test("a verified paper's setup replaces the example of its trap type, and is cit
   // a setup the schema cannot hold yet stays out
   const gapped = buildPresets([{ ...paper, schema_gaps: ["focus.kind"] }]).find((p) => p.id === "tweezer")!;
   assert.equal(gapped.setup, DEFAULT_SETUP);
+});
+
+test("the WS2 bottle beam is illustrative, not validated, and its focus is dark", () => {
+  const ws2 = PRESETS.find((p) => p.id === "ws2-bottle")!;
+  assert.ok(ws2.illustrative);
+  assert.match(ws2.source, /^Illustrative, not validated: after Illetschek et al\., arXiv:2607\.09896/);
+  assert.deepEqual(ws2.references, []);
+  const [b1, b2] = ws2.setup.trap.fields as BeamField[];
+  // two coherent beams, opposite in phase, 0.8 W together
+  assert.equal(b2.coherent_with, b1.id);
+  assert.equal(b2.phase, Math.PI);
+  assert.ok(Math.abs(b1.power + b2.power - 0.8) < 1e-12);
+  // the engine holds the sphere above the dark focus (recorded)
+  const r = RECORDED["ws2-bottle"]!;
+  assert.ok(r.stable && r.equilibrium![2] > 0.2e-6 && r.equilibrium![2] < 0.3e-6);
 });

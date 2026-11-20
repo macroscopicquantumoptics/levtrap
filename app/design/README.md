@@ -218,7 +218,18 @@ rim 3.75 mm above it.
 
 ![The mirror in the scene](screens/mirror-scene-desktop-light.webp)
 
-## 9. The intensity slice (#48)
+## 9. An illustrative preset: the WS₂ bottle beam (#52)
+
+The picker's fifth card, tagged "illustrative": not validated, after
+arXiv:2607.09896, with the power split that darkens the focus.
+
+![The WS₂ card](screens/presets-ws2-desktop-light.webp)
+
+Opened: two coherent LG beams, the sphere held 237 nm above the dark focus.
+
+![The WS₂ bottle beam](screens/scene-ws2-desktop-light.webp)
+
+## 10. The intensity slice (#48)
 
 Show → Intensity slice: the light on the plane through the trap that faces
 the camera, from the engine. From the side, the tweezer's focus:
