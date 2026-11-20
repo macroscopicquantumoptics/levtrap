@@ -218,6 +218,17 @@ rim 3.75 mm above it.
 
 ![The mirror in the scene](screens/mirror-scene-desktop-light.webp)
 
+## 9. An illustrative preset: the WS₂ bottle beam (#52)
+
+The picker's fifth card, tagged "illustrative": not validated, after
+arXiv:2607.09896, with the power split that darkens the focus.
+
+![The WS₂ card](screens/presets-ws2-desktop-light.webp)
+
+Opened: two coherent LG beams, the sphere held 237 nm above the dark focus.
+
+![The WS₂ bottle beam](screens/scene-ws2-desktop-light.webp)
+
 ## Other states
 
 A number explaining itself: the formula, the values that went in, the model
