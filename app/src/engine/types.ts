@@ -341,6 +341,8 @@ export interface FieldShare {
 
 export interface Result {
   version: 1;
+  /** with a start (continuation): where the search began, and whether the followed trap vanished */
+  followed?: { start: Vec3; jumped: boolean };
   /** levtrap version that computed it */
   engine: string;
   stable: boolean;

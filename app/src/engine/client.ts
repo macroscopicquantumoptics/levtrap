@@ -7,7 +7,7 @@
  * shows the answer to the latest setup.
  */
 import type { Versions } from "./protocol.ts";
-import type { Result, Setup, SolveResponse, Want } from "./types.ts";
+import type { Result, Setup, SolveResponse, Vec3, Want } from "./types.ts";
 
 export type EngineStatus =
   | { state: "loading"; stage: string; fraction: number }
@@ -18,8 +18,8 @@ export type EngineStatus =
 export interface Transport {
   /** Start loading; report status changes through `onStatus`. */
   start(onStatus: (status: EngineStatus) => void): void;
-  /** Send one solve; `setup` and `want` are JSON text. Rejects with an AbortError when `signal` aborts. */
-  request(setup: string, want: string, signal: AbortSignal): Promise<SolveResponse>;
+  /** Send one solve; `setup`, `want` and `start` are JSON text. Rejects with an AbortError when `signal` aborts. */
+  request(setup: string, want: string, signal: AbortSignal, start?: string): Promise<SolveResponse>;
   dispose(): void;
 }
 
@@ -51,6 +51,8 @@ export interface SolveOptions {
    * Use different keys for independent requests, e.g. headline numbers and a plot.
    */
   key?: string;
+  /** m, lab: follow the equilibrium from here (continuation, as a sweep does); the result's `followed` says if it jumped */
+  start?: Vec3 | null;
 }
 
 export interface Engine {
@@ -89,7 +91,7 @@ export function createEngine(transport: Transport): Engine {
       opts.signal?.addEventListener("abort", onAbort, { once: true });
       try {
         if (ctrl.signal.aborted) throw ctrl.signal.reason;
-        const res = await transport.request(JSON.stringify(setup), JSON.stringify(want), ctrl.signal);
+        const res = await transport.request(JSON.stringify(setup), JSON.stringify(want), ctrl.signal, JSON.stringify(opts.start ?? null));
         if (ctrl.signal.aborted) throw ctrl.signal.reason;
         if (!res.ok) throw new EngineError(res.kind, res.error, res.kind === "setup" ? res.path : undefined);
         return res.result;
