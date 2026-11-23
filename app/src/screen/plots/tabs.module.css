@@ -207,3 +207,71 @@
   background: var(--axis-z);
 }
 
+
+/* ---- wavefront map (#49) ------------------------------------------------------- */
+
+.wavefronts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  transition: opacity 150ms;
+}
+
+.wavefronts[data-pending] {
+  opacity: 0.55;
+}
+
+.wavefrontFigure {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 4px;
+}
+
+.wavefrontCanvas {
+  width: 200px;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.wavefrontCaption {
+  display: grid;
+  gap: 6px;
+  max-width: 56ch;
+}
+
+.wavefrontNumbers {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.wavefrontNumbers dt {
+  color: var(--text-muted);
+}
+
+.wavefrontNumbers dd {
+  margin: 0;
+  font-family: var(--font-mono);
+}
+
+.wavefrontScale {
+  display: inline-block;
+  width: 64px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: middle;
+  background: linear-gradient(90deg, rgb(42 120 214), rgb(247 247 247), rgb(198 47 46));
+}

@@ -10,7 +10,7 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Matrix4, Vector3, type OrthographicCamera } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { BeamField, FieldBlock, FieldShare, GravityField, PaulField, SlicePlane, Vec3 } from "../../engine/types.ts";
+import type { BeamField, FieldBlock, FieldShare, GravityField, LensResult, PaulField, SlicePlane, Vec3 } from "../../engine/types.ts";
 import { formatSI } from "../../lib/format.ts";
 import { environmentOf, gravityOf, partsOf, type Part, type PartId } from "../model.ts";
 import { beamRadius, scaleBar, unit } from "../scene/geometry.ts";
@@ -21,7 +21,7 @@ import { beamGeometry, electrodeExtent, fitScene, lensDistance, toWorld, viewDir
 import type { SceneProps } from "../Scene.tsx";
 import { usePalette } from "./palette.ts";
 import { facingPlane, planeName } from "../scene/slice.ts";
-import { AsphereLens, Beam, IntensitySlice, ParabolicMirror, ForceArrows, PaulTrap, Particle, TrapAxes, type Picking } from "./parts.tsx";
+import { AsphereLens, Beam, IntensitySlice, ParabolicMirror, ForceArrows, TracedRays, PaulTrap, Particle, TrapAxes, type Picking } from "./parts.tsx";
 import base from "../Scene.module.css";
 import styles from "./Scene3D.module.css";
 
@@ -43,6 +43,14 @@ export interface SliceData {
   pending: boolean;
   /** why the engine has no field for this setup */
   notice: string | null;
+}
+
+/** Traced rays (#49): the engine's lens blocks with their rays, or why there are none. */
+export interface RayData {
+  lenses: LensResult[] | null;
+  /** the setup has a beam focused by a real lens */
+  realLens: boolean;
+  pending: boolean;
 }
 
 export interface Scene3DProps extends Omit<SceneProps, "thumbnail"> {
@@ -70,7 +78,7 @@ const VIEWS: { name: ViewName; label: string; title: string }[] = [
   { name: "side", label: "Side", title: "Look from the side" },
 ];
 
-export default function Scene3D({ setup, result, selected, onSelect, inset, labels, grid, width, height, overlays, field, onReady }: Scene3DProps) {
+export default function Scene3D({ setup, result, selected, onSelect, inset, labels, grid, width, height, overlays, field, rays, onReady }: Scene3DProps) {
   const palette = usePalette();
   const [camera, setCamera] = useState<CameraState | null>(null);
   const [hover, setHover] = useState<{ id: PartId; x: number; y: number } | null>(null);
@@ -302,6 +310,9 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
           <TrapAxes centre={result.equilibrium} modes={result.modes} length={70 / pxPerMetre} palette={palette} />
         )}
         {slice && <IntensitySlice field={slice.block} plane={slice.plane} color={palette.color(lightColor(slice.wavelength))} />}
+        {rays?.lenses?.map((l) =>
+          l.rays ? <TracedRays key={`rays-${l.field}`} rays={l.rays} color={palette.color(lightColor((fields[l.field] as BeamField).wavelength))} /> : null,
+        )}
         {/* with one field the force at the equilibrium is zero by definition: arrows only when fields share the load */}
         {overlays.forces && result?.equilibrium && result.breakdown && result.breakdown.length > 1 && (
           <ForceArrows centre={result.equilibrium} shares={result.breakdown} length={90 / pxPerMetre} colorOf={shareColor} />
@@ -325,6 +336,18 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
                   : field.pending
                     ? "Computing the intensity slice…"
                     : "No light to show"}
+            </text>
+          )}
+          {rays && (
+            /* above the slice's note when both are shown */
+            <text className={base.cornerText} x={barRight} y={bottom - (field ? 62 : 44)} textAnchor="end" data-testid="rays-note">
+              {!rays.realLens
+                ? "No real lens to trace: Lens → Type → Asphere"
+                : rays.lenses?.some((l) => l.rays)
+                  ? `${rays.lenses.reduce((n, l) => n + (l.rays?.length ?? 0), 0)} rays traced through the lens, to its best focus`
+                  : rays.pending
+                    ? "Tracing the rays…"
+                    : "No rays traced"}
             </text>
           )}
           <path d={`M${barRight - bar.px} ${bottom - 22}v6h${bar.px}v-6`} className={base.scaleBar} data-testid="scale-bar-line" />

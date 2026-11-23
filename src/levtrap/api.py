@@ -342,7 +342,54 @@ def asphere_focus(b: dict) -> dict:
                 rms_waves=float(lr.rms_waves), rms_waves_untilted=float(lr0.rms_waves), n_glass=float(lr.n_glass),
                 back_focal_length=float(lr0.focus_mm[2] - 3.214106073867) * 1e-3,
                 pointing_mrad=[float(lr.centroid_dir[0] * 1e3), float(lr.centroid_dir[1] * 1e3)])
-    return dict(beam=lr.beam * math.sqrt(lr.transmitted), offset=offset, info=info)
+    return dict(beam=lr.beam * math.sqrt(lr.transmitted), offset=offset, info=info, lens=lr, aligned_focus_mm=np.asarray(lr0.focus_mm),
+                wavelength=wl, beam_diameter=float(focus["beam_diameter"]))
+
+
+def lens_detail(entry: dict, R: np.ndarray, position: np.ndarray, per_fan: int = 9) -> dict:
+    """The traced rays and the wavefront error of a beam focused by a real lens
+    (``asphere_focus``'s ``entry``), for ``want=["lens"]``.
+
+    ``rays``: two fans (across x and across y, through the beam's centre),
+    ``per_fan`` rays each within the beam's 1/e^2 diameter; each ray is a
+    polyline [m, lab] from the incoming beam, to the front surface, to the back
+    surface, to the plane of the best focus, with its ``weight`` (the input
+    intensity, 1 on the axis). ``R`` and ``position`` place the beam's own
+    frame (origin at the aligned lens's best focus) in the lab.
+
+    ``wavefront``: the error W [waves] about the best focus on the input ray
+    grid ``x``, ``y`` [m] (null where no ray passes), with ``weight`` (the
+    input intensity); sqrt(sum weight W^2 / sum weight) is the lens's
+    ``rms_waves``.
+    """
+    lr = entry["lens"]
+    tr = lr.trace
+    P0 = entry["aligned_focus_mm"]
+    P = np.asarray(lr.focus_mm)
+
+    def lab(v_mm):  # lens lab (mm, S1 vertex of the aligned lens at 0) -> lab (m)
+        own = (np.asarray(v_mm, dtype=float) - P0) * 1e-3
+        return (own @ R.T + position).tolist()
+
+    w = entry["beam_diameter"] / 2 * 1e3  # mm
+    n = tr.x.shape[0]
+    mid = n // 2
+    rays = []
+    for fan, line in (("x", [(mid, j) for j in range(n)]), ("y", [(i, mid) for i in range(n)])):
+        cand = [(i, j) for i, j in line if tr.valid[i, j] and np.hypot(tr.x[i, j], tr.y[i, j]) <= w]
+        if not cand:
+            continue
+        pick = [cand[int(round(k))] for k in np.linspace(0, len(cand) - 1, min(per_fan, len(cand)))]
+        for i, j in pick:
+            start = np.array([tr.x[i, j], tr.y[i, j], -2 * w])
+            q1, q2, u = tr.Q1[i, j], tr.Q[i, j], tr.U[i, j]
+            end = q2 + u * (P[2] - q2[2]) / u[2]
+            rays.append(dict(fan=fan, weight=float(tr.E_in[i, j] ** 2), points=[lab(start), lab(q1), lab(q2), lab(end)]))
+    Wv = np.where(tr.valid, lr.W / (entry["wavelength"] * 1e3), np.nan)
+    wf = dict(x=(tr.x[0, :] * 1e-3).tolist(), y=(tr.y[:, 0] * 1e-3).tolist(),
+              W=[[None if not np.isfinite(v) else float(v) for v in row] for row in Wv],
+              weight=(tr.E_in**2 * tr.valid).tolist())
+    return dict(rays=rays, wavefront=wf)
 
 
 _MIRROR_BEAMS: dict = {}

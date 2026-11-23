@@ -22,6 +22,8 @@ export interface ShowOptions {
   trueSize: boolean;
   /** the light's intensity on the lab plane through the trap that faces the camera */
   slice: boolean;
+  /** rays traced through a real lens (an asphere) */
+  rays: boolean;
 }
 
 export interface TopBarProps {
@@ -199,6 +201,13 @@ export function TopBar({ name, canUndo, canRedo, onUndo, onRedo, show, onShow, o
                 checked={show.slice}
                 onSelect={() => onShow({ ...show, slice: !show.slice })}
                 testId="show-slice"
+              />
+              <MenuItem
+                title="Traced rays"
+                note="Through a real lens (Lens → Asphere)"
+                checked={show.rays}
+                onSelect={() => onShow({ ...show, rays: !show.rays })}
+                testId="show-rays"
               />
             </>
           )}
