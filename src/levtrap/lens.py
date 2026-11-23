@@ -181,6 +181,7 @@ class TraceResult:
     valid: np.ndarray
     n_glass: float
     transmitted: float  # fraction of input power transmitted by the apertures
+    Q1: np.ndarray = None  # where each ray meets S1 (lab, mm), (N, N, 3)
 
 
 def trace(lens: Lens, wavelength_um: float, beam_diameter_mm: float, tilt_x_deg: float = 0.0,
@@ -216,13 +217,14 @@ def trace(lens: Lens, wavelength_um: float, beam_diameter_mm: float, tilt_x_deg:
     L = t1 * 1.0 + t2 * n
     # lens -> lab
     Q = (X2 - pivot_pt) @ R.T + pivot_pt + shift
+    Q1 = (X1 - pivot_pt) @ R.T + pivot_pt + shift
     Ulab = U2 @ R.T
     valid = valid & (Ulab[:, 2] > 0)
     shp = X0.shape
     Pin = np.sum(E_in**2)
     tr = float(np.sum(E_in.ravel()[valid] ** 2) / Pin)
     return TraceResult(X0, Y0, E_in, Q.reshape(shp + (3,)), Ulab.reshape(shp + (3,)), L.reshape(shp),
-                       valid.reshape(shp), n, tr)
+                       valid.reshape(shp), n, tr, Q1.reshape(shp + (3,)))
 
 
 def best_focus(tr: TraceResult):
@@ -422,6 +424,7 @@ class LensResult:
     x: np.ndarray = field(repr=False)
     y: np.ndarray = field(repr=False)
     centroid_dir: np.ndarray = field(repr=False, default=None)
+    trace: TraceResult = field(repr=False, default=None)  # the rays behind it
 
 
 def focused_beam(lens: Lens, wavelength_um: float, beam_diameter_mm: float, tilt_x_deg=0.0, tilt_y_deg=0.0,
@@ -443,6 +446,6 @@ def focused_beam(lens: Lens, wavelength_um: float, beam_diameter_mm: float, tilt
     cdir = np.sum(tr.U * wgt[..., None], axis=(0, 1))
     cdir = cdir / np.linalg.norm(cdir)
     return LensResult(beam, P, rms / (wavelength_um * 1e-3), tr.transmitted, tr.n_glass,
-                      W, tr.x, tr.y, cdir)
+                      W, tr.x, tr.y, cdir, tr)
 
 

@@ -154,7 +154,7 @@ export interface Setup {
 // ---------------------------------------------------------------------------
 
 /** Extra blocks `solve` computes only on request (solve.WANTS). */
-export type Want = "curves" | "dipole" | "pattern" | "field";
+export type Want = "curves" | "dipole" | "pattern" | "field" | "lens";
 
 export interface TrapMode {
   /** the lab axis the eigen-axis is nearest to: "x" | "y" | "z" */
@@ -311,6 +311,28 @@ export interface LensResult {
   back_focal_length: number;
   /** mrad, the light's mean direction in the beam's frame (x, y) */
   pointing_mrad: [number, number];
+  /** on request (want "lens"): two fans of traced rays, lab frame */
+  rays?: TracedRay[];
+  /** on request (want "lens"): the wavefront error about the best focus, on the input ray grid */
+  wavefront?: Wavefront;
+}
+
+/** One traced ray (api.lens_detail): from the incoming beam, to the front and back surfaces, to the best-focus plane [m]. */
+export interface TracedRay {
+  fan: "x" | "y";
+  /** the input intensity, 1 on the axis */
+  weight: number;
+  points: Vec3[];
+}
+
+/** The wavefront error W [waves] on the input grid x, y [m]; null where no ray passes. */
+export interface Wavefront {
+  x: number[];
+  y: number[];
+  /** W[j][i] at (x[i], y[j]) */
+  W: (number | null)[][];
+  /** the input intensity at each node; the rms of W weighted by it is rms_waves */
+  weight: number[][];
 }
 
 export type SlicePlane = "xz" | "yz" | "xy";

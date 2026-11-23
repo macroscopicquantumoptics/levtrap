@@ -28,7 +28,7 @@ __all__ = ["solve", "solve_json", "check_supported", "check_simple", "scan_box",
            "RESULT_VERSION", "WANTS", "pattern_result"]
 
 RESULT_VERSION = 1
-WANTS = ("curves", "dipole", "pattern", "field")
+WANTS = ("curves", "dipole", "pattern", "field", "lens")
 SCAN_RANGES = (1.5e-6, 1.5e-6, 3e-6)  # half-widths [m] searched for the equilibrium (x, y, z)
 SCAN_POINTS = 61
 
@@ -326,7 +326,7 @@ def solve(setup: dict | str, want: Iterable[str] = (), start=None) -> dict:
         result["models"].append(dict(quantity="mirror", model="paraboloid far field", validity="ok",
                                      notes=["geometric optics on the mirror; far field projected on VSWFs"]))
     if lensed:
-        result["lenses"] = _lens_block(s, lensed, modes)
+        result["lenses"] = _lens_block(s, lensed, modes, detail="lens" in want)
         result["models"].append(dict(quantity="lens", model="ray-trace", validity="ok",
                                      notes=["Thorlabs 354330-C, Zemax prescription; far field projected on VSWFs"]))
     result["time"] = time.perf_counter() - t0
@@ -362,9 +362,13 @@ def _place_aspheres(s: dict) -> dict:
     return out
 
 
-def _lens_block(s: dict, lensed: dict, modes: list[dict]) -> list[dict]:
+def _lens_block(s: dict, lensed: dict, modes: list[dict], detail: bool = False) -> list[dict]:
     """The ``lenses`` block: per beam focused by a real lens, where the focus
-    went, the light lost on the lens, and how far the trap's axis tilts."""
+    went, the light lost on the lens, and how far the trap's axis tilts; with
+    ``detail`` (``want=["lens"]``) also its traced ``rays`` and ``wavefront``
+    (:func:`levtrap.api.lens_detail`)."""
+    from .api import lens_detail
+    from .optics import beam_rotation
     out = []
     for entry in sorted(lensed.values(), key=lambda e: e["index"]):
         d = entry["direction"] / np.linalg.norm(entry["direction"])
@@ -373,6 +377,11 @@ def _lens_block(s: dict, lensed: dict, modes: list[dict]) -> list[dict]:
         tilt = None if axial is None else float(np.arccos(min(1.0, abs(float(np.dot(axial["axis"], d))))) * 1e3)
         out.append(dict(field=entry["index"], focus_shift=[float(v) for v in entry["shift"]],
                         trap_axis_tilt_mrad=tilt, **entry["info"]))
+        if detail:
+            f = s["trap"]["fields"][entry["index"]]
+            # the beam's position was moved to the lens's focus: the aligned focus is where it was
+            aligned = np.asarray(f["position"], dtype=float) - entry["shift"]
+            out[-1].update(lens_detail(entry, beam_rotation(entry["direction"]), aligned))
     return out
 
 
