@@ -25,7 +25,9 @@ test("a tilt sweep of the real lens follows one trap and marks the jumps", async
   // the tilt moves the focus off the trap it was following: the jumps are counted and drawn
   await expect(page.getByTestId("sweep-progress")).toContainText(/the trap jumped \d+×/);
   await expect(page.getByTestId("plot-sweep-marker").first()).toBeVisible();
-  await expect(page.getByTestId("plot-sweep")).toContainText("no stable trap");
+  // and where the followed trap vanished, the fresh search found another (#59): every value holds one
+  // (before #59 the search missed the traps beside the axis at ±1/3° and ±1°, shaded "no stable trap")
+  await expect(page.getByTestId("plot-sweep")).not.toContainText("no stable trap");
   await shot(page, "plot-sweep-follow-desktop-light");
   // the new outputs read the same run
   await page.getByTestId("field-sweep-output").selectOption("recoil");
