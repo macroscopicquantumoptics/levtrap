@@ -70,12 +70,11 @@ def test_a_start_far_from_any_trap_jumps_and_searches_afresh():
     assert "followed" not in fresh
 
 
-def test_a_start_reaches_a_trap_beyond_the_searched_box():
+def test_a_start_reaches_a_trap_beyond_the_first_searched_box():
     """A 5 mm beam on the asphere at 1550 nm traps 3.2 um upstream, beyond the
-    3 um the search covers along the beam: a fresh search misses it, but a
-    sweep that started near it follows it (the old page found it on its axis scan)."""
+    3 um the first search covers along the beam; a sweep that started near it
+    follows it. (Since #59 a fresh search finds it too: tests/test_trap_search.py.)"""
     s = asphere(0.0, diameter=5e-3)
-    assert not solve(s)["stable"]
     r = solve(s, start=[0.0, 0.0, -3.0e-6])
     assert r["stable"] and r["followed"]["jumped"] is False
     assert r["equilibrium"][2] == pytest.approx(-3.1635e-6, abs=1e-9)
