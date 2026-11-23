@@ -28,7 +28,7 @@ const post = (msg: WorkerReply) => ctx.postMessage(msg);
 const progress = (stage: string, fraction: number) => post({ type: "progress", stage, fraction });
 
 let solveJson: PyProxyFn | null = null;
-const queue: { id: number; setup: string; want: string }[] = [];
+const queue: { id: number; setup: string; want: string; start?: string }[] = [];
 const cancelled = new Set<number>();
 let pumping = false;
 
@@ -73,7 +73,7 @@ async function pump(): Promise<void> {
         continue;
       }
       const t0 = performance.now();
-      const response = solveJson(job.setup, job.want);
+      const response = solveJson(job.setup, job.want, job.start ?? "null");
       post({ type: "result", id: job.id, response, elapsed: (performance.now() - t0) / 1000 });
     }
   } finally {
