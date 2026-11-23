@@ -10,7 +10,8 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Matrix4, Vector3, type OrthographicCamera } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { BeamField, FieldShare, GravityField, PaulField, Vec3 } from "../../engine/types.ts";
+import type { BeamField, FieldBlock, FieldShare, GravityField, PaulField, SlicePlane, Vec3 } from "../../engine/types.ts";
+import { formatSI } from "../../lib/format.ts";
 import { environmentOf, gravityOf, partsOf, type Part, type PartId } from "../model.ts";
 import { beamRadius, scaleBar, unit } from "../scene/geometry.ts";
 import { lightColor } from "../scene/light.ts";
@@ -19,17 +20,29 @@ import { mirrorSag } from "../../engine/mirrors.ts";
 import { beamGeometry, electrodeExtent, fitScene, lensDistance, toWorld, viewDirection, WORLD, type Fit, type LensPlacement, type ViewName } from "../scene/space.ts";
 import type { SceneProps } from "../Scene.tsx";
 import { usePalette } from "./palette.ts";
-import { AsphereLens, Beam, ParabolicMirror, ForceArrows, PaulTrap, Particle, TrapAxes, type Picking } from "./parts.tsx";
+import { facingPlane, planeName } from "../scene/slice.ts";
+import { AsphereLens, Beam, IntensitySlice, ParabolicMirror, ForceArrows, PaulTrap, Particle, TrapAxes, type Picking } from "./parts.tsx";
 import base from "../Scene.module.css";
 import styles from "./Scene3D.module.css";
 
 export interface Overlays {
+  /** the light's intensity on the lab plane through the trap that faces the camera */
+  slice?: boolean;
   /** draw the particle at its true size even when that is under a few pixels */
   trueSize: boolean;
   /** the trap's eigen-axes through the equilibrium */
   axes: boolean;
   /** each field's force on the particle */
   forces: boolean;
+}
+
+/** The intensity slice's data (#48): the engine's field block, or why there is none yet. */
+export interface SliceData {
+  block: FieldBlock | null;
+  /** the shown block belongs to an earlier setup (or none has come yet) */
+  pending: boolean;
+  /** why the engine has no field for this setup */
+  notice: string | null;
 }
 
 export interface Scene3DProps extends Omit<SceneProps, "thumbnail"> {
@@ -57,7 +70,7 @@ const VIEWS: { name: ViewName; label: string; title: string }[] = [
   { name: "side", label: "Side", title: "Look from the side" },
 ];
 
-export default function Scene3D({ setup, result, selected, onSelect, inset, labels, grid, width, height, overlays, onReady }: Scene3DProps) {
+export default function Scene3D({ setup, result, selected, onSelect, inset, labels, grid, width, height, overlays, field, onReady }: Scene3DProps) {
   const palette = usePalette();
   const [camera, setCamera] = useState<CameraState | null>(null);
   const [hover, setHover] = useState<{ id: PartId; x: number; y: number } | null>(null);
@@ -77,6 +90,11 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
   const equilibrium: Vec3 = result?.equilibrium ?? (firstBeam ? (firstBeam.position ?? [0, 0, 0]) : [0, 0, 0]);
   const pxPerMetre = camera?.pxPerMetre ?? fit.pxPerMetre;
   const pxPerUnit = pxPerMetre / WORLD;
+  // the intensity slice: on the lab plane that faces the camera (its normal nearest the view direction)
+  const viewDir: Vec3 = camera ? (camera.right.clone().cross(camera.up).toArray() as Vec3) : [0, 1, 0];
+  const sliceWavelength = fields.find((f): f is BeamField => f.kind === "beam")?.wavelength ?? 1.064e-6;
+  const slice: { block: FieldBlock; plane: SlicePlane; wavelength: number } | null =
+    overlays.slice && field?.block ? { block: field.block, plane: facingPlane(viewDir), wavelength: sliceWavelength } : null;
 
   const picking: Picking = {
     selected,
@@ -267,6 +285,7 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
           <Beam
             key={index}
             symbol={!asphere && !mirror}
+            light={!slice}
             id={`field:${index}`}
             lensId={`lens:${index}`}
             geometry={g}
@@ -282,6 +301,7 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
         {overlays.axes && result?.equilibrium && result.modes.length > 0 && (
           <TrapAxes centre={result.equilibrium} modes={result.modes} length={70 / pxPerMetre} palette={palette} />
         )}
+        {slice && <IntensitySlice field={slice.block} plane={slice.plane} color={palette.color(lightColor(slice.wavelength))} />}
         {/* with one field the force at the equilibrium is zero by definition: arrows only when fields share the load */}
         {overlays.forces && result?.equilibrium && result.breakdown && result.breakdown.length > 1 && (
           <ForceArrows centre={result.equilibrium} shares={result.breakdown} length={90 / pxPerMetre} colorOf={shareColor} />
@@ -296,6 +316,17 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
           )}
         {enlarged && <circle className={base.enlarged} cx={P[0]} cy={P[1]} r={particlePx + 4} />}
         <g className={base.corner}>
+          {field && (
+            <text className={base.cornerText} x={barRight} y={bottom - 44} textAnchor="end" data-testid="slice-note" data-plane={slice?.plane}>
+              {slice
+                ? `Intensity on the ${planeName(slice.plane)} plane · peak ${formatSI(slice.block.max, "W/m²", 3)}`
+                : field.notice
+                  ? "No intensity slice: " + field.notice.replace(/\.$/, "").toLowerCase()
+                  : field.pending
+                    ? "Computing the intensity slice…"
+                    : "No light to show"}
+            </text>
+          )}
           <path d={`M${barRight - bar.px} ${bottom - 22}v6h${bar.px}v-6`} className={base.scaleBar} data-testid="scale-bar-line" />
           <text className={base.cornerText} x={barRight - bar.px / 2} y={bottom - 26} textAnchor="middle" data-testid="scale-bar" data-px-per-metre={pxPerMetre}>
             {bar.label}

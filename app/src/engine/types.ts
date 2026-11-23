@@ -154,7 +154,7 @@ export interface Setup {
 // ---------------------------------------------------------------------------
 
 /** Extra blocks `solve` computes only on request (solve.WANTS). */
-export type Want = "curves" | "dipole" | "pattern";
+export type Want = "curves" | "dipole" | "pattern" | "field";
 
 export interface TrapMode {
   /** the lab axis the eigen-axis is nearest to: "x" | "y" | "z" */
@@ -313,6 +313,24 @@ export interface LensResult {
   pointing_mrad: [number, number];
 }
 
+export type SlicePlane = "xz" | "yz" | "xy";
+
+/** The light's intensity on the lab planes through the trap (solve._field_block, want "field"). */
+export interface FieldBlock {
+  /** m: the planes pass through here (the equilibrium, or the searched centre) */
+  centre: Vec3;
+  planes: Record<SlicePlane, {
+    /** m, along the plane's first lab axis (absolute) */
+    u: number[];
+    /** m, along its second */
+    v: number[];
+    /** W/m², I[j][i] at (u[i], v[j]) */
+    I: number[][];
+  }>;
+  /** W/m², the largest on any plane */
+  max: number;
+}
+
 /** What a parabolic mirror does to its beam (api.mirror_focus). */
 export interface MirrorResult {
   /** index into trap.fields */
@@ -371,6 +389,8 @@ export interface Result {
   paul?: PaulResult | null;
   /** per beam focused by a real lens (focus.kind "asphere") */
   lenses?: LensResult[];
+  /** on request (want "field"): the light's intensity on the lab planes; null without light */
+  field?: FieldBlock | null;
   /** per beam focused by a parabolic mirror */
   mirrors?: MirrorResult[];
   /** each field's force and stiffness at the equilibrium; absent without one */

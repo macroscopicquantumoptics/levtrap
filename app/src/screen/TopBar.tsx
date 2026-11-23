@@ -20,6 +20,8 @@ export interface ShowOptions {
   axes: boolean;
   forces: boolean;
   trueSize: boolean;
+  /** the light's intensity on the lab plane through the trap that faces the camera */
+  slice: boolean;
 }
 
 export interface TopBarProps {
@@ -191,7 +193,13 @@ export function TopBar({ name, canUndo, canRedo, onUndo, onRedo, show, onShow, o
                 onSelect={() => onShow({ ...show, trueSize: !show.trueSize })}
                 testId="show-true-size"
               />
-              <MenuItem title="Intensity slice" tag="later" disabled />
+              <MenuItem
+                title="Intensity slice"
+                note="The light on the plane through the trap that faces you"
+                checked={show.slice}
+                onSelect={() => onShow({ ...show, slice: !show.slice })}
+                testId="show-slice"
+              />
             </>
           )}
         </Menu>

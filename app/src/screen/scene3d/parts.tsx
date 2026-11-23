@@ -13,10 +13,13 @@ import {
   ArrowHelper,
   BufferAttribute,
   BufferGeometry,
+  type Color,
+  DataTexture,
   DoubleSide,
   Float32BufferAttribute,
   Group,
   LatheGeometry,
+  LinearFilter,
   Line,
   LineBasicMaterial,
   LineDashedMaterial,
@@ -26,6 +29,7 @@ import {
   MeshStandardMaterial,
   NormalBlending,
   Quaternion,
+  RGBAFormat,
   ShaderMaterial,
   Vector2,
   Vector3,
@@ -36,7 +40,8 @@ import { beamRadius } from "../scene/geometry.ts";
 import { lightColor } from "../scene/light.ts";
 import { sag, type LensData } from "../../engine/lenses.ts";
 import { mirrorSag } from "../../engine/mirrors.ts";
-import type { MirrorFocus } from "../../engine/types.ts";
+import type { FieldBlock, MirrorFocus, SlicePlane } from "../../engine/types.ts";
+import { sliceCorners, sliceImage } from "../scene/slice.ts";
 import { beamProfile, beamToLab, type BeamGeometry, electrodes, type Electrode, lensToLab, type LensPlacement, toWorld, WORLD } from "../scene/space.ts";
 import type { Palette } from "./palette.ts";
 
@@ -127,9 +132,11 @@ export interface BeamProps {
   pxPerUnit: number;
   /** draw the symbolic lens (an ideal lens); a real lens is drawn by AsphereLens */
   symbol?: boolean;
+  /** draw the light's volume; off while the intensity slice shows the light itself */
+  light?: boolean;
 }
 
-export function Beam({ id, lensId, geometry: g, wavelength, lens: L, run, palette, picking, pxPerUnit, symbol = true }: BeamProps) {
+export function Beam({ id, lensId, geometry: g, wavelength, lens: L, run, palette, picking, pxPerUnit, symbol = true, light = true }: BeamProps) {
   const color = palette.color(lightColor(wavelength));
   const dark = palette.theme === "dark";
 
@@ -192,7 +199,7 @@ export function Beam({ id, lensId, geometry: g, wavelength, lens: L, run, palett
   return (
     <group position={focus} quaternion={q}>
       <primitive object={axis} />
-      <mesh geometry={mesh} material={material} renderOrder={2} {...handlers(id, 0, picking)} />
+      <mesh geometry={mesh} material={material} renderOrder={2} visible={light} {...handlers(id, 0, picking)} />
       {symbol && <Lens id={lensId} at={-L} radius={1.12 * beamRadius(-L, g.w0, g.theta)} palette={palette} picking={picking} />}
     </group>
   );
@@ -331,6 +338,36 @@ export function ParabolicMirror({ id, focus, beam, palette, picking }: { id: Par
       </mesh>
       <primitive object={edge} />
     </group>
+  );
+}
+
+/**
+ * The intensity slice (#48): the light's intensity on a lab plane through
+ * the trap, as a texture in the light's colour whose opacity follows the
+ * intensity. Drawn behind the particle, without writing depth.
+ */
+export function IntensitySlice({ field, plane, color }: { field: FieldBlock; plane: SlicePlane; color: Color }) {
+  const rgb = [Math.round(color.r * 255), Math.round(color.g * 255), Math.round(color.b * 255)] as [number, number, number];
+  const key = `${rgb.join(",")}|${plane}`;
+  const { geometry, texture } = useMemo(() => {
+    const img = sliceImage(field, plane, rgb);
+    const tex = new DataTexture(img.data, img.width, img.height, RGBAFormat);
+    tex.magFilter = LinearFilter;
+    tex.minFilter = LinearFilter;
+    tex.needsUpdate = true;
+    const corners = sliceCorners(field, plane).map(toWorld);
+    const g = new BufferGeometry();
+    g.setAttribute("position", new Float32BufferAttribute(corners.flat(), 3));
+    g.setAttribute("uv", new Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+    g.setIndex([0, 1, 2, 0, 2, 3]);
+    return { geometry: g, texture: tex };
+    // rgb is in key
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [field, key]);
+  return (
+    <mesh geometry={geometry} renderOrder={1}>
+      <meshBasicMaterial map={texture} transparent depthWrite={false} side={DoubleSide} toneMapped={false} />
+    </mesh>
   );
 }
 
