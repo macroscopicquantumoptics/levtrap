@@ -445,7 +445,7 @@ function LensEditor({ setup, beam, index, prefix, onEdit, result, engine, record
           value={filling != null ? "objective" : "gaussian"}
           options={[
             { value: "gaussian", label: "Gaussian of this NA" },
-            { value: "objective", label: "Objective, aperture filled" },
+            { value: "objective", label: "Filled objective" },
           ]}
           onChange={(m) => edit(m === "objective" ? { kind: "lens", NA: na, filling: 1 } : { kind: "lens", NA: na })}
           note={

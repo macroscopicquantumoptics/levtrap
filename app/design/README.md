@@ -272,6 +272,14 @@ Plots → Wavefront: the error the rays carry about the best focus, rms
 
 ![Wavefront](screens/plot-wavefront-desktop-light.webp)
 
+## 14. An objective's filled aperture (#61)
+
+Lens → Advanced → Focus model → Filled objective: NA 0.8 is now the
+aperture, and Filling (here 1) how fully the beam lights it. Every
+frequency is lower than the Gaussian of the same NA (227 / 285 / 96.8 kHz).
+
+![Filled objective](screens/lens-filling-desktop-light.webp)
+
 ## Other states
 
 A number explaining itself: the formula, the values that went in, the model
