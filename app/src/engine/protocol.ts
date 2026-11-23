@@ -1,6 +1,6 @@
 /** Messages between the engine client and the Pyodide worker. */
 
-/** Must match web/worker.js (a unit test checks). */
+/** Must match the pyodide CI checks the wheel with (contract.test.ts checks). */
 export const PYODIDE_VERSION = "0.29.5";
 export const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
 
@@ -17,8 +17,8 @@ export interface Versions {
 export type WorkerRequest =
   /** Absolute URL of the folder holding manifest.json and the wheel. */
   | { type: "init"; wheelBase: string }
-  /** setup and want are JSON text, handed to levtrap.solve.solve_json as is. */
-  | { type: "solve"; id: number; setup: string; want: string }
+  /** setup, want and start are JSON text, handed to levtrap.solve.solve_json as is (start: null, or a lab position to follow). */
+  | { type: "solve"; id: number; setup: string; want: string; start?: string }
   /** Drop a queued solve; a solve already running finishes and is ignored. */
   | { type: "cancel"; id: number };
 

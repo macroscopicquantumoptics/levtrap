@@ -22,7 +22,7 @@ import { Plot, type PlotSeries, type Tone } from "./Plot.tsx";
 import { PolarPlot } from "./PolarPlot.tsx";
 import { spectrum } from "./spectrum.ts";
 import { waveRange, wavefrontPixels, weightedRms } from "./wavefront.ts";
-import { defaultRange, OUTPUTS, sweepParams, sweepValues, unstableRuns } from "./sweep.ts";
+import { defaultRange, followFrom, jumpsAt, OUTPUTS, sweepParams, sweepValues, unstableRuns } from "./sweep.ts";
 import styles from "./tabs.module.css";
 
 export interface TabProps {
@@ -462,6 +462,7 @@ export function SweepTab({ setup, engine }: TabProps) {
   const isLog = log[param.id] ?? param.log;
   const [outputId, setOutputId] = useState("frequencies");
   const output = OUTPUTS.find((o) => o.id === outputId)!;
+  const [follow, setFollow] = useState(true);
   const [run, setRun] = useState<SweepRun | null>(null);
   const ctrl = useRef<AbortController | null>(null);
   const setupKey = canonical(setup);
@@ -485,7 +486,8 @@ export function SweepTab({ setup, engine }: TabProps) {
     for (const v of xs) {
       if (c.signal.aborted) return;
       try {
-        results.push(await engine().solve(param.set(setup, v), [], { signal: c.signal }));
+        // continuation: start from the last stable equilibrium, so the sweep follows one trap
+        results.push(await engine().solve(param.set(setup, v), [], { signal: c.signal, start: follow ? followFrom(results) : null }));
       } catch (err) {
         if (isAbortError(err)) return;
         // one value the engine refuses does not end the sweep: it is a gap
@@ -537,6 +539,10 @@ export function SweepTab({ setup, engine }: TabProps) {
         <input type="checkbox" checked={isLog} onChange={(e) => setLog((l) => ({ ...l, [param.id]: e.target.checked }))} data-testid="sweep-log" />
         Log spacing
       </label>
+      <label className={styles.check} title="Start each value from the trap found at the one before, and mark where it vanished">
+        <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} data-testid="sweep-follow" />
+        Follow one trap
+      </label>
       <SelectField id="sweep-output" label="Plot" value={outputId} options={OUTPUTS.map((o) => ({ value: o.id, label: o.label }))} onChange={setOutputId} />
       {running ? (
         <button type="button" className={ui.button} onClick={cancel} data-testid="sweep-cancel">
@@ -550,6 +556,7 @@ export function SweepTab({ setup, engine }: TabProps) {
       {run && (
         <span className={styles.progress} data-testid="sweep-progress" role="status">
           {running ? `${run.results.length} of ${run.xs.length}` : run.results.length < run.xs.length ? `Stopped at ${run.results.length} of ${run.xs.length}` : `${run.xs.length} solves`}
+          {jumpsAt(run.xs, run.results).length > 0 && ` · the trap jumped ${jumpsAt(run.xs, run.results).length}× (the followed trap vanished; marked)`}
           <progress max={run.xs.length} value={run.results.length} />
         </span>
       )}
@@ -558,7 +565,7 @@ export function SweepTab({ setup, engine }: TabProps) {
 
   let plot: ReactNode = (
     <Note title="Sweep">
-      Choose an input and a range, and Run: the engine computes the trap at each value. The unstable values are shaded. Each value takes about a second.
+      Choose an input and a range, and Run: the engine computes the trap at each value, following one trap from value to value; where it vanishes, a line marks the jump. The unstable values are shaded. Each value takes about a second.
     </Note>
   );
   if (run && run.results.length) {
@@ -586,6 +593,7 @@ export function SweepTab({ setup, engine }: TabProps) {
         y={output.unit ? { label: output.label, unit: output.unit } : { label: output.label, unit: "", display: { unit: output.id === "depth" ? "k_BT" : "", factor: 1 } }}
         series={[...names].map(([name, points]) => ({ id: name, label: names.size > 1 ? `along ${name}` : output.label, tone: tone(name), points }))}
         bands={unstableRuns(done, stable).map(([a, b]) => ({ from: a, to: b, label: "no stable trap" }))}
+        markers={jumpsAt(done, run.results).map((x) => ({ x, label: "jump" }))}
       />
     );
   }

@@ -1,17 +1,18 @@
-"""Local development server: serves web/ and answers API calls with native
-Python (no Pyodide/CDN needed).  Open http://localhost:8000/?backend=local
+"""Local engine for the app: answers POST /api with native Python (no
+Pyodide needed).
 
     python scripts/devserver.py [port]
 
-The new app (app/, served by `next dev` or any static server) calls the same
-POST /api from another origin with ?backend=local, so the API answers CORS
-requests.  It listens on 127.0.0.1 only.
+The app (app/, served by `next dev` or any static server) calls it from
+another origin when opened with ?backend=local, so the API answers CORS
+requests. GET / answers that the server is up (the browser tests wait for
+it). It listens on 127.0.0.1 only.
 """
 
 import json
 import os
 import sys
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, os.path.join(ROOT, "src"))
@@ -19,9 +20,14 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 from levtrap import api  # noqa: E402
 
 
-class Handler(SimpleHTTPRequestHandler):
-    def __init__(self, *a, **kw):
-        super().__init__(*a, directory=os.path.join(ROOT, "web"), **kw)
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):  # noqa: N802
+        data = b"levtrap engine: POST /api\n"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -54,5 +60,5 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
-    print(f"Serving on http://localhost:{port}/?backend=local")
+    print(f"levtrap engine on http://127.0.0.1:{port}/api (open the app with ?backend=local)")
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

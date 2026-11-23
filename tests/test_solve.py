@@ -1,4 +1,5 @@
-"""solve(): the OTT benchmark through the Setup/Result contract and the generic solver,\nagreement with api.analyse, and gravity."""
+"""solve(): the OTT benchmark through the Setup/Result contract and the generic solver,
+agreement with the old on-axis path (its numbers recorded), and gravity."""
 
 import copy
 import json
@@ -47,21 +48,29 @@ def test_result_shape(ott):
     json.dumps(ott)  # plain JSON
 
 
-def test_matches_analyse():
-    """The generic solver reproduces the validated on-axis path (api.analyse):
+# The old on-axis path (api.analyse, validated against OTT and retired with
+# web/ in E2) on DEFAULT_SETUP, recorded before it was deleted.
+ANALYSE = dict(z_eq=2.1552054190010294e-07, P_sca=0.0002961258563006126, mass=9.215338450530059e-18, kT=384.229197601967,
+               freq=dict(x=227499.36931260797, y=284780.7549543197, z=96842.64135638638),
+               stiffness=dict(x=1.882918059498975e-05, y=2.9504774574613407e-05, z=3.411962735102289e-06),
+               depth=dict(x=2.3718298586228087e-18, y=2.3704364210327993e-18, z=1.5914569723198744e-18))
+
+
+def test_matches_the_old_on_axis_path():
+    """The generic solver reproduces the validated on-axis path (ANALYSE):
     equilibrium and frequencies within 0.1 %.  The depth is integrated on a
     line through the equilibrium rather than through the focus, which is
     closer to the converged value; it agrees within 1 %."""
     r = solve(DEFAULT_SETUP, want=["curves"])
-    ref = api.analyse(*api.prepare(dict(setup=DEFAULT_SETUP)), detail=False)
-    assert r["stable"] == ref["stable"]
+    ref = ANALYSE
+    assert r["stable"]
     assert r["equilibrium"][2] == pytest.approx(ref["z_eq"], rel=1e-3)
     for m in r["modes"]:
         assert m["frequency"] == pytest.approx(ref["freq"][m["name"]], rel=1e-3)
         assert m["stiffness"] == pytest.approx(ref["stiffness"][m["name"]], rel=2e-3)
         assert m["depth"] == pytest.approx(ref["depth"][m["name"]], rel=1e-2)
-    assert r["depth"]["kT"] == pytest.approx(ref["depth"]["kT"], rel=1e-2)
-    assert r["optical"]["P_sca"] == pytest.approx(ref["at"]["P_sca"], rel=1e-4)
+    assert r["depth"]["kT"] == pytest.approx(ref["kT"], rel=1e-2)
+    assert r["optical"]["P_sca"] == pytest.approx(ref["P_sca"], rel=1e-4)
     assert r["particle"]["mass"] == ref["mass"]
     for a in "xyz":
         c = r["curves"][a]

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { isAbortError, type Engine, type EngineStatus } from "../engine/client.ts";
-import type { Setup, Want } from "../engine/types.ts";
+import type { Setup, Want, Vec3 } from "../engine/types.ts";
 import { answerFromError, instantAnswer, NO_ANSWER, type Answer } from "./answer.ts";
 import { canonical } from "./model.ts";
 
@@ -30,12 +30,23 @@ export interface Solving {
  * The answer for a setup: at once for a preset, from the engine otherwise.
  * The engine starts loading on mount, so it is ready by the first edit.
  * `want` asks for extra blocks (a plot's data); with `enabled` false nothing
- * is asked and the answer stays empty.
+ * is asked and the answer stays empty. Requests for different `want`s (or a
+ * different `channel`) run side by side; a newer one supersedes only its own kind.
  */
-export function useAnswer(setup: Setup, engine: (() => Engine) | null, recorded = true, want: readonly Want[] = [], enabled = true): Solving {
+export function useAnswer(
+  setup: Setup,
+  engine: (() => Engine) | null,
+  recorded = true,
+  want: readonly Want[] = [],
+  enabled = true,
+  channel?: string,
+  /** m, lab: follow the equilibrium from here (continuation); a recorded preset answer is not used then */
+  start?: Vec3 | null,
+): Solving {
   const wanted = want.join(",");
-  const key = useMemo(() => `${wanted}|${canonical(setup)}`, [setup, wanted]);
-  const instant = useMemo(() => instantAnswer(setup, recorded, wanted ? (wanted.split(",") as Want[]) : []), [setup, recorded, wanted]);
+  const from = start ? start.join(",") : "";
+  const key = useMemo(() => `${wanted}|${from}|${canonical(setup)}`, [setup, wanted, from]);
+  const instant = useMemo(() => (from ? null : instantAnswer(setup, recorded, wanted ? (wanted.split(",") as Want[]) : [])), [setup, recorded, wanted, from]);
   const [settled, setSettled] = useState<{ key: string; answer: Answer } | null>(null);
   const [last, setLast] = useState<Answer>(NO_ANSWER);
 
@@ -51,7 +62,13 @@ export function useAnswer(setup: Setup, engine: (() => Engine) | null, recorded 
     const ctrl = new AbortController();
     const timer = setTimeout(() => {
       engine()
-        .solve(setup, wanted ? (wanted.split(",") as Want[]) : [], { signal: ctrl.signal })
+        // requests for different blocks (or channels) must not supersede each other: the headline numbers,
+        // a plot's data and a comparison each have their own key
+        .solve(setup, wanted ? (wanted.split(",") as Want[]) : [], {
+          signal: ctrl.signal,
+          key: channel ?? `solve:${wanted}`,
+          start: from ? (from.split(",").map(Number) as Vec3) : null,
+        })
         .then(
           (result) => setSettled({ key, answer: { result, origin: "engine", notice: null } }),
           (err: unknown) => {
@@ -63,7 +80,7 @@ export function useAnswer(setup: Setup, engine: (() => Engine) | null, recorded 
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [key, setup, instant, engine, enabled, wanted]);
+  }, [key, setup, instant, engine, enabled, wanted, channel, from]);
 
   const current = !enabled ? NO_ANSWER : (instant ?? (engine ? (settled?.key === key ? settled.answer : null) : NO_ENGINE));
   // remember the latest answer, to keep showing it (dimmed) while the next one is computed
