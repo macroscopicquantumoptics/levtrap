@@ -117,7 +117,9 @@ test("the picker says where each preset's values come from", async ({ page }) =>
   await open(page, "preset=tweezer");
   await fileMenu(page, "open-presets");
   await expect(page.getByTestId("preset-tweezer-source")).toContainText("Example values, not from a paper yet");
-  await expect(page.getByTestId("preset-tweezer-source")).toContainText("to be checked against Jain et al., Phys. Rev. Lett. 116, 243601 (2016)");
+  // the tweezer's paper is read (C3), but levtrap disagrees with it: named, with the issue, and not used (#61)
+  await expect(page.getByTestId("preset-tweezer-source")).toContainText("levtrap disagrees with Jain et al., Phys. Rev. Lett. 116, 243601 (2016) (issue #61)");
+  await expect(page.getByTestId("preset-counter-source")).toContainText("to be checked against Yoneda and Aikawa");
   await expect(page.getByTestId("presets-sources").locator("a")).toHaveCount(4);
   await shot(page, "presets-sources-desktop-light");
 });

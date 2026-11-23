@@ -14,6 +14,8 @@ export interface Reference {
   doi: string | null;
   setup?: Setup;
   schema_gaps?: string[];
+  /** a verified entry levtrap disagrees with beyond its tolerance: the issue tracking it (C4) */
+  disagrees?: number | null;
 }
 
 /** "Jain et al., Phys. Rev. Lett. 116, 243601 (2016)" */

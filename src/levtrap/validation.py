@@ -177,8 +177,10 @@ def readme() -> str:
     if refs["verified"]:
         lines += ["| Reference | Quantity | Paper | levtrap | Ratio | Tolerance | Agrees | Model |", "|---|---|---|---|---|---|---|---|"]
         for e in refs["verified"]:
+            known = e.get("known_disagreement")
+            name = f"{e['id']} (#{known['issue']})" if known else e["id"]
             for c in compare_reference(e):
-                lines.append(f"| {e['id']} | {c['quantity']} | {_fmt(c['reference'])} {c['unit']} | {_fmt(c['computed'])} {c['unit']} "
+                lines.append(f"| {name} | {c['quantity']} | {_fmt(c['reference'])} {c['unit']} | {_fmt(c['computed'])} {c['unit']} "
                              f"| {_fmt(c['ratio'])} | ±{_fmt(100 * c['tolerance_rel'], 2)} % | {_fmt(c['ok'])} | {c['model']} |")
         lines.append("")
     else:
@@ -229,7 +231,9 @@ def readme() -> str:
 
 def untested_reason(entry: dict) -> str:
     """Why a wanted entry has no test yet (C4's acceptance: a test or a documented reason)."""
-    reason = "its numbers have not been read from the paper (C3: the full text was not accessible)"
+    if entry.get("why_not_verified"):
+        return "read (C3): " + entry["why_not_verified"]
+    reason = "its numbers have not been read from the paper"
     if not str(entry.get("schema_support", "")).startswith("current"):
         reason += "; and the setup schema cannot express it yet"
     return reason

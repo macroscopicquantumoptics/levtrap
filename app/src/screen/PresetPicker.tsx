@@ -3,12 +3,23 @@
 import { useEffect, useRef } from "react";
 import { issueUrl } from "./answer.ts";
 import { PRESETS, type Preset } from "./presets.ts";
-import { shortCitation } from "./referenceTypes.ts";
+import { type Reference, shortCitation } from "./referenceTypes.ts";
 import { RECORDED } from "./recorded.ts";
 import { Scene } from "./Scene.tsx";
 import { Icon } from "./ui/Icon.tsx";
 import ui from "./ui/ui.module.css";
 import styles from "./PresetPicker.module.css";
+
+/** One entry per paper (a paper can give several reference entries, e.g. two particles). */
+function uniqueByPaper(refs: Reference[]): Reference[] {
+  const seen = new Set<string>();
+  return refs.filter((r) => {
+    const key = r.doi ?? r.title;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 export interface PresetPickerProps {
   open: boolean;
@@ -77,6 +88,12 @@ export function PresetPicker({ open, current, onPick, onClose }: PresetPickerPro
                       {preset.source}
                       {preset.pending ? " · not computed yet" : ""}
                       {preset.references[0]?.status === "wanted" && <> · to be checked against {shortCitation(preset.references[0])}</>}
+                      {preset.references[0]?.disagrees && (
+                        <>
+                          {" "}
+                          · levtrap disagrees with {shortCitation(preset.references[0])} (issue #{preset.references[0].disagrees})
+                        </>
+                      )}
                     </span>
                   </span>
                 </button>
@@ -86,7 +103,7 @@ export function PresetPicker({ open, current, onPick, onClose }: PresetPickerPro
           <p className={styles.foot} data-testid="presets-sources">
             Each preset will become a setup from a paper once its values are checked against the paper
             (docs/validation/references.md). Papers waiting:{" "}
-            {PRESETS.flatMap((p) => p.references.filter((r) => r.status === "wanted")).map((r, i) => (
+            {uniqueByPaper(PRESETS.flatMap((p) => p.references.filter((r) => r.status === "wanted" || r.disagrees))).map((r, i) => (
               <span key={r.id}>
                 {i > 0 && "; "}
                 {r.doi ? (

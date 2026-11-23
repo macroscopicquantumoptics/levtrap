@@ -376,10 +376,13 @@ gravity, a beam's direction and focus position.
 * The unit-aware fields are written here, not ported from QUOP (its code was
   not reachable from this work). Radius, diameter and mass are linked, as
   are NA, waist and half-angle (`src/lib/linked.ts`).
-* Presets are example values: `docs/validation/references.json` (C3) has no
-  verified paper yet. Each card names the paper its trap type is waiting for,
-  and a verified entry the schema can hold replaces the example and is cited
-  (`buildPresets`, tested), with no change to the screen.
+* Presets are example values. Each card names the paper its trap type is
+  waiting for (`docs/validation/references.json`, C3). A verified entry the
+  schema can hold replaces the example and is cited (`buildPresets`,
+  tested), with no change to the screen. A verified entry levtrap disagrees
+  with beyond its tolerance (C4: an issue and `known_disagreement`) is named
+  on the card with its issue, but does not replace the example: today the
+  tweezer's paper, Jain et al. 2016 (#61).
 * One preset is illustrative only (#52): the WS₂ bottle beam, a dark trap
   after Illetschek et al., arXiv:2607.09896, as the old site had it. Its card
   is tagged "illustrative" and says it is not validated, and that the paper

@@ -47,14 +47,21 @@ def test_wanted_entry(entry):
     assert entry["needed"] and entry["expected_quantities"] and entry["agreement_note"]
     assert entry["schema_support"].startswith(("current", "future"))
     assert not _numbers(entry), "a wanted entry must not carry numbers; move it to 'verified' with sources"
+    # read (C3): what the paper states, what it lacks, and so why it is not verified
+    assert entry["read"] and entry["missing"] and entry["why_not_verified"]
 
 
 @pytest.mark.parametrize("entry", DATA["verified"], ids=lambda e: e["id"])
 def test_verified_entry(entry):
+    """Every number of the Setup has a source (a provenance key covers the keys below it)."""
+    keys = entry["provenance"]
+    for path in _numbers(entry["setup"]):
+        path = path.lstrip(".")
+        assert path == "version" or any(path == k or path.startswith(k + ".") or path.startswith(k + "[") for k in keys), path
     assert entry["slot"] in SLOTS
     assert entry["citation"].get("doi") or entry["citation"].get("arxiv")
     for key, p in entry["provenance"].items():
-        assert p["flag"] in ("stated", "inferred"), key
+        assert p["flag"] in ("stated", "inferred", "assumed"), key
         assert p["source"], key
     for e in entry["expected"]:
         assert e["source"] and e["unit"] and e["why"]

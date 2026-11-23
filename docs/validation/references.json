@@ -1,14 +1,20 @@
 {
   "format": "levtrap-references/1",
-  "about": "Literature reference values for validation tests and presets (issue #15). Human-readable companion: references.md. Read that file's 'Status' section first: no paper full text could be fetched for this version, so 'verified' is empty and every candidate is under 'wanted'. No number in this file comes from memory.",
+  "about": "Published experiments for levtrap to reproduce (C3, issue #15). Every number in a verified entry was read from the paper (arXiv full text), with its location; wanted entries were read too but lack parameters a Setup needs (see 'missing'). references.md is the readable version, with the values the wanted papers do state.",
   "entry_format": {
     "verified": {
       "id": "short slug, also the preset name",
       "slot": "one of: single_beam_tweezer | counter_propagating_or_standing_wave | linear_paul | ring_paul | hybrid_paul_optical | parabolic_mirror",
-      "citation": {"authors": "...", "title": "...", "journal": "...", "doi": "...", "arxiv": "..."},
+      "citation": {
+        "authors": "...",
+        "title": "...",
+        "journal": "...",
+        "doi": "...",
+        "arxiv": "..."
+      },
       "setup": "a Setup file (docs/ARCHITECTURE.md section 4); must pass levtrap.setup.parse unless schema_gaps is non-empty",
       "schema_gaps": "list of setup keys that the current schema does not support yet, written as ARCHITECTURE.md section 4 says the future schema will (e.g. focus.kind = 'parabolic_mirror')",
-      "provenance": "map from setup key path to {value, source, flag}; flag is 'stated' or 'inferred'; source names page/section/figure/table",
+      "provenance": "map from setup key path to {value, source, flag}; flag is 'stated' (printed in the paper), 'inferred' (worked out from printed values, working in source) or 'assumed' (not in the paper; the value levtrap needs, and why it does not matter for the expected quantities); source names page/section/figure/table",
       "expected": "list of {quantity, value, unit, source, tolerance_rel, why}; quantity is a name levtrap.validation.quantity reads (frequency.x|y|z|max|min, depth.kT|K, gas_damping, secular.exact|pseudopotential.<axis>, recoil_heating.<axis>)",
       "known_disagreement": "optional {issue: N}: the entry disagrees with levtrap beyond its tolerance and issue #N tracks it; tests/test_literature.py marks it xfail. Never widen the tolerance instead (C4, issue #16)",
       "agreement_note": "what agreement to expect and why"
@@ -22,11 +28,12 @@
       "schema_support": "'current' if the current Setup schema can express the trap, else 'future' with schema_gaps",
       "needed": "parameters to read from the paper",
       "expected_quantities": "measured quantities to read from the paper",
-      "agreement_note": "what agreement to expect once the numbers are in, and why"
+      "agreement_note": "what agreement to expect once the numbers are in, and why",
+      "read": "after C3: what the paper does state, in words (no numbers here; references.md has them with locations)",
+      "missing": "after C3: the parameters the paper does not state, without which levtrap cannot be compared with it"
     }
   },
-  "verified": [],
-  "wanted": [
+  "verified": [
     {
       "id": "jain2016_recoil",
       "slot": "single_beam_tweezer",
@@ -36,16 +43,297 @@
         "journal": "Phys. Rev. Lett. 116, 243601 (2016)",
         "doi": "10.1103/PhysRevLett.116.243601",
         "arxiv": "1603.03420",
-        "metadata_source": "web-search index (APS accepted-manuscript link, alphaxiv listing); not checked against the paper"
+        "metadata_source": "title and authors checked against the arXiv PDF (v2); journal and DOI from the publisher listing (not printed on the preprint)"
       },
-      "trap_type": "single focused beam through a high-NA lens, silica nanosphere, ultrahigh vacuum, feedback cooled",
-      "skeleton": {"particle": {"material": "SiO2"}, "trap": {"fields": [{"kind": "beam", "focus": {"kind": "lens"}}]}},
-      "schema_support": "current",
+      "setup": {
+        "version": 1,
+        "particle": {
+          "radius": 4.98e-08,
+          "material": "SiO2",
+          "n": 1.45,
+          "k": 0.0,
+          "density": 2200.0
+        },
+        "environment": {
+          "pressure": 2e-08,
+          "temperature": 300.0,
+          "gas": "N2",
+          "medium_index": 1.0
+        },
+        "trap": {
+          "fields": [
+            {
+              "kind": "beam",
+              "id": "beam1",
+              "wavelength": 1.064e-06,
+              "power": 0.07,
+              "focus": {
+                "kind": "lens",
+                "NA": 0.9
+              },
+              "mode": {
+                "type": "lg",
+                "indices": [
+                  0,
+                  0
+                ]
+              },
+              "polarisation": "x"
+            }
+          ]
+        }
+      },
       "schema_gaps": [],
-      "needed": ["wavelength", "trapping power at the focus (and whether it is before or after the objective)", "objective NA and whether the back aperture is overfilled (filling factor)", "polarisation", "particle radius or diameter and how it was measured", "pressure for each measurement"],
-      "expected_quantities": ["trap frequencies along x, y, z", "recoil heating rate vs power and vs radius", "gas damping rate vs pressure, if given"],
-      "agreement_note": "The effective NA of an overfilled or apodised objective is rarely stated, and levtrap's lens model assumes an ideal aplanatic focus; expect the frequency ratios to agree better than the absolute frequencies, which may be off by tens of percent. The recoil heating rate scales with scattered power, so once the frequencies are matched it should agree to the paper's stated uncertainty plus the radius uncertainty (rate ~ r^6)."
+      "provenance": {
+        "trap.fields[0].wavelength": {
+          "value": 1.064e-06,
+          "source": "arXiv:1603.03420v2 p. 2: 'wavelength λ = 1064 nm'",
+          "flag": "stated"
+        },
+        "trap.fields[0].power": {
+          "value": 0.07,
+          "source": "arXiv:1603.03420v2 p. 2: 'power P0 = 70 mW'; Fig. 3, 4 captions: 'focal power P0 = 70 mW'. Where it was measured is not stated",
+          "flag": "stated"
+        },
+        "trap.fields[0].focus.NA": {
+          "value": 0.9,
+          "source": "arXiv:1603.03420v2 p. 2: 'objective of numerical aperture NA = 0.9'. Filling factor / effective NA not stated",
+          "flag": "stated"
+        },
+        "trap.fields[0].polarisation": {
+          "value": "x",
+          "source": "arXiv:1603.03420v2 p. 2: 'x axis defines the direction of polarization'",
+          "flag": "stated"
+        },
+        "trap.fields[0].mode": {
+          "value": "LG00",
+          "source": "not stated; a Gaussian beam is assumed (the paper's own theory uses a Gaussian focus, p. 3)",
+          "flag": "assumed"
+        },
+        "particle.material": {
+          "value": "SiO2",
+          "source": "arXiv:1603.03420v2 p. 2: 'fused silica particles'",
+          "flag": "stated"
+        },
+        "particle.n": {
+          "value": 1.45,
+          "source": "arXiv:1603.03420v2 p. 3: 'n = 1.45'",
+          "flag": "stated"
+        },
+        "particle.k": {
+          "value": 0.0,
+          "source": "not stated; silica is taken as lossless at 1064 nm",
+          "flag": "assumed"
+        },
+        "particle.density": {
+          "value": 2200.0,
+          "source": "arXiv:1603.03420v2 p. 3: 'ρSiO2 = 2200 kg/m3' (mass 1.14e-18 kg at R = 49.8 nm, levtrap 1.138e-18)",
+          "flag": "stated"
+        },
+        "environment.temperature": {
+          "value": 300.0,
+          "source": "not stated; room temperature assumed. Enters only the gas damping, which is not compared",
+          "flag": "assumed"
+        },
+        "environment.gas": {
+          "value": "N2",
+          "source": "not stated. Enters only the gas damping, which is not compared",
+          "flag": "assumed"
+        },
+        "environment.medium_index": {
+          "value": 1.0,
+          "source": "vacuum: arXiv:1603.03420v2 pressures of 1e-8 mbar and below",
+          "flag": "inferred"
+        },
+        "particle.radius": {
+          "value": 4.98e-08,
+          "source": "arXiv:1603.03420v2 Fig. 2 caption and p. 3: 'R = 49.8 nm'. Uncertainty and method not stated",
+          "flag": "stated"
+        },
+        "environment.pressure": {
+          "value": 2e-08,
+          "source": "arXiv:1603.03420v2 Fig. 2 caption: lowest of '6.6e-4, 1.1e-5 and 2e-8 mbar'",
+          "flag": "stated"
+        }
+      },
+      "expected": [
+        {
+          "quantity": "frequency.x",
+          "value": 123000.0,
+          "unit": "Hz",
+          "source": "arXiv:1603.03420v2 p. 2: 'oscillation frequencies for the x and z axes are 123 kHz and 49 kHz'",
+          "tolerance_rel": 0.2,
+          "why": "effective NA and power at the focus are not stated (agreement_note)"
+        },
+        {
+          "quantity": "frequency.y",
+          "value": 150000.0,
+          "unit": "Hz",
+          "source": "arXiv:1603.03420v2 p. 2: 'Ω0/2π = 150 kHz'",
+          "tolerance_rel": 0.2,
+          "why": "as frequency.x"
+        },
+        {
+          "quantity": "frequency.z",
+          "value": 49000.0,
+          "unit": "Hz",
+          "source": "arXiv:1603.03420v2 p. 2 (as frequency.x)",
+          "tolerance_rel": 0.2,
+          "why": "as frequency.x; the axial frequency is the most sensitive to the shape of the focus"
+        }
+      ],
+      "known_disagreement": {
+        "issue": 61
+      },
+      "agreement_note": "levtrap's lens is an ideal aplanatic focus filled to NA 0.9 with all 70 mW at the focus; the paper states neither the filling factor nor how P0 was measured. Expect the absolute frequencies to within tens of percent; ±20 % is the tolerance. levtrap is 23-57 % stiffer (issue #61)."
     },
+    {
+      "id": "jain2016_recoil_r527",
+      "slot": "single_beam_tweezer",
+      "citation": {
+        "authors": "V. Jain, J. Gieseler, C. Moritz, C. Dellago, R. Quidant, L. Novotny",
+        "title": "Direct Measurement of Photon Recoil from a Levitated Nanoparticle",
+        "journal": "Phys. Rev. Lett. 116, 243601 (2016)",
+        "doi": "10.1103/PhysRevLett.116.243601",
+        "arxiv": "1603.03420",
+        "metadata_source": "title and authors checked against the arXiv PDF (v2); journal and DOI from the publisher listing (not printed on the preprint)"
+      },
+      "setup": {
+        "version": 1,
+        "particle": {
+          "radius": 5.27e-08,
+          "material": "SiO2",
+          "n": 1.45,
+          "k": 0.0,
+          "density": 2200.0
+        },
+        "environment": {
+          "pressure": 3e-08,
+          "temperature": 300.0,
+          "gas": "N2",
+          "medium_index": 1.0
+        },
+        "trap": {
+          "fields": [
+            {
+              "kind": "beam",
+              "id": "beam1",
+              "wavelength": 1.064e-06,
+              "power": 0.07,
+              "focus": {
+                "kind": "lens",
+                "NA": 0.9
+              },
+              "mode": {
+                "type": "lg",
+                "indices": [
+                  0,
+                  0
+                ]
+              },
+              "polarisation": "x"
+            }
+          ]
+        }
+      },
+      "schema_gaps": [],
+      "provenance": {
+        "trap.fields[0].wavelength": {
+          "value": 1.064e-06,
+          "source": "arXiv:1603.03420v2 p. 2: 'wavelength λ = 1064 nm'",
+          "flag": "stated"
+        },
+        "trap.fields[0].power": {
+          "value": 0.07,
+          "source": "arXiv:1603.03420v2 p. 2: 'power P0 = 70 mW'; Fig. 3, 4 captions: 'focal power P0 = 70 mW'. Where it was measured is not stated",
+          "flag": "stated"
+        },
+        "trap.fields[0].focus.NA": {
+          "value": 0.9,
+          "source": "arXiv:1603.03420v2 p. 2: 'objective of numerical aperture NA = 0.9'. Filling factor / effective NA not stated",
+          "flag": "stated"
+        },
+        "trap.fields[0].polarisation": {
+          "value": "x",
+          "source": "arXiv:1603.03420v2 p. 2: 'x axis defines the direction of polarization'",
+          "flag": "stated"
+        },
+        "trap.fields[0].mode": {
+          "value": "LG00",
+          "source": "not stated; a Gaussian beam is assumed (the paper's own theory uses a Gaussian focus, p. 3)",
+          "flag": "assumed"
+        },
+        "particle.material": {
+          "value": "SiO2",
+          "source": "arXiv:1603.03420v2 p. 2: 'fused silica particles'",
+          "flag": "stated"
+        },
+        "particle.n": {
+          "value": 1.45,
+          "source": "arXiv:1603.03420v2 p. 3: 'n = 1.45'",
+          "flag": "stated"
+        },
+        "particle.k": {
+          "value": 0.0,
+          "source": "not stated; silica is taken as lossless at 1064 nm",
+          "flag": "assumed"
+        },
+        "particle.density": {
+          "value": 2200.0,
+          "source": "arXiv:1603.03420v2 p. 3: 'ρSiO2 = 2200 kg/m3' (mass 1.14e-18 kg at R = 49.8 nm, levtrap 1.138e-18)",
+          "flag": "stated"
+        },
+        "environment.temperature": {
+          "value": 300.0,
+          "source": "not stated; room temperature assumed. Enters only the gas damping, which is not compared",
+          "flag": "assumed"
+        },
+        "environment.gas": {
+          "value": "N2",
+          "source": "not stated. Enters only the gas damping, which is not compared",
+          "flag": "assumed"
+        },
+        "environment.medium_index": {
+          "value": 1.0,
+          "source": "vacuum: arXiv:1603.03420v2 pressures of 1e-8 mbar and below",
+          "flag": "inferred"
+        },
+        "particle.radius": {
+          "value": 5.27e-08,
+          "source": "arXiv:1603.03420v2 p. 4 and Fig. 4a: 'R1 = 52.7 nm'",
+          "flag": "stated"
+        },
+        "environment.pressure": {
+          "value": 3e-08,
+          "source": "arXiv:1603.03420v2 Fig. 4 caption: '3 × 10−8 mbar' (Fig. 4a)",
+          "flag": "stated"
+        }
+      },
+      "expected": [
+        {
+          "quantity": "frequency.y",
+          "value": 148800.0,
+          "unit": "Hz",
+          "source": "arXiv:1603.03420v2 p. 4: R1 'Ω0 = 2π × 148.8 kHz'",
+          "tolerance_rel": 0.2,
+          "why": "as jain2016_recoil"
+        },
+        {
+          "quantity": "recoil_heating.y",
+          "value": 20900.0,
+          "unit": "1/s",
+          "source": "arXiv:1603.03420v2 p. 4: 'Γ1 = (20.9 ± 0.2) kHz' (phonons/s, y, reheating at 70 mW)",
+          "tolerance_rel": 0.35,
+          "why": "the paper's own theory differs from its measurements by up to 35 % (15.5 vs 20.9 kHz here); radius uncertainty not stated (rate ∝ R³ at fixed power)"
+        }
+      ],
+      "known_disagreement": {
+        "issue": 61
+      },
+      "agreement_note": "The recoil rate is Γ ∝ P_sca ω0 / (m c² Ω): it follows the focus, so it agrees once the frequencies do. levtrap gives 6.2e3 /s at 210 kHz against 20.9e3 /s at 148.8 kHz (issue #61)."
+    }
+  ],
+  "wanted": [
     {
       "id": "yoneda2017_standing_wave",
       "slot": "counter_propagating_or_standing_wave",
@@ -55,17 +343,60 @@
         "journal": "J. Phys. B: At. Mol. Opt. Phys. 50, 245501 (2017)",
         "doi": "10.1088/1361-6455/aa95ab",
         "arxiv": "1708.07572",
-        "metadata_source": "web-search index (arXiv listing metadata); not checked against the paper"
+        "metadata_source": "arXiv full text (preprint as posted; the journal version was not available here); web-search index (arXiv listing metadata); not checked against the paper"
       },
       "trap_type": "retro-reflected beam forming an optical lattice (standing wave), silica particle, vacuum (geometry to be confirmed from the text)",
-      "skeleton": {"particle": {"material": "SiO2"}, "trap": {"fields": [
-        {"kind": "beam", "id": "fwd", "focus": {"kind": "lens"}, "direction": "+z"},
-        {"kind": "beam", "id": "back", "coherent_with": "fwd", "focus": {"kind": "lens"}, "direction": "-z"}]}},
+      "skeleton": {
+        "particle": {
+          "material": "SiO2"
+        },
+        "trap": {
+          "fields": [
+            {
+              "kind": "beam",
+              "id": "fwd",
+              "focus": {
+                "kind": "lens"
+              },
+              "direction": "+z"
+            },
+            {
+              "kind": "beam",
+              "id": "back",
+              "coherent_with": "fwd",
+              "focus": {
+                "kind": "lens"
+              },
+              "direction": "-z"
+            }
+          ]
+        }
+      },
       "schema_support": "current",
       "schema_gaps": [],
-      "needed": ["wavelength", "power in each pass and the retro-reflection loss", "focusing NA or waist of each pass and the relative focus positions", "polarisation of each pass", "particle radius", "pressure"],
-      "expected_quantities": ["trap frequencies along x, y, z", "linewidths vs pressure (the paper's subject)"],
-      "agreement_note": "The axial frequency of a standing wave is set by the fringe contrast, i.e. by how well the returning beam overlaps the incoming one; this is seldom stated, so expect the axial frequency to tens of percent and the radial frequencies (set mostly by the waist and power) to be closer. Model as two coherent beams with opposite directions."
+      "needed": [
+        "wavelength",
+        "power in each pass and the retro-reflection loss",
+        "focusing NA or waist of each pass and the relative focus positions",
+        "polarisation of each pass",
+        "particle radius",
+        "pressure"
+      ],
+      "expected_quantities": [
+        "trap frequencies along x, y, z",
+        "linewidths vs pressure (the paper's subject)"
+      ],
+      "agreement_note": "The axial frequency of a standing wave is set by the fringe contrast, i.e. by how well the returning beam overlaps the incoming one; this is seldom stated, so expect the axial frequency to tens of percent and the radial frequencies (set mostly by the waist and power) to be closer. Model as two coherent beams with opposite directions.",
+      "read": "A single 1550 nm beam, retro-reflected into a standing wave (one-dimensional lattice); elliptical waists in x and y; silica of nominal radius; trap frequencies along x, y and z; linewidths against pressure.",
+      "missing": [
+        "the beam is elliptical (two waists): the Setup's focus has one NA or waist",
+        "power and focus position of the returning pass, and the fringe contrast",
+        "NA of either pass",
+        "polarisation",
+        "the radius of the particle whose frequencies are given (radii vary from particle to particle)",
+        "density"
+      ],
+      "why_not_verified": "the elliptical focus cannot be expressed, and the returning pass is not described"
     },
     {
       "id": "dania2024_linear_paul",
@@ -76,15 +407,47 @@
         "journal": "Phys. Rev. Lett. 132, 133602 (2024)",
         "doi": "10.1103/PhysRevLett.132.133602",
         "arxiv": "2304.02408",
-        "metadata_source": "web-search index (arXiv DOI page, journal news items); not checked against the paper"
+        "metadata_source": "arXiv full text (preprint as posted; the journal version was not available here); web-search index (arXiv DOI page, journal news items); not checked against the paper"
       },
       "trap_type": "linear Paul trap, charged silica nanoparticle, room temperature, extreme high vacuum",
-      "skeleton": {"particle": {"material": "SiO2"}, "trap": {"fields": [{"kind": "paul", "geometry": "linear"}]}},
+      "skeleton": {
+        "particle": {
+          "material": "SiO2"
+        },
+        "trap": {
+          "fields": [
+            {
+              "kind": "paul",
+              "geometry": "linear"
+            }
+          ]
+        }
+      },
       "schema_support": "current",
       "schema_gaps": [],
-      "needed": ["RF amplitude and frequency", "DC and endcap voltages", "electrode distances r0 and z0", "geometry (efficiency) factors, or the electrode drawing to compute them", "particle radius and charge (number of elementary charges)", "pressure"],
-      "expected_quantities": ["secular frequencies (radial and axial)", "Mathieu q and a, if given", "dissipation rate and quality factor vs pressure"],
-      "agreement_note": "Secular frequencies depend on q/m and on geometry factors that only an electrode simulation gives; if the paper states the measured charge and the geometry factors, the Mathieu secular frequency should agree to a few percent, otherwise only the scaling with RF voltage can be tested. The measured damping at the lowest pressures is below the gas-damping model's reach and should be compared only where gas damping dominates."
+      "needed": [
+        "RF amplitude and frequency",
+        "DC and endcap voltages",
+        "electrode distances r0 and z0",
+        "geometry (efficiency) factors, or the electrode drawing to compute them",
+        "particle radius and charge (number of elementary charges)",
+        "pressure"
+      ],
+      "expected_quantities": [
+        "secular frequencies (radial and axial)",
+        "Mathieu q and a, if given",
+        "dissipation rate and quality factor vs pressure"
+      ],
+      "agreement_note": "Secular frequencies depend on q/m and on geometry factors that only an electrode simulation gives; if the paper states the measured charge and the geometry factors, the Mathieu secular frequency should agree to a few percent, otherwise only the scaling with RF voltage can be tested. The measured damping at the lowest pressures is below the gas-damping model's reach and should be compared only where gas damping dominates.",
+      "read": "Linear Paul trap (four rods and end caps); silica dumbbell of measured mass and charge; axial secular frequency; damping and Q against pressure down to extreme high vacuum.",
+      "missing": [
+        "RF amplitude and frequency",
+        "DC and end-cap voltages",
+        "r0 and z0 (only a particle-to-electrode distance is given)",
+        "geometry factors",
+        "radial secular frequencies"
+      ],
+      "why_not_verified": "the paper does not report its trap drive or electrode geometry"
     },
     {
       "id": "millen2015_ring_paul_cavity",
@@ -95,15 +458,45 @@
         "journal": "Phys. Rev. Lett. 114, 123602 (2015)",
         "doi": "10.1103/PhysRevLett.114.123602",
         "arxiv": "1407.3595",
-        "metadata_source": "web-search index (UCL repository copy, arXiv listing under preprint title 'Cavity cooling a single charged nanoparticle'); not checked against the paper"
+        "metadata_source": "arXiv full text (preprint as posted; the journal version was not available here); web-search index (UCL repository copy, arXiv listing under preprint title 'Cavity cooling a single charged nanoparticle'); not checked against the paper"
       },
       "trap_type": "Paul trap inside a single-mode optical cavity (hybrid electro-optical), charged silica nanosphere. Electrode geometry (ring or otherwise) NOT confirmed: must be read from the paper before this fills the ring-trap slot.",
-      "skeleton": {"particle": {"material": "SiO2"}, "trap": {"fields": [{"kind": "paul", "geometry": "ring (to be confirmed)"}]}},
+      "skeleton": {
+        "particle": {
+          "material": "SiO2"
+        },
+        "trap": {
+          "fields": [
+            {
+              "kind": "paul",
+              "geometry": "ring (to be confirmed)"
+            }
+          ]
+        }
+      },
       "schema_support": "current for the Paul part; the cavity field is out of scope",
-      "schema_gaps": ["optical cavity field (not planned in ARCHITECTURE.md)"],
-      "needed": ["electrode geometry and dimensions", "RF amplitude and frequency, DC voltages", "particle radius and charge", "pressure", "cavity parameters only if the cavity-free secular frequencies are not reported separately"],
-      "expected_quantities": ["secular frequencies with the cavity field off"],
-      "agreement_note": "Only the Paul-trap secular frequencies are comparable; the cavity cooling itself is outside levtrap. If a better-documented ring or wheel trap paper is found, it should replace this entry for the ring_paul slot."
+      "schema_gaps": [
+        "optical cavity field (not planned in ARCHITECTURE.md)"
+      ],
+      "needed": [
+        "electrode geometry and dimensions",
+        "RF amplitude and frequency, DC voltages",
+        "particle radius and charge",
+        "pressure",
+        "cavity parameters only if the cavity-free secular frequencies are not reported separately"
+      ],
+      "expected_quantities": [
+        "secular frequencies with the cavity field off"
+      ],
+      "agreement_note": "Only the Paul-trap secular frequencies are comparable; the cavity cooling itself is outside levtrap. If a better-documented ring or wheel trap paper is found, it should replace this entry for the ring_paul slot.",
+      "read": "Paul trap of two rounded electrodes inside grounded shields (not a ring or wheel), with an optical cavity; silica sphere of a few elementary charges; RF amplitude as a range; secular frequency only read from a spectrum with the cavity light on.",
+      "missing": [
+        "r0 or any electrode dimension besides the gap",
+        "geometry factor",
+        "density",
+        "an RF amplitude, charge and secular frequency for the same run"
+      ],
+      "why_not_verified": "the electrode geometry is neither ring nor linear and r0 is not given; it does not fill the ring slot, and a better ring/wheel paper is wanted"
     },
     {
       "id": "conangla2020_hybrid",
@@ -114,15 +507,47 @@
         "journal": "Nano Lett. 20, 6018-6023 (2020)",
         "doi": "10.1021/acs.nanolett.0c02025",
         "arxiv": "2005.05486",
-        "metadata_source": "web-search index (arXiv PDF listing, publisher indexing); not checked against the paper"
+        "metadata_source": "arXiv full text (preprint as posted; the journal version was not available here); web-search index (arXiv PDF listing, publisher indexing); not checked against the paper"
       },
       "trap_type": "weak tightly focused beam overlaid on a Paul trap, giving a dimple in the Paul pseudopotential",
-      "skeleton": {"trap": {"fields": [{"kind": "paul"}, {"kind": "beam", "focus": {"kind": "lens"}}]}},
+      "skeleton": {
+        "trap": {
+          "fields": [
+            {
+              "kind": "paul"
+            },
+            {
+              "kind": "beam",
+              "focus": {
+                "kind": "lens"
+              }
+            }
+          ]
+        }
+      },
       "schema_support": "current",
       "schema_gaps": [],
-      "needed": ["particle material(s), radius, charge", "Paul trap geometry, RF amplitude and frequency, DC voltages", "beam wavelength, power, NA", "pressure"],
-      "expected_quantities": ["secular frequencies with Paul trap only, optical trap only, and combined", "any reported depth or stability boundary"],
-      "agreement_note": "The hybrid sum is a direct test of levtrap's 'sum the fields' design. Expect the combined frequency to follow the summed stiffness to the accuracy of each part separately; the absolute numbers inherit the NA uncertainty of the optical part and the geometry-factor uncertainty of the Paul part."
+      "needed": [
+        "particle material(s), radius, charge",
+        "Paul trap geometry, RF amplitude and frequency, DC voltages",
+        "beam wavelength, power, NA",
+        "pressure"
+      ],
+      "expected_quantities": [
+        "secular frequencies with Paul trap only, optical trap only, and combined",
+        "any reported depth or stability boundary"
+      ],
+      "agreement_note": "The hybrid sum is a direct test of levtrap's 'sum the fields' design. Expect the combined frequency to follow the summed stiffness to the accuracy of each part separately; the absolute numbers inherit the NA uncertainty of the optical part and the geometry-factor uncertainty of the Paul part.",
+      "read": "Focused 532 nm beam overlaid on an end-cap Paul trap; gold nanorods, nanodiamonds, silica; RF ranges only; hybrid frequencies only as 'hundreds of kHz' and peaks in a log-scale spectrum.",
+      "missing": [
+        "electrode dimensions, r0, z0, geometry factors",
+        "DC voltages",
+        "polarisation",
+        "density and refractive index of the nanodiamonds",
+        "charge of the measured particle",
+        "frequencies with the Paul trap alone and the beam alone"
+      ],
+      "why_not_verified": "only parameter ranges are given and no run records a complete set"
     },
     {
       "id": "bonvin2024_hybrid_large_access",
@@ -133,15 +558,47 @@
         "journal": "Phys. Rev. Research 6, 043129 (2024)",
         "doi": "10.1103/PhysRevResearch.6.043129",
         "arxiv": "2312.10131",
-        "metadata_source": "web-search index (arXiv listing, DOAJ record); not checked against the paper"
+        "metadata_source": "arXiv full text (preprint as posted; the journal version was not available here); web-search index (arXiv listing, DOAJ record); not checked against the paper"
       },
       "trap_type": "Paul trap combined with a high-NA optical tweezer; particle held by optical, RF, or combined fields",
-      "skeleton": {"trap": {"fields": [{"kind": "paul"}, {"kind": "beam", "focus": {"kind": "lens"}}]}},
+      "skeleton": {
+        "trap": {
+          "fields": [
+            {
+              "kind": "paul"
+            },
+            {
+              "kind": "beam",
+              "focus": {
+                "kind": "lens"
+              }
+            }
+          ]
+        }
+      },
       "schema_support": "current",
       "schema_gaps": [],
-      "needed": ["electrode geometry and dimensions", "RF amplitude and frequency", "beam wavelength, power, NA", "particle material, radius, charge", "pressure"],
-      "expected_quantities": ["secular frequencies in the Paul trap alone", "optical trap frequencies", "frequencies in the combined trap"],
-      "agreement_note": "Second hybrid entry, useful because the abstract (as indexed) says the particle can be held by optical fields, RF fields or both, so each field can be checked separately before the sum."
+      "needed": [
+        "electrode geometry and dimensions",
+        "RF amplitude and frequency",
+        "beam wavelength, power, NA",
+        "particle material, radius, charge",
+        "pressure"
+      ],
+      "expected_quantities": [
+        "secular frequencies in the Paul trap alone",
+        "optical trap frequencies",
+        "frequencies in the combined trap"
+      ],
+      "agreement_note": "Second hybrid entry, useful because the abstract (as indexed) says the particle can be held by optical fields, RF fields or both, so each field can be checked separately before the sum.",
+      "read": "Planar wheel Paul trap with lens-holder end caps and a 0.77 NA tweezer at 1565 nm; silica of stated diameter and charge-to-mass ratio; frequencies with the tweezer alone and the Paul trap alone ('typical' values).",
+      "missing": [
+        "frequencies with both traps on",
+        "geometry factors of the wheel trap",
+        "power at the focus",
+        "density"
+      ],
+      "why_not_verified": "the combined trap's frequencies are not reported, and the wheel trap's geometry factors are not given"
     },
     {
       "id": "vovrosh2017_parabolic_mirror",
@@ -152,15 +609,49 @@
         "journal": "J. Opt. Soc. Am. B 34, 1421-1428 (2017)",
         "doi": null,
         "arxiv": "1603.02917",
-        "metadata_source": "web-search index (arXiv PDF listing, Optica abstract URI josab-34-7-1421); only the first author was given; DOI not found in the index (the Optica URI suggests 10.1364/JOSAB.34.001421, unconfirmed)"
+        "metadata_source": "arXiv full text (preprint as posted; the journal version was not available here); web-search index (arXiv PDF listing, Optica abstract URI josab-34-7-1421); only the first author was given; DOI not found in the index (the Optica URI suggests 10.1364/JOSAB.34.001421, unconfirmed)"
       },
       "trap_type": "single beam focused by a parabolic mirror, silica nanoparticle, feedback cooled in 3D",
-      "skeleton": {"particle": {"material": "SiO2"}, "trap": {"fields": [{"kind": "beam", "focus": {"kind": "parabolic_mirror"}}]}},
+      "skeleton": {
+        "particle": {
+          "material": "SiO2"
+        },
+        "trap": {
+          "fields": [
+            {
+              "kind": "beam",
+              "focus": {
+                "kind": "parabolic_mirror"
+              }
+            }
+          ]
+        }
+      },
       "schema_support": "current",
       "schema_gaps": [],
-      "needed": ["wavelength", "power", "mirror focal length, rim and hole radii", "beam diameter on the mirror", "particle radius", "pressure"],
-      "expected_quantities": ["trap frequencies along x, y, z", "feedback-cooled temperatures (not modelled)", "quality factor estimate (not modelled)"],
-      "agreement_note": "A parabolic mirror focuses with an apodisation unlike an aplanatic lens and with a large solid angle; a lens stand-in should be expected to miss the frequencies by tens of percent. focus.kind 'parabolic_mirror' (E3, levtrap.mirror) now models it; the comparison waits for the paper's parameters and frequencies to be read and recorded."
+      "needed": [
+        "wavelength",
+        "power",
+        "mirror focal length, rim and hole radii",
+        "beam diameter on the mirror",
+        "particle radius",
+        "pressure"
+      ],
+      "expected_quantities": [
+        "trap frequencies along x, y, z",
+        "feedback-cooled temperatures (not modelled)",
+        "quality factor estimate (not modelled)"
+      ],
+      "agreement_note": "A parabolic mirror focuses with an apodisation unlike an aplanatic lens and with a large solid angle; a lens stand-in should be expected to miss the frequencies by tens of percent. focus.kind 'parabolic_mirror' (E3, levtrap.mirror) now models it; the comparison waits for the paper's parameters and frequencies to be read and recorded.",
+      "read": "Single 1550 nm beam focused by a parabolic mirror (focal length and rim radius stated); silica of several radii; trap frequencies read from spectra; parametric feedback cooling.",
+      "missing": [
+        "input beam diameter at the mirror",
+        "power at the focus",
+        "polarisation",
+        "density",
+        "which spectral peak is which axis (the figures disagree)"
+      ],
+      "why_not_verified": "the input beam and the power at the focus are not stated, so the frequencies cannot be predicted"
     }
   ]
 }

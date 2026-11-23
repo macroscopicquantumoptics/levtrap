@@ -121,11 +121,12 @@ const BASE: Base[] = [
 export function buildPresets(references: readonly Reference[]): Preset[] {
   return BASE.map((base) => {
     const forSlot = references.filter((r) => r.slot === base.slot);
-    const paper = forSlot.find((r) => r.status === "verified" && r.setup && !r.schema_gaps?.length);
+    // a paper levtrap disagrees with (C4) is named, not used: the example stays until the disagreement is resolved
+    const paper = forSlot.find((r) => r.status === "verified" && r.setup && !r.schema_gaps?.length && !r.disagrees);
     if (paper) {
       return { ...base, setup: paper.setup!, source: `${paper.authors.split(",")[0]} et al., ${paper.journal}`, references: [paper] };
     }
-    return { ...base, references: forSlot.filter((r) => r.status === "wanted") };
+    return { ...base, references: forSlot.filter((r) => r.status === "wanted" || r.disagrees) };
   });
 }
 
