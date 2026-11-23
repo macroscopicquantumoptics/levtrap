@@ -8,6 +8,13 @@
    crossing); the deepest crossing seeds step 2.
 2. 3D Newton iteration on F(r) = 0, steps limited to a quarter of the
    smallest field length scale.
+2b. Only if that gives no stable equilibrium (#59): every restoring zero
+   crossing on the three lines of a box :data:`WIDER` times as large,
+   nearest to the centre first, each a seed for a short Newton run
+   (:func:`_wider_search`); the first stable equilibrium wins, otherwise
+   step 2's answer stands. A trap step 2 finds is therefore never changed,
+   and costs nothing more; a setup with no trap costs a few more force
+   evaluations.
 3. Stiffness matrix K_ij = -dF_i/dr_j by central differences (step
    length_scale / 200), symmetrised; its antisymmetric part is reported
    when it exceeds :data:`NONCONSERVATIVE_WARN` of the symmetric part
@@ -44,6 +51,7 @@ class Trap:
     modes: list[dict] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     jumped: bool = False  # a start was given and the equilibrium followed from it vanished
+    wider: bool = False  # found by the fallback search (the first seed gave no stable trap)
 
 
 def _scale(fields) -> float:
@@ -87,10 +95,18 @@ def _seed(fields, centre, ranges, points) -> np.ndarray | None:
     return None
 
 
-def _newton(fields, r0, h, max_step, tol, bounds, max_iter=30):
+def _newton(fields, r0, h, max_step, tol, bounds, max_iter=30, stall_after=None):
+    """Newton on F(r) = 0. ``stall_after``: give up when |F| has not halved
+    after that many steps (in a trap's basin it falls quadratically; near a
+    trap that has just vanished, or far from any, it creeps)."""
     r = np.asarray(r0, dtype=float).copy()
-    for _ in range(max_iter):
+    f0 = None
+    for i in range(max_iter):
         K, F = stiffness(fields, r, h)
+        if f0 is None:
+            f0 = np.linalg.norm(F)
+        elif stall_after is not None and i == stall_after and np.linalg.norm(F) > 0.5 * f0:
+            return r, False
         try:
             step = np.linalg.solve(K, F)
         except np.linalg.LinAlgError:
@@ -148,6 +164,53 @@ def _lab_aligned(ev: np.ndarray, evec: np.ndarray) -> np.ndarray:
     return evec
 
 
+WIDER = 2.0  # the fallback search box, in units of the first one
+FALLBACK_ITER = 12  # Newton steps per fallback seed
+FALLBACK_STALL = 3  # ... and it is dropped if |F| has not halved after this many
+
+
+def _seeds(fields, centre, ranges, points) -> list[np.ndarray]:
+    """Every restoring zero crossing on the z, x and y lines through
+    ``centre``, nearest to it first (distance in units of ``ranges``)."""
+    out = []
+    for j in (2, 0, 1):
+        s = np.linspace(-ranges[j], ranges[j], points)
+        line = np.tile(centre, (points, 1))
+        line[:, j] += s
+        fj = total_force(fields, line)[:, j]
+        if not np.any(fj):
+            continue
+        for t in find_traps(s, fj):
+            r0 = np.array(centre, dtype=float)
+            r0[j] += float(t["position"])
+            out.append(r0)
+    return sorted(out, key=lambda r: float(np.linalg.norm((r - centre) / ranges)))
+
+
+def _wider_search(fields, centre, ranges, points, h, L, skip=None) -> np.ndarray | None:
+    """The fallback when the first seed gives no stable trap: every restoring
+    zero on the three lines of a box :data:`WIDER` times as large, nearest
+    first, except ``skip`` (the first seed, already tried); Newton from each,
+    at most :data:`FALLBACK_ITER` steps, dropped after :data:`FALLBACK_STALL`
+    if |F| has not halved (from a seed in a trap's basin it converges in a
+    handful; near a trap that has just vanished it creeps and never does).
+    The first stable equilibrium wins."""
+    box = np.asarray(ranges) * WIDER
+    found: list[np.ndarray] = []
+    for r0 in _seeds(fields, centre, box, points):
+        if skip is not None and np.linalg.norm(r0 - skip) < L * 1e-2:
+            continue
+        r, ok = _newton(fields, r0, h, max_step=L / 4, tol=L * 1e-7, bounds=(centre, box),
+                        max_iter=FALLBACK_ITER, stall_after=FALLBACK_STALL)
+        if not ok or any(np.linalg.norm(r - f) < L * 1e-3 for f in found):
+            continue
+        found.append(r)
+        K, _ = stiffness(fields, r, h)
+        if np.all(np.linalg.eigvalsh(0.5 * (K + K.T)) > 0):
+            return r
+    return None
+
+
 def find_trap(fields, mass: float, *, centre=(0.0, 0.0, 0.0), ranges=(1.5e-6, 1.5e-6, 3e-6),
               points: int = 61, depth_points: int | None = None, start=None) -> Trap:
     """Equilibrium, modes and depth of the summed force of ``fields``.
@@ -185,9 +248,19 @@ def find_trap(fields, mass: float, *, centre=(0.0, 0.0, 0.0), ranges=(1.5e-6, 1.
         r_eq, ok = followed, True
     else:
         r0 = _seed(fields, centre, ranges, points)
-        if r0 is None:
+        r_eq, ok = (None, False) if r0 is None else _newton(fields, r0, h, max_step=L / 4, tol=L * 1e-7,
+                                                            bounds=(centre, ranges))
+        stable = False
+        if ok:
+            K0, _ = stiffness(fields, r_eq, h)
+            stable = bool(np.all(np.linalg.eigvalsh(0.5 * (K0 + K0.T)) > 0))
+        if not stable:
+            wider = _wider_search(fields, centre, ranges, points, h, L, skip=r0)
+            if wider is not None:
+                r_eq, ok = wider, True
+                out.wider = True
+        if r_eq is None:
             return out
-        r_eq, ok = _newton(fields, r0, h, max_step=L / 4, tol=L * 1e-7, bounds=(centre, ranges))
     if not ok:
         out.warnings.append("The equilibrium search did not converge inside the scanned region.")
         return out
