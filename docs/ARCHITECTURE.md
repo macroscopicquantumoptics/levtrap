@@ -146,6 +146,8 @@ Models per field:
   "mirrors": [{"field": 0, "reflected": 0.98, "rim_angle_deg": 112.6,     // per beam from a parabolic mirror (E3)
                "hole_angle_deg": 9.5, "deep": true, "clipping_loss": …, "Nmax": 25}],
   "pattern": {...},                       // on request
+  "field": {"centre": [...], "planes": {"xz": {"u": [...], "v": [...], "I": [[...]]}, "yz": …, "xy": …},
+            "max": …},                    // on request: intensity [W/m²] on the lab planes (#48)
   "curves": {...},                        // on request: force cuts, potential, map
   "followed": {"start": [...], "jumped": false},  // with solve(..., start=r): the trap followed from r, or a jump (#50)
   "models": [{"quantity": "modes", "model": "mie", "validity": "ok", "notes": []}],

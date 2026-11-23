@@ -65,9 +65,11 @@ export function hasBlocks(result: Result, want: readonly Want[]): boolean {
       ? Boolean(result.curves)
       : w === "dipole"
         ? Boolean(result.curves && Object.values(result.curves).every((c) => c.dipole))
-        : w === "lens"
-          ? (result.lenses ?? []).every((l) => l.rays && l.wavefront)
-          : Boolean(result.pattern),
+        : w === "field"
+          ? result.field !== undefined
+          : w === "lens"
+            ? (result.lenses ?? []).every((l) => l.rays && l.wavefront)
+            : Boolean(result.pattern),
   );
 }
 

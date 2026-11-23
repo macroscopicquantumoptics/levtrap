@@ -94,7 +94,9 @@ function ScreenBody({ engine }: ScreenProps) {
   const { setup, selected } = state;
   const { answer, pending, status } = useAnswer(setup, engine, params.recorded);
   const narrow = useMedia(NARROW);
-  const [show, setShow] = useState<ShowOptions>({ labels: true, grid: true, axes: false, forces: false, trueSize: false, rays: false });
+  const [show, setShow] = useState<ShowOptions>({ labels: true, grid: true, axes: false, forces: false, trueSize: false, slice: false, rays: false });
+  // the intensity slice asks the engine for the field, only while it is shown
+  const sliced = useAnswer(setup, engine, params.recorded, ["field"], show.slice);
   // traced rays: asked of the engine only while shown, and only for a setup with a real lens
   const realLens = setup.trap.fields.some((f) => f.kind === "beam" && f.focus.kind === "asphere");
   const traced = useAnswer(setup, engine, params.recorded, ["lens"], show.rays && realLens);
@@ -180,6 +182,7 @@ function ScreenBody({ engine }: ScreenProps) {
           labels={show.labels && !narrow}
           grid={show.grid}
           overlays={show}
+          field={show.slice ? { block: sliced.answer.result?.field ?? null, pending: sliced.pending, notice: sliced.answer.notice?.text ?? null } : null}
           rays={show.rays ? { lenses: realLens ? (traced.answer.result?.lenses ?? null) : null, realLens, pending: traced.pending } : null}
         />
         <TopBar

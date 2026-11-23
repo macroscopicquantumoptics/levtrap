@@ -245,7 +245,22 @@ lens's.
 
 ![Compare with the aligned lens](screens/aligned-compare-desktop-light.webp)
 
-## 12. A real lens's rays and wavefront (#49)
+## 12. The intensity slice (#48)
+
+Show → Intensity slice: the light on the plane through the trap that faces
+the camera, from the engine. From the side, the tweezer's focus:
+
+![Intensity slice, side](screens/slice-side-desktop-light.webp)
+
+Looking along the beam, its cross-section:
+
+![Intensity slice, along](screens/slice-along-desktop-light.webp)
+
+Counter-propagating beams made coherent: the standing wave's fringes.
+
+![Standing wave](screens/slice-counter-desktop-light.webp)
+
+## 13. A real lens's rays and wavefront (#49)
 
 Show → Traced rays, zoomed out to millimetres from the side: the 354330-C
 tilted 0.3°, the rays refracted at both surfaces and meeting at its focus.
