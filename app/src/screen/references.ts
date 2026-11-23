@@ -5,11 +5,100 @@ export const REFERENCES: Reference[] = [
   {
     "id": "jain2016_recoil",
     "slot": "single_beam_tweezer",
-    "status": "wanted",
+    "status": "verified",
     "authors": "V. Jain, J. Gieseler, C. Moritz, C. Dellago, R. Quidant, L. Novotny",
     "title": "Direct Measurement of Photon Recoil from a Levitated Nanoparticle",
     "journal": "Phys. Rev. Lett. 116, 243601 (2016)",
-    "doi": "10.1103/PhysRevLett.116.243601"
+    "doi": "10.1103/PhysRevLett.116.243601",
+    "setup": {
+      "version": 1,
+      "particle": {
+        "radius": 4.98e-8,
+        "material": "SiO2",
+        "n": 1.45,
+        "k": 0,
+        "density": 2200
+      },
+      "environment": {
+        "pressure": 2e-8,
+        "temperature": 300,
+        "gas": "N2",
+        "medium_index": 1
+      },
+      "trap": {
+        "fields": [
+          {
+            "kind": "beam",
+            "id": "beam1",
+            "wavelength": 0.000001064,
+            "power": 0.07,
+            "focus": {
+              "kind": "lens",
+              "NA": 0.9
+            },
+            "mode": {
+              "type": "lg",
+              "indices": [
+                0,
+                0
+              ]
+            },
+            "polarisation": "x"
+          }
+        ]
+      }
+    },
+    "schema_gaps": [],
+    "disagrees": 61
+  },
+  {
+    "id": "jain2016_recoil_r527",
+    "slot": "single_beam_tweezer",
+    "status": "verified",
+    "authors": "V. Jain, J. Gieseler, C. Moritz, C. Dellago, R. Quidant, L. Novotny",
+    "title": "Direct Measurement of Photon Recoil from a Levitated Nanoparticle",
+    "journal": "Phys. Rev. Lett. 116, 243601 (2016)",
+    "doi": "10.1103/PhysRevLett.116.243601",
+    "setup": {
+      "version": 1,
+      "particle": {
+        "radius": 5.27e-8,
+        "material": "SiO2",
+        "n": 1.45,
+        "k": 0,
+        "density": 2200
+      },
+      "environment": {
+        "pressure": 3e-8,
+        "temperature": 300,
+        "gas": "N2",
+        "medium_index": 1
+      },
+      "trap": {
+        "fields": [
+          {
+            "kind": "beam",
+            "id": "beam1",
+            "wavelength": 0.000001064,
+            "power": 0.07,
+            "focus": {
+              "kind": "lens",
+              "NA": 0.9
+            },
+            "mode": {
+              "type": "lg",
+              "indices": [
+                0,
+                0
+              ]
+            },
+            "polarisation": "x"
+          }
+        ]
+      }
+    },
+    "schema_gaps": [],
+    "disagrees": 61
   },
   {
     "id": "yoneda2017_standing_wave",

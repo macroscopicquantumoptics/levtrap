@@ -28,13 +28,16 @@ test("references.ts is generated from docs/validation/references.json", () => {
   );
 });
 
-test("today every preset is example values, waiting for its paper", () => {
+test("today every preset is example values, waiting for its paper or naming one levtrap disagrees with", () => {
   for (const p of PRESETS.filter((x) => !x.illustrative)) {
     assert.equal(p.source, "Example values, not from a paper yet");
     assert.ok(p.references.length > 0, `${p.id} names a paper to check`);
-    assert.ok(p.references.every((r) => r.status === "wanted" && r.slot === p.slot));
+    assert.ok(p.references.every((r) => (r.status === "wanted" || r.disagrees) && r.slot === p.slot));
   }
-  assert.equal(shortCitation(PRESETS[0].references[0]), "Jain et al., Phys. Rev. Lett. 116, 243601 (2016)");
+  // the tweezer's paper is read (C3) but levtrap disagrees with it (#61): named, not used
+  const tweezer = PRESETS.find((p) => p.id === "tweezer")!;
+  assert.equal(shortCitation(tweezer.references[0]), "Jain et al., Phys. Rev. Lett. 116, 243601 (2016)");
+  assert.ok(tweezer.references.every((r) => r.status === "verified" && r.disagrees === 61));
 });
 
 test("a verified paper's setup replaces the example of its trap type, and is cited", () => {
@@ -54,6 +57,10 @@ test("a verified paper's setup replaces the example of its trap type, and is cit
   assert.equal(tweezer.setup.particle.radius, 7.5e-8);
   assert.equal(tweezer.source, "A. Someone et al., Phys. Rev. A 1, 1 (2030)");
   assert.deepEqual(tweezer.references, [paper]);
+  // a paper levtrap disagrees with is named but not used
+  const disputed = buildPresets([{ ...paper, disagrees: 99 }]).find((p) => p.id === "tweezer")!;
+  assert.equal(disputed.setup, DEFAULT_SETUP);
+  assert.deepEqual(disputed.references, [{ ...paper, disagrees: 99 }]);
   // a setup the schema cannot hold yet stays out
   const gapped = buildPresets([{ ...paper, schema_gaps: ["focus.kind"] }]).find((p) => p.id === "tweezer")!;
   assert.equal(gapped.setup, DEFAULT_SETUP);
