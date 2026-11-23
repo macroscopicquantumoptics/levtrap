@@ -56,7 +56,9 @@ Rules:
 * The engine knows nothing about the UI; the UI does no physics. The only
   contract is Setup in, Result out, both plain JSON, both SI.
 * `src/levtrap` imports numpy, scipy and the standard library only.
-* The old entry points in `api.py` keep working until `web/` is retired.
+* `api.py` keeps the engine's JSON entry points (`solve`, `field3d`, the asphere's
+  `lens_trap`), dispatched by `api.handle`; the old site's `compute`, `sweep` and
+  `presets` went with `web/` (E2).
 * Static site, no server, ever.
 
 ## 4. Setup file (version 1)
@@ -146,6 +148,7 @@ Models per field:
   "field": {"centre": [...], "planes": {"xz": {"u": [...], "v": [...], "I": [[...]]}, "yz": …, "xy": …},
             "max": …},                    // on request: intensity [W/m²] on the lab planes (#48)
   "curves": {...},                        // on request: force cuts, potential, map
+  "followed": {"start": [...], "jumped": false},  // with solve(..., start=r): the trap followed from r, or a jump (#50)
   "models": [{"quantity": "modes", "model": "mie", "validity": "ok", "notes": []}],
   "warnings": ["Paul q = 0.62: pseudopotential is inaccurate, using Mathieu"]
 }
@@ -200,7 +203,7 @@ link. Code copied from QUOP keeps its licence header and is listed in
 
 Stack: Next (static export) + React + TypeScript + three.js via
 react-three-fiber, KaTeX, Node test runner, Playwright. Lives in `app/`;
-`web/` is deleted once `app/` reaches parity.
+`web/` was deleted once `app/` reached parity (E2, `docs/PARITY.md`).
 
 ## 8. Trust
 

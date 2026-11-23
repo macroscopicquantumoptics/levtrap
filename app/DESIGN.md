@@ -111,6 +111,12 @@ for it).
   aligned focus), tilted and decentred as set, and the light converges to
   where the ray trace puts the focus. Zoomed in on the focus it is out of
   view; its label then waits at the edge of the view, towards it.
+* **Compare with the aligned lens** (lens inspector, #51): for a tilted or
+  decentred asphere, a button solves the same setup with the lens aligned,
+  starting from the particle's equilibrium so both describe the same trap
+  (continuation, #50), and shows how far the particle moved (and along
+  x, y, z) and each trap frequency against the aligned lens's. It updates
+  with each edit while open; for an aligned lens the button is disabled.
 * **A parabolic mirror** (E3) is drawn at its true size about the focus:
   the paraboloid between its hole and its rim, faint (a deep mirror stands
   all round the trap, which must stay in view through it), its rim and hole
@@ -235,7 +241,7 @@ result the strip already has, and Sweep runs one solve per value when asked.
 |---|---|
 | Forces | The force along each eigen-axis of the trap, through the equilibrium. "Dipole approximation" draws the same with the light as a point dipole, dashed: where Mie theory matters shows. |
 | Potential | The potential along each axis in k_BT (the force integrated from the equilibrium), and the harmonic trap of the same stiffness dashed: anharmonicity shows where they part. Its barriers are the depths in the strip. |
-| Sweep | Any input of the setup (power, wavelength, NA, radius, charge, RF voltage and frequency, pressure, temperature…) against a headline number (the frequencies, the depth, the position along the beam, the scattered power). One solve per value, with progress and Cancel; the values without a stable trap are shaded. |
+| Sweep | Any input of the setup (power, wavelength, NA, radius, charge, RF voltage and frequency, pressure, temperature…) against a headline number (the frequencies, the depth, the position along the beam, the scattered power). One solve per value, with progress and Cancel; the values without a stable trap are shaded. "Follow one trap" (on by default, #50) starts each value from the equilibrium found at the one before (continuation); where that trap vanished and the engine searched afresh, a line marks the jump and the progress counts them. Outputs also include the absorbed power and the recoil heating per mode.|
 | Radiation | Where the scattered light goes, in two planes through the beam axis (polar); the fraction a lens of each NA collects, forward and backward; and the fraction of the position information a backward lens collects, per axis. The trapping lens's NA is marked. |
 | Heating | The reheating rate of each mode against pressure (10⁻⁹ to 10³ mbar), with photon recoil alone dashed, the setup's pressure marked, and a dot where recoil and gas heat equally. "At 1e-6 mbar" shows the rates as a table. |
 | Spectrum | The displacement spectrum each mode would show on an analyser (E4): a Lorentzian at its frequency, γ/2π wide, whose area is k_BT_eff/(mΩ²); T_eff balances the reheating against the damping, and is marked on each peak. "Feedback damping" adds linewidth to every mode (ideal cold damping: no added noise) and cools them. "Occupation" shows, per mode, the linewidth, phonon number, T_eff and rms displacement. Computed in the page from the result (`plots/spectrum.ts`, a copy of `levtrap.spectrum`); for traps with light, as the rates are. |
@@ -301,6 +307,9 @@ touch screen. Islands have a 12 px radius and one shadow.
   ("Beam", then "Beam 1" and "Beam 2").
 
 ## 10. Where every input of the old site goes
+
+The full checklist, outputs included, with what was dropped and what is to
+be ticketed, is `docs/PARITY.md` (E2).
 
 `web/index.html` (trap simulator):
 

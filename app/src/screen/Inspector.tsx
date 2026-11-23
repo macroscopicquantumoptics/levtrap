@@ -1,6 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
+import type { Engine } from "../engine/client.ts";
+import { alignedSetup, compare, misaligned } from "./aligned.ts";
+import { useAnswer } from "./hooks.ts";
 import type { AsphereFocus, BeamField, MirrorFocus, Field, Gas, GravityField, PaulField, Polarisation, Result, Setup, Vec3 } from "../engine/types.ts";
 import { asphereHalfAngle, LENSES } from "../engine/lenses.ts";
 import { mirrorAngles, mirrorHalfAngle, mirrorReflected } from "../engine/mirrors.ts";
@@ -49,10 +52,13 @@ export interface InspectorProps {
   /** one edit: one undo step */
   onEdit(setup: Setup, select?: PartId | null): void;
   onClose(): void;
+  /** the engine, for a comparison the inspector asks for (a real lens against the aligned one) */
+  engine?: (() => Engine) | null;
+  recorded?: boolean;
 }
 
 /** The selected thing's inputs: at most six, the rest under one Advanced fold. */
-export function Inspector({ setup, part, result, notice, onEdit, onClose }: InspectorProps) {
+export function Inspector({ setup, part, result, notice, onEdit, onClose, engine = null, recorded = true }: InspectorProps) {
   const field = part.index === undefined ? undefined : setup.trap.fields[part.index];
   const removable = part.kind === "beam" || part.kind === "paul" || part.kind === "gravity";
   const prefix = `${part.kind}${part.index ?? ""}`;
@@ -80,7 +86,7 @@ export function Inspector({ setup, part, result, notice, onEdit, onClose }: Insp
       {part.kind === "particle" && <ParticleEditor key={part.id} setup={setup} result={result} prefix={prefix} onEdit={onEdit} />}
       {part.kind === "environment" && <EnvironmentEditor key={part.id} setup={setup} prefix={prefix} onEdit={onEdit} />}
       {part.kind === "beam" && field?.kind === "beam" && <BeamEditor key={part.id} setup={setup} beam={field} index={part.index!} prefix={prefix} onEdit={onEdit} />}
-      {part.kind === "lens" && field?.kind === "beam" && <LensEditor key={part.id} setup={setup} beam={field} index={part.index!} prefix={prefix} onEdit={onEdit} result={result} />}
+      {part.kind === "lens" && field?.kind === "beam" && <LensEditor key={part.id} setup={setup} beam={field} index={part.index!} prefix={prefix} onEdit={onEdit} result={result} engine={engine} recorded={recorded} />}
       {part.kind === "paul" && field?.kind === "paul" && <PaulEditor key={part.id} setup={setup} paul={field} index={part.index!} prefix={prefix} onEdit={onEdit} />}
       {part.kind === "gravity" && field?.kind === "gravity" && <GravityEditor key={part.id} setup={setup} gravity={field} index={part.index!} prefix={prefix} onEdit={onEdit} />}
 
@@ -365,9 +371,12 @@ function switchFocus(kind: string, theta: number): BeamField["focus"] | null {
   return null;
 }
 
-function LensEditor({ setup, beam, index, prefix, onEdit, result }: EditorProps & { beam: BeamField; index: number; result: Result | null }) {
+type EngineProps = { engine: (() => Engine) | null; recorded: boolean };
+
+function LensEditor({ setup, beam, index, prefix, onEdit, result, engine, recorded }: EditorProps & EngineProps & { beam: BeamField; index: number; result: Result | null }) {
   if (beam.focus.kind === "parabolic_mirror") return <MirrorEditor setup={setup} beam={beam} focus={beam.focus} index={index} prefix={prefix} onEdit={onEdit} result={result} />;
-  if (beam.focus.kind === "asphere") return <AsphereEditor setup={setup} beam={beam} focus={beam.focus} index={index} prefix={prefix} onEdit={onEdit} result={result} />;
+  if (beam.focus.kind === "asphere")
+    return <AsphereEditor setup={setup} beam={beam} focus={beam.focus} index={index} prefix={prefix} onEdit={onEdit} result={result} engine={engine} recorded={recorded} />;
   const focus = beam.focus;
   const n = environmentOf(setup).medium_index;
   const order = modeOrder(beam.mode?.type ?? "lg", beam.mode?.indices ?? [0, 0]);
@@ -439,7 +448,14 @@ function lensKinds(setup: Setup, beam: BeamField) {
 }
 
 /** A real lens, ray traced: the beam on it, its tilt and decentre; and what it does to the focus. */
-function AsphereEditor({ setup, beam, focus, index, prefix, onEdit, result }: EditorProps & { beam: BeamField; focus: AsphereFocus; index: number; result: Result | null }) {
+function AsphereEditor({ setup, beam, focus, index, prefix, onEdit, result, engine, recorded }: EditorProps & EngineProps & { beam: BeamField; focus: AsphereFocus; index: number; result: Result | null }) {
+  // compare with the aligned lens (#51): the same setup solved with no tilt and no decentre, on its own channel
+  const [comparing, setComparing] = useState(false);
+  const off = misaligned(setup, index);
+  // the aligned lens solved from the particle's equilibrium as set, so both describe the same trap (continuation)
+  const aligned = useAnswer(alignedSetup(setup, index), engine, recorded, [], comparing && off, "aligned", result?.stable ? result.equilibrium : null);
+  const comparison = comparing && off && result && aligned.answer.result ? compare(result, aligned.answer.result) : null;
+  const followed = aligned.answer.result?.followed;
   const edit = (patch: Partial<AsphereFocus>) => onEdit(withField<BeamField>(setup, index, { focus: { ...focus, ...patch } }));
   const lens = LENSES[focus.lens ?? "354330-C"];
   const [tx, ty] = focus.tilt_deg ?? [0, 0];
@@ -488,6 +504,51 @@ function AsphereEditor({ setup, beam, focus, index, prefix, onEdit, result }: Ed
           <dd>{done.trap_axis_tilt_mrad == null ? "—" : `${formatNumber(done.trap_axis_tilt_mrad, 3)} mrad`}</dd>
           <dt>Wavefront error</dt>
           <dd>{formatNumber(done.rms_waves, 3)} waves rms</dd>
+        </dl>
+      )}
+      <button
+        type="button"
+        className={ui.button}
+        aria-pressed={comparing}
+        disabled={!off || !engine}
+        title={off ? "Solve the same setup with the lens aligned, and show what the tilt and decentre do" : "The lens is aligned: nothing to compare"}
+        onClick={() => setComparing((c) => !c)}
+        data-testid={`${prefix}-compare`}
+      >
+        {comparing ? "Hide the comparison" : "Compare with the aligned lens"}
+      </button>
+      {comparing && off && (
+        <dl className={styles.readout} data-testid={`${prefix}-comparison`} data-pending={aligned.pending || undefined}>
+          {comparison ? (
+            <>
+              <dt>Particle moved</dt>
+              <dd>{formatSI(Math.hypot(...comparison.shift), "m")}</dd>
+              {followed?.jumped && (
+                <>
+                  <dt>Note</dt>
+                  <dd>the trap vanishes as the lens aligns: another trap is compared</dd>
+                </>
+              )}
+              <dt>by x, y, z</dt>
+              <dd>{comparison.shift.map((v) => formatSI(v, "m", 2)).join(", ")}</dd>
+              {comparison.modes.map((m) => (
+                <Fragment key={m.name}>
+                  <dt>f{m.name} against aligned</dt>
+                  <dd>
+                    {m.change == null ? "—" : `${m.change >= 0 ? "+" : "−"}${formatNumber(Math.abs(100 * m.change), 3)} %`}
+                    {m.aligned != null && ` (${formatSI(m.aligned, "Hz", 3)})`}
+                  </dd>
+                </Fragment>
+              ))}
+            </>
+          ) : (
+            <>
+              <dt>Aligned lens</dt>
+              <dd>
+                {!result?.stable ? "the lens as set holds no stable trap" : aligned.pending || !aligned.answer.result ? "solving…" : "the aligned lens holds no stable trap"}
+              </dd>
+            </>
+          )}
         </dl>
       )}
       <p className={styles.aside}>Drawn at its true size and distance, with its tilt and decentre.</p>

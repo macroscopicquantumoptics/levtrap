@@ -3,7 +3,7 @@ import { test } from "node:test";
 import type { BeamField, PaulField } from "../../engine/types.ts";
 import { PRESETS } from "../presets.ts";
 import { RECORDED } from "../recorded.ts";
-import { defaultRange, OUTPUTS, sweepParams, sweepValues, unstableRuns } from "./sweep.ts";
+import { defaultRange, followFrom, jumpsAt, OUTPUTS, sweepParams, sweepValues, unstableRuns } from "./sweep.ts";
 
 const preset = (id: string) => PRESETS.find((p) => p.id === id)!.setup;
 
@@ -102,4 +102,24 @@ test("a parabolic mirror sweeps its beam, size and hole", async () => {
   const focus = (t.trap.fields[0] as BeamField).focus;
   assert.equal(focus.kind === "parabolic_mirror" && focus.hole_radius, 1e-3);
   assert.deepEqual(defaultRange(hole, MIRROR_SETUP), [0, 4.5e-3]);
+});
+
+test("continuation: the next start is the last stable equilibrium, and jumps are marked", () => {
+  const r = RECORDED.tweezer!;
+  const lost = { ...r, stable: false, equilibrium: null };
+  const moved = { ...r, equilibrium: [1e-7, 0, 2e-7] as [number, number, number], followed: { start: r.equilibrium!, jumped: true } };
+  assert.equal(followFrom([]), null);
+  assert.deepEqual(followFrom([r, lost]), r.equilibrium);
+  assert.deepEqual(followFrom([r, lost, moved, null]), [1e-7, 0, 2e-7]);
+  assert.deepEqual(jumpsAt([0, 1, 2], [r, lost, moved]), [2]);
+});
+
+test("the new outputs: absorbed power, and recoil heating per mode", () => {
+  const r = RECORDED.tweezer!;
+  const read = (id: string) => OUTPUTS.find((o) => o.id === id)!.read(r, preset("tweezer"));
+  assert.equal(read("absorbed")[0].value, r.optical!.P_abs);
+  assert.deepEqual(
+    read("recoil").map((v) => [v.name, v.value]),
+    r.rates!.modes.map((m) => [m.name, m.recoil_heating]),
+  );
 });
