@@ -72,7 +72,9 @@ Rules:
                   "temperature": 300, "gas": "N2", "medium_index": 1.0},
   "trap": {"fields": [
     {"kind": "beam", "wavelength": 1.064e-6, "power": 0.1,
-     "focus": {"kind": "lens", "NA": 0.8},            // or {"kind": "asphere", "lens": "354330-C",
+     "focus": {"kind": "lens", "NA": 0.8},            // + optional "filling": the beam fills an aplanatic
+                                                      //  objective's aperture (1/e^2 radius / aperture, #61);
+                                                      // or {"kind": "asphere", "lens": "354330-C",
                                                       //  "beam_diameter": 2.5e-3, "tilt_deg": [0, 0],
                                                       //  "decentre": [0, 0]} (E1); or {"kind": "parabolic_mirror",
                                                       //  "focal_length": 3e-3, "rim_radius": 9e-3, "hole_radius": 0,

@@ -573,7 +573,8 @@ def BscPmGauss(beam_type: str = "lg", mode=(0, 0), *, polarisation=(1, 1j),
                power: float | None = None, Nmax: int | None = None,
                truncation_angle: float | None = None, offset=None,
                angular_scaling: str = "tantheta", zero_rejection_level: float = 1e-8,
-               omega: float = 2 * np.pi) -> Bsc:
+               omega: float = 2 * np.pi, apodisation: str | None = None,
+               width_sin: float | None = None) -> Bsc:
     """Focused Gaussian / Laguerre-Gaussian / Hermite-Gaussian beam.
 
     Port of ``ott.BscPmGauss`` (far-field point matching of a paraxial
@@ -599,6 +600,15 @@ def BscPmGauss(beam_type: str = "lg", mode=(0, 0), *, polarisation=(1, 1j),
         Hard aperture [rad]; default pi/2 (no truncation).
     offset : (3,) array, optional
         Beam focus offset [m] (OTT's far-field phase-shift offset).
+    apodisation : {None, 'aplanatic'}
+        Not in OTT. ``'aplanatic'`` weights the far field by sqrt|cos theta|,
+        as an objective obeying the sine condition does (energy conservation
+        from the back aperture, rho = f sin theta, to the sphere). Use it with
+        ``angular_scaling='sintheta'``.
+    width_sin : float, optional
+        Not in OTT. With ``angular_scaling='sintheta'``: sin of the angle at
+        which the paraxial beam's 1/e^2 radius maps, given directly so it may
+        exceed 1 (an overfilled aperture). Replaces NA / angle for the width.
     """
     k = k_medium_from(k_medium, wavelength_medium, index_medium, wavelength0)
     if truncation_angle is None:
@@ -675,7 +685,7 @@ def BscPmGauss(beam_type: str = "lg", mode=(0, 0), *, polarisation=(1, 1j),
         rw = 2 * (wscaling * w0) ** 2 * np.tan(theta) ** 2
         dr = (wscaling * w0) * (1 / np.cos(theta)) ** 2
     elif angular_scaling == "sintheta":
-        wscaling = 1 / np.sin(abs(np.radians(beam_angle_deg)))
+        wscaling = 1 / (width_sin if width_sin is not None else np.sin(abs(np.radians(beam_angle_deg))))
         rw = 2 * (wscaling * w0) ** 2 * np.sin(theta) ** 2
         dr = (wscaling * w0) * np.abs(np.cos(theta))
     else:
@@ -694,6 +704,10 @@ def BscPmGauss(beam_type: str = "lg", mode=(0, 0), *, polarisation=(1, 1j),
         env = (norm_paraxial * rw ** abs(azimuthal_mode / 2) * L
                * np.exp(-rw / 2 + 1j * azimuthal_mode * phi
                         + 1j * np.pi / 2 * (radial_mode * 2 + abs(azimuthal_mode) + 1)))
+        if apodisation == "aplanatic":
+            env = env * np.sqrt(np.abs(np.cos(theta)))
+        elif apodisation is not None:
+            raise ValueError("apodisation must be None or 'aplanatic'")
         mode_input_power = np.sqrt(np.sum(2 * np.pi * np.abs(env) ** 2 * np.sqrt(rw / 2) * np.abs(dr)))
         aperture_norm = np.sqrt(np.sum(2 * np.pi * np.abs(env) ** 2 * np.sin(theta)))
         envelope[:, ii] = c[ii] * env / aperture_norm * mode_input_power

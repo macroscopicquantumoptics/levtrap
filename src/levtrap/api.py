@@ -82,13 +82,23 @@ def _single_beam(b: dict, n_medium: float) -> Bsc:
     order = (2 * mode[0] + abs(mode[1])) if btype == "lg" else (mode[0] + mode[1])
     angle = _beam_angle(b["focus"], wavelength, n_medium, order)
     pol = _pol(b["polarisation"])
-    key = (btype, mode, round(angle, 12), pol, wavelength, n_medium)
+    filling = b["focus"].get("filling")
+    key = (btype, mode, round(angle, 12), pol, wavelength, n_medium, filling)
     beam = _BEAM_CACHE.get(key)
     if beam is None:
         if len(_BEAM_CACHE) > 32:
             _BEAM_CACHE.clear()
-        beam = BscPmGauss(btype, mode, polarisation=pol, angle=angle, index_medium=n_medium,
-                          wavelength0=wavelength, power=1.0)
+        if filling:
+            # an aplanatic objective (sine condition, rho = f sin theta) of aperture sin(theta_max) = NA / n,
+            # its back aperture filled by the beam: 1/e^2 radius = filling x aperture radius (issue #61);
+            # the power is what passes the aperture
+            beam = BscPmGauss(btype, mode, polarisation=pol, angle=angle, index_medium=n_medium,
+                              wavelength0=wavelength, power=1.0, angular_scaling="sintheta",
+                              apodisation="aplanatic", width_sin=float(filling) * math.sin(angle),
+                              truncation_angle=angle)
+        else:
+            beam = BscPmGauss(btype, mode, polarisation=pol, angle=angle, index_medium=n_medium,
+                              wavelength0=wavelength, power=1.0)
         _BEAM_CACHE[key] = beam
     return beam
 

@@ -387,6 +387,8 @@ function LensEditor({ setup, beam, index, prefix, onEdit, result, engine, record
   const na = naFromAngle(angle, n);
   const waist = waistFromAngle(angle, beam.wavelength, n, order);
   const given = focus.NA != null ? "NA" : focus.waist != null ? "waist" : "half-angle";
+  // an objective with its back aperture filled (#61): NA is then the aperture, and the filling sets the focus
+  const filling = focus.NA != null ? (focus.filling ?? null) : null;
   return (
     <>
       <Fields>
@@ -406,20 +408,52 @@ function LensEditor({ setup, beam, index, prefix, onEdit, result, engine, record
           value={na}
           quantity="number"
           check={(v) => (v > 0 && v < n ? null : `Must be between 0 and the medium index (${formatNumber(n, 4, true)}).`)}
-          onCommit={(v) => edit({ kind: "lens", NA: v })}
+          onCommit={(v) => edit(filling != null ? { kind: "lens", NA: v, filling } : { kind: "lens", NA: v })}
         />
-        <NumberField
-          id={`${prefix}-waist`}
-          label={<>Waist w₀</>}
-          value={waist}
-          quantity="length"
-          unit="µm"
-          check={positive}
-          onCommit={(v) => edit({ kind: "lens", waist: v })}
-          note={`Linked to the NA${order ? ` for this mode (order ${order})` : ""}. The setup keeps the ${given}.`}
-        />
+        {filling != null ? (
+          <NumberField
+            id={`${prefix}-filling`}
+            label="Filling"
+            value={filling}
+            quantity="number"
+            check={(v) => (v > 0 && v <= 10 ? null : "Must be between 0 and 10.")}
+            onCommit={(v) => edit({ kind: "lens", NA: na, filling: v })}
+            note="The beam's 1/e² radius on the back aperture, over the aperture's radius: below 1 underfilled, above 1 overfilled."
+          />
+        ) : (
+          <NumberField
+            id={`${prefix}-waist`}
+            label={<>Waist w₀</>}
+            value={waist}
+            quantity="length"
+            unit="µm"
+            check={positive}
+            onCommit={(v) => edit({ kind: "lens", waist: v })}
+            note={`Linked to the NA${order ? ` for this mode (order ${order})` : ""}. The setup keeps the ${given}.`}
+          />
+        )}
       </Fields>
-      <Advanced changed={given === "half-angle" ? [`half-angle ${formatNumber((angle * 180) / Math.PI, 3, true)}°`] : []}>
+      <Advanced
+        changed={[
+          ...(given === "half-angle" ? [`half-angle ${formatNumber((angle * 180) / Math.PI, 3, true)}°`] : []),
+          ...(filling != null ? [`objective, filling ${formatNumber(filling, 3, true)}`] : []),
+        ]}
+      >
+        <SelectField
+          id={`${prefix}-model`}
+          label="Focus model"
+          value={filling != null ? "objective" : "gaussian"}
+          options={[
+            { value: "gaussian", label: "Gaussian of this NA" },
+            { value: "objective", label: "Objective, aperture filled" },
+          ]}
+          onChange={(m) => edit(m === "objective" ? { kind: "lens", NA: na, filling: 1 } : { kind: "lens", NA: na })}
+          note={
+            filling != null
+              ? "An aplanatic objective of this NA, its back aperture filled by the beam; the power is what passes the aperture."
+              : "The Gaussian beam whose far field reaches 1/e² at this NA, with no aperture: the tightest focus of this NA."
+          }
+        />
         <NumberField
           id={`${prefix}-angle`}
           label="Half-angle"

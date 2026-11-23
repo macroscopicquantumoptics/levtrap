@@ -183,6 +183,11 @@ def _focus(f: dict, path: str) -> dict:
     limits = dict(NA=dict(exclusive_min=0), waist=dict(exclusive_min=0),
                   angle_deg=dict(exclusive_min=0, max=90))[key]
     out[key] = _num(f[key], f"{path}.{key}", **limits)
+    if f.get("filling") is not None:
+        # an objective's back aperture filled by a Gaussian (issue #61): needs the aperture, i.e. the NA
+        if key != "NA":
+            raise SetupError(f"{path}.filling", "needs the objective's NA (the aperture it fills); remove it or give NA")
+        out["filling"] = _num(f["filling"], f"{path}.filling", exclusive_min=0, max=10)
     return out
 
 
@@ -339,7 +344,7 @@ _KNOWN = {
     "trap": {"fields"},
     "beam": {"kind", "id", "wavelength", "power", "focus", "mode", "polarisation", "direction",
              "position", "phase", "coherent_with"},
-    "focus": {"kind", "NA", "waist", "angle_deg", "lens", "beam_diameter", "tilt_deg", "decentre",
+    "focus": {"kind", "NA", "waist", "angle_deg", "filling", "lens", "beam_diameter", "tilt_deg", "decentre",
               "focal_length", "rim_radius", "hole_radius"},
     "mode": {"type", "indices"},
     "paul": {"kind", "id", "geometry", "rf_voltage", "rf_frequency", "dc_voltage", "endcap_voltage",
