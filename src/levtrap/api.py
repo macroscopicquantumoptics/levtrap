@@ -60,12 +60,21 @@ def _beam_angle(focus: dict, wavelength: float, n_medium: float, order: int) -> 
     """Convergence angle [rad] from the focus block (NA, angle_deg or waist).
 
     For a waist W (1/e^2 field radius of the paraxial LG/HG mode at focus)
-    OTT's far-field mapping gives tan(angle) = lambda_m w_p / (pi W) with
-    w_p = ``paraxial_beam_waist(order)`` (BscPmGauss.m).
+    OTT's far-field mapping (the default) gives tan(angle) = lambda_m w_p / (pi W)
+    with w_p = ``paraxial_beam_waist(order)`` (BscPmGauss.m). With
+    ``mapping: "sine"`` (#64) it is sin(angle) = lambda_m w_p / (pi W): a
+    Gaussian's angular spectrum goes with k sin(theta), so this is the
+    textbook relation; below lambda_m w_p / pi there is no angle.
     """
     if focus.get("waist"):
         lam_m = wavelength / n_medium
-        return math.atan(lam_m * paraxial_beam_waist(order) / (math.pi * float(focus["waist"])))
+        s = lam_m * paraxial_beam_waist(order) / (math.pi * float(focus["waist"]))
+        if focus.get("mapping") == "sine":
+            if s >= 1:
+                raise ValueError(f"a waist of {float(focus['waist']):.3g} m is below the diffraction limit "
+                                 f"{lam_m * paraxial_beam_waist(order) / math.pi:.3g} m")
+            return math.asin(s)
+        return math.atan(s)
     if focus.get("angle_deg"):
         return math.radians(float(focus["angle_deg"]))
     na = float(focus["NA"])
@@ -83,7 +92,8 @@ def _single_beam(b: dict, n_medium: float) -> Bsc:
     angle = _beam_angle(b["focus"], wavelength, n_medium, order)
     pol = _pol(b["polarisation"])
     filling = b["focus"].get("filling")
-    key = (btype, mode, round(angle, 12), pol, wavelength, n_medium, filling)
+    mapping = b["focus"].get("mapping", "ott")
+    key = (btype, mode, round(angle, 12), pol, wavelength, n_medium, filling, mapping)
     beam = _BEAM_CACHE.get(key)
     if beam is None:
         if len(_BEAM_CACHE) > 32:
@@ -96,7 +106,15 @@ def _single_beam(b: dict, n_medium: float) -> Bsc:
                               wavelength0=wavelength, power=1.0, angular_scaling="sintheta",
                               apodisation="aplanatic", width_sin=float(filling) * math.sin(angle),
                               truncation_angle=angle)
+        elif mapping == "sine":
+            # the Gaussian of this NA as its angular spectrum has it (#64): the paraxial beam mapped by
+            # sin(theta), weighted by sqrt(cos theta) as an aplanatic lens does, so it fades to 0 at 90 degrees;
+            # at small NA its waist is the textbook lambda / (pi NA)
+            beam = BscPmGauss(btype, mode, polarisation=pol, angle=angle, index_medium=n_medium,
+                              wavelength0=wavelength, power=1.0, angular_scaling="sintheta",
+                              apodisation="aplanatic")
         else:
+            # OTT's BscPmGauss: the paraxial beam mapped by tan(theta) (the default; OTT-based papers use it)
             beam = BscPmGauss(btype, mode, polarisation=pol, angle=angle, index_medium=n_medium,
                               wavelength0=wavelength, power=1.0)
         _BEAM_CACHE[key] = beam

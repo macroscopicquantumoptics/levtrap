@@ -82,9 +82,9 @@ def sbesselj(n, kr, derivative: bool = False):
     with np.errstate(all="ignore"):
         jn = np.sqrt(np.pi / (2 * KR)) * sp.jv(N + 0.5, KR)
     if np.any(small):
-        # OTT: jn = kr^n / (2n+1)!!
+        # OTT: jn = kr^n / (2n+1)!!; in floats, as (2n+1)!! overflows a float from n ~ 150 (it is then inf, and jn 0)
         nn = N[small]
-        dfact = np.array([math.prod(range(1, int(2 * v + 2), 2)) if v >= 0 else 1.0 for v in nn],
+        dfact = np.array([float(sp.factorial2(int(2 * v + 1), exact=False)) if v >= 0 else 1.0 for v in nn],
                          dtype=float)
         jn = np.asarray(jn, dtype=np.result_type(jn, KR, float))
         jn[small] = KR[small] ** nn / dfact

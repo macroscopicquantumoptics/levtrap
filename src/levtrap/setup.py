@@ -188,6 +188,11 @@ def _focus(f: dict, path: str) -> dict:
         if key != "NA":
             raise SetupError(f"{path}.filling", "needs the objective's NA (the aperture it fills); remove it or give NA")
         out["filling"] = _num(f["filling"], f"{path}.filling", exclusive_min=0, max=10)
+    if f.get("mapping") is not None:
+        # how the paraxial beam meets the far field (#64): OTT's tan(theta) (default) or the textbook sine
+        out["mapping"] = _choice(f["mapping"], f"{path}.mapping", ("ott", "sine"))
+        if out.get("filling") is not None and out["mapping"] != "sine":
+            raise SetupError(f"{path}.mapping", "a filled objective maps by the sine condition; remove mapping")
     return out
 
 
@@ -329,6 +334,14 @@ def parse(setup: dict | str) -> dict:
                 and f["focus"]["NA"] >= s["environment"]["medium_index"]:
             raise SetupError(f"{path}.focus.NA", "must be smaller than the medium index "
                                                 f"({s['environment']['medium_index']:g})")
+        if f["kind"] == "beam" and f["focus"].get("waist") is not None and f["focus"].get("mapping") == "sine":
+            from .special import paraxial_beam_waist
+            m = f["mode"]["indices"]
+            order = 2 * m[0] + abs(m[1]) if f["mode"]["type"] == "lg" else m[0] + m[1]
+            limit = f["wavelength"] / s["environment"]["medium_index"] * paraxial_beam_waist(order) / math.pi
+            if f["focus"]["waist"] <= limit:
+                raise SetupError(f"{path}.focus.waist", f"must be larger than the diffraction limit ({limit:g} m) "
+                                                        "with the sine mapping")
         if f["kind"] == "paul" and s["particle"]["charge"] == 0:
             raise SetupError("particle.charge", "a Paul trap needs a charged particle; set the charge "
                                                 "(in elementary charges)")
@@ -344,7 +357,7 @@ _KNOWN = {
     "trap": {"fields"},
     "beam": {"kind", "id", "wavelength", "power", "focus", "mode", "polarisation", "direction",
              "position", "phase", "coherent_with"},
-    "focus": {"kind", "NA", "waist", "angle_deg", "filling", "lens", "beam_diameter", "tilt_deg", "decentre",
+    "focus": {"kind", "NA", "waist", "angle_deg", "filling", "mapping", "lens", "beam_diameter", "tilt_deg", "decentre",
               "focal_length", "rim_radius", "hole_radius"},
     "mode": {"type", "indices"},
     "paul": {"kind", "id", "geometry", "rf_voltage", "rf_frequency", "dc_voltage", "endcap_voltage",

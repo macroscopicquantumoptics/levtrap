@@ -44,7 +44,7 @@ export interface Environment {
  * the beam fills: its 1/e² radius is `filling` times the aperture's (#61).
  * Without it the focus is the Gaussian of that NA, with no aperture.
  */
-export type IdealFocus = { kind?: "lens" } & (
+export type IdealFocus = { kind?: "lens"; mapping?: "ott" | "sine" } & (
   | { NA: number; filling?: number; waist?: never; angle_deg?: never }
   | { waist: number; NA?: never; angle_deg?: never; filling?: never }
   | { angle_deg: number; NA?: never; waist?: never; filling?: never }

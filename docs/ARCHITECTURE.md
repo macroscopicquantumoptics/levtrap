@@ -74,6 +74,8 @@ Rules:
     {"kind": "beam", "wavelength": 1.064e-6, "power": 0.1,
      "focus": {"kind": "lens", "NA": 0.8},            // + optional "filling": the beam fills an aplanatic
                                                       //  objective's aperture (1/e^2 radius / aperture, #61);
+                                                      //  + optional "mapping": "ott" (default, tan theta, as
+                                                      //  OTT-based papers) or "sine" (textbook Gaussian, #64);
                                                       // or {"kind": "asphere", "lens": "354330-C",
                                                       //  "beam_diameter": 2.5e-3, "tilt_deg": [0, 0],
                                                       //  "decentre": [0, 0]} (E1); or {"kind": "parabolic_mirror",
