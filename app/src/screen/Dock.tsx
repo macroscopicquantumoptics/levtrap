@@ -6,17 +6,19 @@ import { formatSI } from "../lib/format.ts";
 import type { Answer } from "./answer.ts";
 import type { PartId } from "./model.ts";
 import { ForcesTab, HeatingTab, PotentialTab, RadiationTab, SpectrumTab, SweepTab, WavefrontTab } from "./plots/tabs.tsx";
+import { DesignTab } from "./plots/DesignTab.tsx";
 import { ResultsStrip } from "./ResultsStrip.tsx";
 import { Icon } from "./ui/Icon.tsx";
 import ui from "./ui/ui.module.css";
 import styles from "./Dock.module.css";
 
-export type TabId = "forces" | "potential" | "sweep" | "radiation" | "heating" | "spectrum" | "wavefront";
+export type TabId = "forces" | "potential" | "sweep" | "design" | "radiation" | "heating" | "spectrum" | "wavefront";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "forces", label: "Forces" },
   { id: "potential", label: "Potential" },
   { id: "sweep", label: "Sweep" },
+  { id: "design", label: "Design" },
   { id: "radiation", label: "Radiation" },
   { id: "heating", label: "Heating" },
   { id: "spectrum", label: "Spectrum" },
@@ -36,10 +38,12 @@ export interface DockProps {
   /** the engine, for the plots' own data */
   engine: (() => Engine) | null;
   recorded: boolean;
+  /** an edit from a tab (Design → Apply) */
+  onEdit?(setup: Setup): void;
 }
 
 /** The bottom of the screen: the results strip, always visible, and the plots drawer under it. */
-export function Dock({ setup, answer, pending, status, tab, onTab, expanded, onToggle, onSelect, engine, recorded }: DockProps) {
+export function Dock({ setup, answer, pending, status, tab, onTab, expanded, onToggle, onSelect, engine, recorded, onEdit }: DockProps) {
   return (
     <section className={`${ui.island} ${styles.dock}`} aria-label="Results">
       <ResultsStrip setup={setup} answer={answer} pending={pending} status={status} expanded={expanded} onToggle={onToggle} onSelect={onSelect} />
@@ -66,7 +70,7 @@ export function Dock({ setup, answer, pending, status, tab, onTab, expanded, onT
       {tab && (
         <div className={styles.drawer} role="tabpanel" id="drawer" aria-labelledby={`tab-${tab}`} data-testid="drawer" data-tab={tab}>
           <div className={styles.panel} data-pending={pending || undefined}>
-            <Panel tab={tab} setup={setup} result={answer.result} engine={engine} recorded={recorded} />
+            <Panel tab={tab} setup={setup} result={answer.result} engine={engine} recorded={recorded} onEdit={onEdit} />
           </div>
           <button type="button" className={`${ui.iconButton} ${styles.close}`} aria-label="Close the plots" onClick={() => onTab(null)}>
             <Icon name="close" />
@@ -103,10 +107,11 @@ function EngineLine({ status, answer }: { status: EngineStatus | null; answer: A
   );
 }
 
-function Panel({ tab, setup, result, engine, recorded }: { tab: TabId; setup: Setup; result: Result | null; engine: (() => Engine) | null; recorded: boolean }) {
+function Panel({ tab, setup, result, engine, recorded, onEdit }: { tab: TabId; setup: Setup; result: Result | null; engine: (() => Engine) | null; recorded: boolean; onEdit?(setup: Setup): void }) {
   if (tab === "forces") return <ForcesTab setup={setup} engine={engine} recorded={recorded} />;
   if (tab === "potential") return <PotentialTab setup={setup} engine={engine} recorded={recorded} />;
   if (tab === "sweep") return <SweepTab setup={setup} engine={engine} recorded={recorded} />;
+  if (tab === "design") return <DesignTab setup={setup} result={result} engine={engine} onEdit={onEdit} />;
   if (tab === "radiation") return <RadiationTab setup={setup} engine={engine} recorded={recorded} />;
   if (tab === "spectrum") return <SpectrumTab setup={setup} result={result} />;
   if (tab === "wavefront") return <WavefrontTab setup={setup} engine={engine} recorded={recorded} />;

@@ -7,10 +7,10 @@
  * it; hover names it. Loaded on demand: the SVG drawing stands in until it is.
  */
 import { Canvas, useThree } from "@react-three/fiber";
-import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Matrix4, Vector3, type OrthographicCamera } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { BeamField, FieldBlock, FieldShare, GravityField, LensResult, PaulField, SlicePlane, Vec3 } from "../../engine/types.ts";
+import type { BeamField, FieldBlock, FieldShare, GravityField, LensResult, PaulField, Pattern, SlicePlane, Vec3 } from "../../engine/types.ts";
 import { formatSI } from "../../lib/format.ts";
 import { environmentOf, gravityOf, partsOf, type Part, type PartId } from "../model.ts";
 import { beamRadius, scaleBar, unit } from "../scene/geometry.ts";
@@ -21,15 +21,25 @@ import { beamGeometry, electrodeExtent, fitScene, lensDistance, toWorld, viewDir
 import type { SceneProps } from "../Scene.tsx";
 import { usePalette } from "./palette.ts";
 import { facingPlane, planeName } from "../scene/slice.ts";
-import { AsphereLens, Beam, IntensitySlice, ParabolicMirror, ForceArrows, TracedRays, PaulTrap, Particle, TrapAxes, type Picking } from "./parts.tsx";
+import { AsphereLens, Beam, IntensitySlice, Moving, ParabolicMirror, ForceArrows, RadiationLobe, TracedRays, PaulTrap, Particle, TrapAxes, type Picking } from "./parts.tsx";
+import { magnification, motionPlan } from "../scene/motion.ts";
+import { lobe } from "../scene/lobe.ts";
 import base from "../Scene.module.css";
 import styles from "./Scene3D.module.css";
 
 export interface Overlays {
   /** the light's intensity on the lab plane through the trap that faces the camera */
   slice?: boolean;
-  /** draw the particle at its true size even when that is under a few pixels */
-  trueSize: boolean;
+  /**
+   * draw to scale: the particle at its true size even when that is under a
+   * few pixels, the ideal lens's symbol left out (it has no size), and the
+   * motion not magnified
+   */
+  toScale: boolean;
+  /** the particle moves as the trap's modes oscillate, with its trail (the Play button) */
+  motion?: boolean;
+  /** the radiation pattern as a surface about the particle */
+  pattern?: boolean;
   /** the trap's eigen-axes through the equilibrium */
   axes: boolean;
   /** each field's force on the particle */
@@ -53,6 +63,14 @@ export interface RayData {
   pending: boolean;
 }
 
+/** The radiation pattern's data, while it is shown. */
+export interface PatternData {
+  pattern: Pattern | null;
+  pending: boolean;
+  /** why the engine has no pattern for this setup */
+  notice: string | null;
+}
+
 export interface Scene3DProps extends Omit<SceneProps, "thumbnail"> {
   width: number;
   height: number;
@@ -72,13 +90,17 @@ interface CameraState {
 }
 
 const MIN_PARTICLE_PX = 4.5;
+/** px: the radiation pattern's largest radius, at the fitted scale */
+const LOBE_PX = 80;
+/** to scale, an ideal lens (it has no size or distance) is drawn this many half-views upstream: out of the view */
+const IDEAL_LENS_AWAY = 20;
 const VIEWS: { name: ViewName; label: string; title: string }[] = [
   { name: "fit", label: "Fit", title: "Show the whole trap" },
   { name: "along", label: "Along", title: "Look along the beam" },
   { name: "side", label: "Side", title: "Look from the side" },
 ];
 
-export default function Scene3D({ setup, result, selected, onSelect, inset, labels, grid, width, height, overlays, field, rays, onReady }: Scene3DProps) {
+export default function Scene3D({ setup, result, selected, onSelect, inset, labels, grid, width, height, overlays, field, rays, pattern, onScale, onReady }: Scene3DProps) {
   const palette = usePalette();
   const [camera, setCamera] = useState<CameraState | null>(null);
   const [hover, setHover] = useState<{ id: PartId; x: number; y: number } | null>(null);
@@ -118,9 +140,13 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
       const g = beamGeometry(f, n);
       if (f.focus.kind === "parabolic_mirror") {
         // a parabolic mirror: drawn about the focus at its true size; the light comes from its vertex side
-        return { beam: f, index, g, lens: f.focus.focal_length, asphere: null, mirror: { focus: f.focus, at: { direction: g.direction, position: g.focus } } };
+        return { beam: f, index, g, lens: f.focus.focal_length, labelAt: f.focus.focal_length, asphere: null, mirror: { focus: f.focus, at: { direction: g.direction, position: g.focus } } };
       }
-      if (f.focus.kind !== "asphere") return { beam: f, index, g, lens: lensDistance(g.w0, g.theta, fit.halfView), asphere: null, mirror: null };
+      if (f.focus.kind !== "asphere") {
+        // an ideal lens has no size or distance: a symbol near the focus, or (to scale) left out, the cone running on
+        const symbolic = lensDistance(g.w0, g.theta, fit.halfView);
+        return { beam: f, index, g, lens: overlays.toScale ? IDEAL_LENS_AWAY * fit.halfView : symbolic, labelAt: symbolic, asphere: null, mirror: null };
+      }
       // a real lens: drawn where it is; the light goes to where it focuses (the result's shift)
       const data = LENSES[f.focus.lens ?? "354330-C"];
       const done = result?.lenses?.find((l) => l.field === index);
@@ -137,6 +163,7 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
         index,
         g: { ...g, focus },
         lens: placement.bfl,
+        labelAt: placement.bfl,
         asphere: { data, placement, at: { direction: g.direction, position: g.focus } },
         mirror: null,
       };
@@ -150,8 +177,28 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
   );
 
   const trueRadius = setup.particle.radius;
-  const enlarged = !overlays.trueSize && trueRadius * pxPerMetre < MIN_PARTICLE_PX;
+  const enlarged = !overlays.toScale && trueRadius * pxPerMetre < MIN_PARTICLE_PX;
   const drawnRadius = enlarged ? MIN_PARTICLE_PX / pxPerMetre : trueRadius;
+
+  // ---- what is not to scale, for the toggle in the corner ---------------------------------
+  const offScale: string[] = [];
+  if (beams.some((b) => !b.asphere && !b.mirror) && !overlays.toScale) offScale.push("the lens is a symbol, drawn near the focus");
+  if (enlarged) offScale.push("the particle is enlarged");
+
+  // ---- motion (the Play button): thermal at the gas temperature, slowed down ----------------
+  const temperature = environmentOf(setup).temperature;
+  const stable = Boolean(result?.equilibrium && result.stable);
+  const plan = useMemo(() => (overlays.motion && stable && result ? motionPlan(result.modes, temperature) : null), [overlays.motion, stable, result, temperature]);
+  // magnified (not to scale) so the largest motion is at least about the drawn particle's radius; fitted to the
+  // setup's scale, not the zoom, so zooming does not restart it
+  const fitParticlePx = Math.max(trueRadius * fit.pxPerMetre, overlays.toScale ? 0 : MIN_PARTICLE_PX);
+  const gain = plan && !overlays.toScale ? magnification(Math.max(...plan.modes.map((m) => m.sigma)) * fit.pxPerMetre, Math.max(12, 1.2 * fitParticlePx)) : 1;
+  if (plan && gain > 1) offScale.push(`the motion is magnified ${gain}×`);
+
+  // ---- the radiation pattern as a surface about the particle --------------------------------
+  const shownPattern = overlays.pattern ? (pattern?.pattern ?? null) : null;
+  const shape = useMemo(() => (shownPattern ? lobe(shownPattern.grid.theta, shownPattern.grid.phi, shownPattern.scattered) : null), [shownPattern]);
+  const lobeSize = Math.max(LOBE_PX / fit.pxPerMetre, 3 * drawnRadius);
 
   // ---- screen positions -----------------------------------------------------------
   const project = useCallback(
@@ -182,12 +229,12 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
   const right = width - inset.right;
   const upScreen = camera?.up ?? new Vector3(0, 1, 0);
   const plus = (p: Vec3, v: Vector3, s: number): Vec3 => [p[0] + v.x * s, p[1] + v.y * s, p[2] + v.z * s];
-  for (const { beam, index, g, lens } of beams) {
+  for (const { beam, index, g, lens, labelAt } of beams) {
     const lensCentre: Vec3 = plus(g.focus, new Vector3(...g.direction), -lens);
     const lensR = 1.12 * beamRadius(-lens, g.w0, g.theta);
     const [lx, ly] = project(lensCentre);
     const [tx, ty] = project(plus(lensCentre, upScreen, lensR));
-    let beamAt = project(plus(g.focus, new Vector3(...g.direction), -lens - 0.45 * fit.halfView));
+    let beamAt = project(plus(g.focus, new Vector3(...g.direction), -Math.min(lens, labelAt) - 0.45 * fit.halfView));
     // looked at along the beam, that point is the focus: put the label on the light's edge instead
     if (Math.hypot(beamAt[0] - lx, beamAt[1] - ly) < 0.3 * lensR * pxPerMetre) beamAt = project(plus(lensCentre, upScreen, -0.8 * lensR));
     spots.push({ part: part(`field:${index}`), x: beamAt[0], y: beamAt[1], anchor: beamAt });
@@ -249,6 +296,56 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
     spots.push({ part: part(id), x: from[0], y: from[1] - 30, anchor: from });
   }
 
+  // ---- the notes over the corner, bottom up ---------------------------------------------------
+  const notes: { id: string; text: string; data?: Record<string, string | undefined> }[] = [];
+  if (field) {
+    notes.push({
+      id: "slice-note",
+      data: { "data-plane": slice?.plane },
+      text: slice
+        ? `Intensity on the ${planeName(slice.plane)} plane · peak ${formatSI(slice.block.max, "W/m²", 3)}`
+        : field.notice
+          ? "No intensity slice: " + field.notice.replace(/\.$/, "").toLowerCase()
+          : field.pending
+            ? "Computing the intensity slice…"
+            : "No light to show",
+    });
+  }
+  if (rays) {
+    notes.push({
+      id: "rays-note",
+      text: !rays.realLens
+        ? "No real lens to trace: Lens → Type → Asphere"
+        : rays.lenses?.some((l) => l.rays)
+          ? `${rays.lenses.reduce((n, l) => n + (l.rays?.length ?? 0), 0)} rays traced through the lens, to its best focus`
+          : rays.pending
+            ? "Tracing the rays…"
+            : "No rays traced",
+    });
+  }
+  if (overlays.pattern && pattern) {
+    notes.push({
+      id: "pattern-note",
+      text: shape
+        ? `Radiation pattern: scattered power per solid angle, peak ${formatSI(shape.peak, "W/sr", 3)} (an angular plot, not to scale)`
+        : pattern.notice
+          ? "No radiation pattern: " + pattern.notice.replace(/\.$/, "").toLowerCase()
+          : pattern.pending
+            ? "Computing the radiation pattern…"
+            : "No radiation pattern for this result",
+    });
+  }
+  if (overlays.motion) {
+    const slowest = plan ? plan.modes.reduce((a, b) => (a.frequency < b.frequency ? a : b)) : null;
+    notes.push({
+      id: "motion-note",
+      text:
+        plan && slowest
+          ? `Thermal motion at ${formatSI(temperature, "K", 3)}, slowed down ${slowdownText(plan.slowdown)}×${gain > 1 ? `, magnified ${gain}×` : ""} · trail: the last 10 periods along ${slowest.name}`
+          : "No motion to show: there is no stable trap",
+    });
+  }
+
   const target = project(fit.target);
   const dot = Math.max(18, bar.px / 2);
   const hoverPart = hover ? parts.find((p) => p.id === hover.id) : undefined;
@@ -305,7 +402,14 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
             pxPerUnit={pxPerUnit}
           />
         ))}
-        <Particle centre={equilibrium} radius={drawnRadius} hitRadius={Math.max(drawnRadius, 12 / pxPerMetre)} palette={palette} picking={picking} />
+        {plan ? (
+          <Moving plan={plan} gain={gain} centre={equilibrium} color={palette.color("particle")}>
+            <Particle centre={equilibrium} radius={drawnRadius} hitRadius={Math.max(drawnRadius, 12 / pxPerMetre)} palette={palette} picking={picking} />
+          </Moving>
+        ) : (
+          <Particle centre={equilibrium} radius={drawnRadius} hitRadius={Math.max(drawnRadius, 12 / pxPerMetre)} palette={palette} picking={picking} />
+        )}
+        {shape && <RadiationLobe shape={shape} centre={equilibrium} size={lobeSize} palette={palette} />}
         {overlays.axes && result?.equilibrium && result.modes.length > 0 && (
           <TrapAxes centre={result.equilibrium} modes={result.modes} length={70 / pxPerMetre} palette={palette} />
         )}
@@ -325,31 +429,13 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
             (s) =>
               s.leader && <line key={`leader-${s.part.id}`} className={base.leader} x1={s.leader[0][0]} y1={s.leader[0][1]} x2={s.leader[1][0]} y2={s.leader[1][1]} />,
           )}
-        {enlarged && <circle className={base.enlarged} cx={P[0]} cy={P[1]} r={particlePx + 4} />}
+        {enlarged && !plan && <circle className={base.enlarged} cx={P[0]} cy={P[1]} r={particlePx + 4} />}
         <g className={base.corner}>
-          {field && (
-            <text className={base.cornerText} x={barRight} y={bottom - 44} textAnchor="end" data-testid="slice-note" data-plane={slice?.plane}>
-              {slice
-                ? `Intensity on the ${planeName(slice.plane)} plane · peak ${formatSI(slice.block.max, "W/m²", 3)}`
-                : field.notice
-                  ? "No intensity slice: " + field.notice.replace(/\.$/, "").toLowerCase()
-                  : field.pending
-                    ? "Computing the intensity slice…"
-                    : "No light to show"}
+          {notes.map((n, i) => (
+            <text key={n.id} className={base.cornerText} x={right - 8} y={bottom - 104 - 18 * i} textAnchor="end" data-testid={n.id} {...n.data}>
+              {n.text}
             </text>
-          )}
-          {rays && (
-            /* above the slice's note when both are shown */
-            <text className={base.cornerText} x={barRight} y={bottom - (field ? 62 : 44)} textAnchor="end" data-testid="rays-note">
-              {!rays.realLens
-                ? "No real lens to trace: Lens → Type → Asphere"
-                : rays.lenses?.some((l) => l.rays)
-                  ? `${rays.lenses.reduce((n, l) => n + (l.rays?.length ?? 0), 0)} rays traced through the lens, to its best focus`
-                  : rays.pending
-                    ? "Tracing the rays…"
-                    : "No rays traced"}
-            </text>
-          )}
+          ))}
           <path d={`M${barRight - bar.px} ${bottom - 22}v6h${bar.px}v-6`} className={base.scaleBar} data-testid="scale-bar-line" />
           <text className={base.cornerText} x={barRight - bar.px / 2} y={bottom - 26} textAnchor="middle" data-testid="scale-bar" data-px-per-metre={pxPerMetre}>
             {bar.label}
@@ -375,6 +461,25 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
           {gravity}
         </g>
       </svg>
+
+      <button
+        type="button"
+        className={styles.scaleToggle}
+        style={{ right: inset.right + 8, bottom: inset.bottom + 66 }}
+        data-testid="scale-toggle"
+        data-to-scale={overlays.toScale || undefined}
+        aria-pressed={overlays.toScale}
+        title={
+          overlays.toScale
+            ? "Drawn to scale: the particle, the beam's waist and cone at their true sizes. The ideal lens has no size, so it is left out. Click to draw it as a sketch again."
+            : offScale.length
+              ? `Not to scale: ${offScale.join("; ")}. Click to draw to scale.`
+              : "Everything drawn is at its true size. Click to keep it so."
+        }
+        onClick={() => onScale?.(!overlays.toScale)}
+      >
+        {overlays.toScale || !offScale.length ? "To scale" : "Not to scale"}
+      </button>
 
       <div className={styles.views} role="group" aria-label="View" style={{ right: inset.right + 8, top: inset.top + 4 }}>
         {VIEWS.map((v) => (
@@ -454,6 +559,12 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
       </ul>
     </div>
   );
+}
+
+/** "150 000": two significant figures, thousands apart */
+function slowdownText(x: number): string {
+  const d = 10 ** Math.max(0, Math.floor(Math.log10(x)) - 1);
+  return (Math.round(x / d) * d).toLocaleString("en-US").replace(/,/g, "\u2009");
 }
 
 // --- camera ----------------------------------------------------------------------------

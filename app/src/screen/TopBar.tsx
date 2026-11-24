@@ -19,7 +19,12 @@ export interface ShowOptions {
   /** the 3D scene's overlays */
   axes: boolean;
   forces: boolean;
-  trueSize: boolean;
+  /** drawn to scale (the toggle in the scene's corner) */
+  toScale: boolean;
+  /** the particle moves as the trap's modes oscillate (the Play button) */
+  motion: boolean;
+  /** the radiation pattern as a surface about the particle */
+  pattern: boolean;
   /** the light's intensity on the lab plane through the trap that faces the camera */
   slice: boolean;
   /** rays traced through a real lens (an asphere) */
@@ -189,11 +194,18 @@ export function TopBar({ name, canUndo, canRedo, onUndo, onRedo, show, onShow, o
                 testId="show-forces"
               />
               <MenuItem
-                title="True particle size"
-                note="Do not enlarge a particle too small to see"
-                checked={show.trueSize}
-                onSelect={() => onShow({ ...show, trueSize: !show.trueSize })}
-                testId="show-true-size"
+                title="Radiation pattern"
+                note="Where the particle scatters the light, as a surface about it"
+                checked={show.pattern}
+                onSelect={() => onShow({ ...show, pattern: !show.pattern })}
+                testId="show-pattern"
+              />
+              <MenuItem
+                title="To scale"
+                note="The particle at its true size, the ideal lens left out"
+                checked={show.toScale}
+                onSelect={() => onShow({ ...show, toScale: !show.toScale })}
+                testId="show-to-scale"
               />
               <MenuItem
                 title="Intensity slice"
