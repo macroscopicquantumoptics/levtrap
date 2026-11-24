@@ -16,7 +16,7 @@ is marked `xfail` with the issue number.
 | jain2016_recoil (#61) | frequency.y | 1.5e+05 Hz | 2.1e+05 Hz | 1.4 | ±20 % | no | mie |
 | jain2016_recoil (#61) | frequency.z | 4.9e+04 Hz | 7.7e+04 Hz | 1.57 | ±20 % | no | mie |
 | jain2016_recoil_r527 (#61) | frequency.y | 1.49e+05 Hz | 2.1e+05 Hz | 1.41 | ±20 % | no | mie |
-| jain2016_recoil_r527 (#61) | recoil_heating.y | 2.09e+04 1/s | 6.16e+03 1/s | 0.295 | ±35 % | no | mie |
+| jain2016_recoil_r527 (#61) | reheating.y | 2.09e+04 1/s | 1.19e+04 1/s | 0.569 | ±35 % | no | mie |
 
 Not tested yet, and why:
 

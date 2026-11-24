@@ -72,8 +72,8 @@ particle):
 | Particle | fused silica, n = 1.45, ρ = 2200 kg/m³ | stated | p. 2–3 |
 | Radius | 49.8 nm (Figs. 2, 3); 52.7 nm and 71.6 nm (Fig. 4a); 68.0 nm (Fig. 4b) | stated | captions, p. 3–4. No uncertainty or method given |
 | Mass | 1.14 × 10⁻¹⁸ kg at 49.8 nm | stated | p. 3. levtrap gets 1.138 × 10⁻¹⁸ |
-| Pressure | 2 × 10⁻⁸ mbar (Fig. 2); 3 × 10⁻⁸ mbar (Fig. 4a) | stated | captions |
-| Gas, temperature, mode | N₂, 300 K, Gaussian | assumed | not stated. They enter only the gas damping, which is not compared |
+| Pressure | 2 × 10⁻⁸ mbar (Fig. 2); 3 × 10⁻⁸ mbar (Fig. 4a), i.e. 2 × 10⁻⁶ and 3 × 10⁻⁶ Pa in the Setup | stated | captions. C3 first entered the mbar values as Pa, 100× too low (fixed for #61) |
+| Gas, temperature, mode | N₂, 300 K, Gaussian | assumed | not stated. Gas and temperature set the gas heating, which the R = 52.7 nm entry compares (He instead of N₂ lowers it 2.6×) |
 
 **Measured:**
 
@@ -81,8 +81,9 @@ particle):
 |---|---|---|---|
 | fx, fy, fz | 123, 150, 49 kHz | R = 49.8 nm | p. 2 |
 | fy | 148.8 kHz; 151.2 kHz | R = 52.7 nm; R = 71.6 nm | p. 4 |
-| Recoil heating, y | (20.9 ± 0.2) × 10³ /s; (29.4 ± 0.3) × 10³ /s | R = 52.7 nm; R = 71.6 nm; 70 mW | p. 4, Fig. 4a |
-| Recoil heating, y | (19.4 ± 0.1) × 10³ /s at 30.5 mW; (38.0 ± 0.3) × 10³ /s at 80 mW | R = 68.0 nm; powers "inferred" by the authors | p. 4, Fig. 4b |
+| Reheating, y (the paper's "Γrecoil") | (20.9 ± 0.2) × 10³ /s; (29.4 ± 0.3) × 10³ /s | R = 52.7 nm; R = 71.6 nm; 70 mW; 3 × 10⁻⁸ mbar | p. 4, Fig. 4a |
+| Reheating, y | (19.4 ± 0.1) × 10³ /s at 30.5 mW; (38.0 ± 0.3) × 10³ /s at 80 mW | R = 68.0 nm; powers "inferred" by the authors; 7 × 10⁻⁹ mbar | p. 4, Fig. 4b |
+| Gas damping | γth ≈ 15.8 R² P_gas / (m v_rms) | below 10 mbar | Eq. 7. levtrap's agrees to 2 % (`test_rates.py`) |
 
 **The paper's own theory.** Its paraxial predictions are 15.5 and
 38.2 × 10³ /s for the Fig. 4a particles, and 21.5 and 35.8 × 10³ /s for
@@ -91,12 +92,18 @@ Fig. 4b. So the paper agrees with its own model to about 30 %.
 **Agreement.** levtrap's lens is an ideal aplanatic focus filled to NA 0.9,
 with all 70 mW at the focus.
 - **Frequencies.** Expected within tens of percent; the tolerance is ±20 %.
-- **Recoil.** The rate is Γ ∝ P_sca ω0 / (m c² Ω), so it follows the focus;
-  the tolerance is ±35 %.
-- **Result.** levtrap is 23–57 % stiffer (151, 210, 77 kHz) and its recoil
-  rate is 0.3× the measured one. The gap is traced in issue #61: an
-  overfilled objective, and the paper's paraxial P_sca against levtrap's
-  Mie P_sca.
+- **Reheating.** What the paper measures is the total reheating with the
+  feedback off (Eq. 12): recoil plus gas. The paper calls it Γrecoil because
+  it takes the gas heating to be negligible below 10⁻⁷ mbar. levtrap's gas
+  heating at 3 × 10⁻⁸ mbar (N₂) is 5.7 × 10³ /s, about as large as its
+  recoil (6.2 × 10³ /s). So the entry compares `reheating.y`, gas plus
+  recoil; the tolerance is ±35 %.
+- **Result.** levtrap is 23–57 % stiffer (151, 210, 77 kHz). Its reheating is
+  11.9 × 10³ /s against the measured 20.9 × 10³, 0.57×.
+  - The focus explains most of the rest: with the frequencies matched (a
+    filled objective at 0.7, #63), levtrap gives 14.8 × 10³ /s.
+  - The gas is not stated: He instead of N₂ would lower the gas heating 2.6×.
+  - Both are tracked in issue #61.
 
 ## Read, not verifiable
 
