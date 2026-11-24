@@ -38,11 +38,16 @@ export interface Environment {
   medium_index?: number;
 }
 
-/** An ideal lens: give exactly one of NA, waist [m] or angle_deg. */
+/**
+ * An ideal lens: give exactly one of NA, waist [m] or angle_deg. With NA,
+ * `filling` makes it an aplanatic objective whose aperture (sin θ = NA / n)
+ * the beam fills: its 1/e² radius is `filling` times the aperture's (#61).
+ * Without it the focus is the Gaussian of that NA, with no aperture.
+ */
 export type IdealFocus = { kind?: "lens" } & (
-  | { NA: number; waist?: never; angle_deg?: never }
-  | { waist: number; NA?: never; angle_deg?: never }
-  | { angle_deg: number; NA?: never; waist?: never }
+  | { NA: number; filling?: number; waist?: never; angle_deg?: never }
+  | { waist: number; NA?: never; angle_deg?: never; filling?: never }
+  | { angle_deg: number; NA?: never; waist?: never; filling?: never }
 );
 
 /**

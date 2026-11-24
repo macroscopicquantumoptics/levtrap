@@ -160,6 +160,11 @@ function focus(f: Json, path: string): Json {
   const key = given[0];
   const lim: Record<string, Limits> = { NA: { exclusiveMin: 0 }, waist: { exclusiveMin: 0 }, angle_deg: { exclusiveMin: 0, max: 90 } };
   out[key] = num(f[key], `${path}.${key}`, lim[key]);
+  if (f.filling !== null && f.filling !== undefined) {
+    // an objective's back aperture filled by the beam (#61): it needs the aperture, i.e. the NA
+    if (key !== "NA") throw new SetupError(`${path}.filling`, "needs the objective's NA (the aperture it fills); remove it or give NA");
+    out.filling = num(f.filling, `${path}.filling`, { exclusiveMin: 0, max: 10 });
+  }
   return out;
 }
 

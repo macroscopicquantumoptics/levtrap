@@ -196,6 +196,7 @@ next. The reason each one is visible is in the last column.
 | Hole radius | Advanced: Mirror | Most mirrors have none or a small one; the note says which angles it removes. |
 | NA and waist w₀ | visible, linked | Two descriptions of one focus: typing one updates the other (the waist through the mode's order). The setup keeps the one typed last. They set the trap's geometry, and with it every frequency. |
 | Half-angle | Advanced, linked | The third description of the same focus. |
+| Focus model, Filling | Advanced; Filling then visible in place of the waist | "Gaussian of this NA" (the default: the tightest focus of that NA, no aperture) or "Filled objective" (#61): an aplanatic objective of that NA whose back aperture the beam fills, the filling being the beam's 1/e² radius over the aperture's. Papers state an objective's NA, rarely how it was filled; the trap softens as the filling falls, most along the beam. |
 
 **Paul trap**
 
