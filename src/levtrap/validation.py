@@ -57,7 +57,9 @@ def quantity(result: dict, name: str) -> float | None:
     * ``depth.kT``, ``depth.K``: the trap depth;
     * ``gas_damping``: [1/s];
     * ``secular.exact.<axis>`` / ``secular.pseudopotential.<axis>``: Paul secular frequencies [Hz];
-    * ``recoil_heating.<axis>``: [phonons/s].
+    * ``recoil_heating.<axis>``: [phonons/s], photon recoil alone;
+    * ``reheating.<axis>``: [phonons/s], recoil plus gas, what a reheating
+      measurement with the feedback off sees.
     """
     head, _, tail = name.partition(".")
     if head == "frequency":
@@ -74,9 +76,9 @@ def quantity(result: dict, name: str) -> float | None:
     if head == "secular":
         kind, _, axis = tail.partition(".")
         return ((result.get("paul") or {}).get("secular") or {}).get(kind, {}).get(axis)
-    if head == "recoil_heating":
+    if head in ("recoil_heating", "reheating"):
         rates = result.get("rates") or {}
-        return next((m["recoil_heating"] for m in rates.get("modes", []) if m["name"] == tail), None)
+        return next((m[head] for m in rates.get("modes", []) if m["name"] == tail), None)
     raise KeyError(f"unknown quantity {name!r}")
 
 

@@ -12,10 +12,10 @@
         "doi": "...",
         "arxiv": "..."
       },
-      "setup": "a Setup file (docs/ARCHITECTURE.md section 4); must pass levtrap.setup.parse unless schema_gaps is non-empty",
+      "setup": "a Setup file (docs/ARCHITECTURE.md section 4); must pass levtrap.setup.parse unless schema_gaps is non-empty (SI units: environment.pressure in Pa, not mbar)",
       "schema_gaps": "list of setup keys that the current schema does not support yet, written as ARCHITECTURE.md section 4 says the future schema will (e.g. focus.kind = 'parabolic_mirror')",
       "provenance": "map from setup key path to {value, source, flag}; flag is 'stated' (printed in the paper), 'inferred' (worked out from printed values, working in source) or 'assumed' (not in the paper; the value levtrap needs, and why it does not matter for the expected quantities); source names page/section/figure/table",
-      "expected": "list of {quantity, value, unit, source, tolerance_rel, why}; quantity is a name levtrap.validation.quantity reads (frequency.x|y|z|max|min, depth.kT|K, gas_damping, secular.exact|pseudopotential.<axis>, recoil_heating.<axis>)",
+      "expected": "list of {quantity, value, unit, source, tolerance_rel, why}; quantity is a name levtrap.validation.quantity reads (frequency.x|y|z|max|min, depth.kT|K, gas_damping, secular.exact|pseudopotential.<axis>, recoil_heating.<axis>, reheating.<axis>)",
       "known_disagreement": "optional {issue: N}: the entry disagrees with levtrap beyond its tolerance and issue #N tracks it; tests/test_literature.py marks it xfail. Never widen the tolerance instead (C4, issue #16)",
       "agreement_note": "what agreement to expect and why"
     },
@@ -55,7 +55,7 @@
           "density": 2200.0
         },
         "environment": {
-          "pressure": 2e-08,
+          "pressure": 2e-06,
           "temperature": 300.0,
           "gas": "N2",
           "medium_index": 1.0
@@ -137,7 +137,7 @@
         },
         "environment.gas": {
           "value": "N2",
-          "source": "not stated. Enters only the gas damping, which is not compared",
+          "source": "not stated. Enters only the gas damping and heating, which this entry does not compare (jain2016_recoil_r527 does)",
           "flag": "assumed"
         },
         "environment.medium_index": {
@@ -151,9 +151,9 @@
           "flag": "stated"
         },
         "environment.pressure": {
-          "value": 2e-08,
-          "source": "arXiv:1603.03420v2 Fig. 2 caption: lowest of '6.6e-4, 1.1e-5 and 2e-8 mbar'",
-          "flag": "stated"
+          "value": 2e-06,
+          "flag": "inferred",
+          "source": "arXiv:1603.03420v2 Fig. 2 caption: lowest of '6.6e-4, 1.1e-5 and 2e-8 mbar'; 2e-08 mbar = 2e-06 Pa (the Setup's pressure is in Pa; C3 first entered the mbar value as Pa, #61)"
         }
       },
       "expected": [
@@ -208,7 +208,7 @@
           "density": 2200.0
         },
         "environment": {
-          "pressure": 3e-08,
+          "pressure": 2.9999999999999997e-06,
           "temperature": 300.0,
           "gas": "N2",
           "medium_index": 1.0
@@ -285,13 +285,13 @@
         },
         "environment.temperature": {
           "value": 300.0,
-          "source": "not stated; room temperature assumed. Enters only the gas damping, which is not compared",
+          "source": "not stated; room temperature assumed. Enters the gas heating in reheating.y",
           "flag": "assumed"
         },
         "environment.gas": {
           "value": "N2",
-          "source": "not stated. Enters only the gas damping, which is not compared",
-          "flag": "assumed"
+          "flag": "assumed",
+          "source": "not stated. It matters here: it sets the gas heating in reheating.y (He instead of N2 lowers it 2.6x; the residual gas of an ultrahigh vacuum is mostly H2). levtrap's gas damping agrees with the paper's Eq. 7 for N2 to 2 %"
         },
         "environment.medium_index": {
           "value": 1.0,
@@ -304,9 +304,9 @@
           "flag": "stated"
         },
         "environment.pressure": {
-          "value": 3e-08,
-          "source": "arXiv:1603.03420v2 Fig. 4 caption: '3 × 10−8 mbar' (Fig. 4a)",
-          "flag": "stated"
+          "value": 2.9999999999999997e-06,
+          "flag": "inferred",
+          "source": "arXiv:1603.03420v2 Fig. 4 caption: '3 × 10−8 mbar' (Fig. 4a); 3e-08 mbar = 3e-06 Pa (the Setup's pressure is in Pa; C3 first entered the mbar value as Pa, #61)"
         }
       },
       "expected": [
@@ -319,18 +319,18 @@
           "why": "as jain2016_recoil"
         },
         {
-          "quantity": "recoil_heating.y",
+          "quantity": "reheating.y",
           "value": 20900.0,
           "unit": "1/s",
-          "source": "arXiv:1603.03420v2 p. 4: 'Γ1 = (20.9 ± 0.2) kHz' (phonons/s, y, reheating at 70 mW)",
+          "source": "arXiv:1603.03420v2 p. 4: 'Γ1 = (20.9 ± 0.2) kHz', the reheating rate along y with the feedback off (Eq. 12); the paper takes it as Γrecoil, assuming the gas heating negligible below 1e-7 mbar",
           "tolerance_rel": 0.35,
-          "why": "the paper's own theory differs from its measurements by up to 35 % (15.5 vs 20.9 kHz here); radius uncertainty not stated (rate ∝ R³ at fixed power)"
+          "why": "the paper's own theory differs from its measurements by up to 35 %; radius uncertainty not stated (rate ∝ R³ at fixed power)"
         }
       ],
       "known_disagreement": {
         "issue": 61
       },
-      "agreement_note": "The recoil rate is Γ ∝ P_sca ω0 / (m c² Ω): it follows the focus, so it agrees once the frequencies do. levtrap gives 6.2e3 /s at 210 kHz against 20.9e3 /s at 148.8 kHz (issue #61)."
+      "agreement_note": "What the paper measures is the total reheating (Eq. 12: n(t) ≈ n0 + Γ t with the feedback off): recoil plus gas. At 3e-8 mbar levtrap's gas heating (N2) is 5.7e3 /s, about as large as its recoil (6.2e3 /s at its 210 kHz): the paper's assumption that gas heating is negligible does not hold for this rate. So the entry compares reheating.y. levtrap gives 11.9e3 /s against 20.9e3 measured; the rest follows the focus (the frequencies, #61) and the unstated gas."
     }
   ],
   "wanted": [

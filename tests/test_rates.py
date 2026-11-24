@@ -159,3 +159,17 @@ def test_result_rates_vacuum_and_large_sphere():
     s["particle"]["radius"] = 600e-9
     models = {m["quantity"]: m for m in solve(s)["models"]}
     assert models["recoil_heating"]["validity"] == "approximate"
+
+
+def test_gas_damping_is_jain_2016_eq_7_in_ultrahigh_vacuum():
+    """Jain et al., PRL 116, 243601 (2016), Eq. 7: gamma_th = 15.8 R^2 P / (m v_rms),
+    v_rms = sqrt(3 k_B T / m_gas), for pressures below 10 mbar. levtrap's free-molecular
+    limit is Epstein's diffuse drag, 3.85 P / (rho R v_rms) against the paper's 3.77
+    (its 15.8 is rounded): within 3 %. (#61: the gas heating it gives at the paper's
+    3e-8 mbar is about as large as the photon recoil.)"""
+    R, rho, T, P = 52.7e-9, 2200.0, 300.0, 3e-6  # Pa
+    g = rates.gas_properties("N2", T)
+    mass = sphere_mass(R, rho)
+    v_rms = math.sqrt(3 * KB * T / g["mass"])
+    eq7 = 15.8 * R**2 * P / (mass * v_rms)
+    assert rates.gas_damping(P, R, mass, g["viscosity"], g["mass"], T) == pytest.approx(eq7, rel=0.03)

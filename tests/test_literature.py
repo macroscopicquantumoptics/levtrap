@@ -47,10 +47,10 @@ def test_the_table_is_current():
 
 def test_quantity_names():
     r = {"modes": [{"name": "x", "frequency": 2.0}, {"name": "z", "frequency": 1.0}], "depth": {"kT": 5.0},
-         "rates": {"gas_damping": 3.0, "modes": [{"name": "x", "recoil_heating": 7.0}]},
+         "rates": {"gas_damping": 3.0, "modes": [{"name": "x", "recoil_heating": 7.0, "reheating": 8.0}]},
          "paul": {"secular": {"exact": {"z": 9.0}}}}
     assert [V.quantity(r, q) for q in ("frequency.x", "frequency.max", "frequency.min", "depth.kT", "gas_damping",
-                                       "recoil_heating.x", "secular.exact.z", "frequency.y")] == [2, 2, 1, 5, 3, 7, 9, None]
+                                       "recoil_heating.x", "reheating.x", "secular.exact.z", "frequency.y")] == [2, 2, 1, 5, 3, 7, 8, 9, None]
     with pytest.raises(KeyError):
         V.quantity(r, "colour")
 

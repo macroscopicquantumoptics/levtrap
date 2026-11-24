@@ -20,7 +20,7 @@ export const REFERENCES: Reference[] = [
         "density": 2200
       },
       "environment": {
-        "pressure": 2e-8,
+        "pressure": 0.000002,
         "temperature": 300,
         "gas": "N2",
         "medium_index": 1
@@ -69,7 +69,7 @@ export const REFERENCES: Reference[] = [
         "density": 2200
       },
       "environment": {
-        "pressure": 3e-8,
+        "pressure": 0.0000029999999999999997,
         "temperature": 300,
         "gas": "N2",
         "medium_index": 1
