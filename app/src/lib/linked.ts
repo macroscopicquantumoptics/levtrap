@@ -37,17 +37,22 @@ export function paraxialBeamWaist(order: number): number {
 /** Paraxial order of a beam mode: 2p + |l| (LG) or m + n (HG). */
 export const modeOrder = (type: "lg" | "hg", [i, j]: [number, number]) => (type === "lg" ? 2 * i + Math.abs(j) : i + j);
 
+/** How an ideal lens maps the paraxial beam onto the far field (#64): OTT's tan θ (default) or the textbook sin θ. */
+export type Mapping = "ott" | "sine";
+
 /**
  * The engine's relation between the waist W (1/e² radius at the focus) and
- * the convergence half-angle (api._beam_angle): tan θ = λ_m w_p / (π W),
- * λ_m = λ / n the wavelength in the medium.
+ * the convergence half-angle (api._beam_angle): tan θ = λ_m w_p / (π W) with
+ * OTT's mapping, sin θ = λ_m w_p / (π W) with the sine one (90° below the
+ * diffraction limit); λ_m = λ / n the wavelength in the medium.
  */
-export function angleFromWaist(waist: number, wavelength: number, nMedium: number, order = 0): number {
-  return Math.atan(((wavelength / nMedium) * paraxialBeamWaist(order)) / (Math.PI * waist));
+export function angleFromWaist(waist: number, wavelength: number, nMedium: number, order = 0, mapping: Mapping = "ott"): number {
+  const s = ((wavelength / nMedium) * paraxialBeamWaist(order)) / (Math.PI * waist);
+  return mapping === "sine" ? Math.asin(Math.min(1, s)) : Math.atan(s);
 }
 
-export function waistFromAngle(angle: number, wavelength: number, nMedium: number, order = 0): number {
-  return ((wavelength / nMedium) * paraxialBeamWaist(order)) / (Math.PI * Math.tan(angle));
+export function waistFromAngle(angle: number, wavelength: number, nMedium: number, order = 0, mapping: Mapping = "ott"): number {
+  return ((wavelength / nMedium) * paraxialBeamWaist(order)) / (Math.PI * (mapping === "sine" ? Math.sin(angle) : Math.tan(angle)));
 }
 
 /** NA = n sin θ. */

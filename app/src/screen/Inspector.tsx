@@ -381,11 +381,18 @@ function LensEditor({ setup, beam, index, prefix, onEdit, result, engine, record
   const n = environmentOf(setup).medium_index;
   const order = modeOrder(beam.mode?.type ?? "lg", beam.mode?.indices ?? [0, 0]);
   const edit = (next: BeamField["focus"]) => onEdit(withField<BeamField>(setup, index, { focus: next }));
+  // how the paraxial beam meets the far field (#64): OTT's tan θ (default) or the textbook sine
+  const mapping = focus.mapping === "sine" ? "sine" : "ott";
+  const mapped = mapping === "sine" ? { mapping: "sine" as const } : {};
   // NA, waist and half-angle are one focus (the engine's relation); the setup keeps the one last typed
   const angle =
-    focus.NA != null ? angleFromNA(focus.NA, n) : focus.angle_deg != null ? (focus.angle_deg * Math.PI) / 180 : angleFromWaist(focus.waist!, beam.wavelength, n, order);
+    focus.NA != null
+      ? angleFromNA(focus.NA, n)
+      : focus.angle_deg != null
+        ? (focus.angle_deg * Math.PI) / 180
+        : angleFromWaist(focus.waist!, beam.wavelength, n, order, mapping);
   const na = naFromAngle(angle, n);
-  const waist = waistFromAngle(angle, beam.wavelength, n, order);
+  const waist = waistFromAngle(angle, beam.wavelength, n, order, mapping);
   const given = focus.NA != null ? "NA" : focus.waist != null ? "waist" : "half-angle";
   // an objective with its back aperture filled (#61): NA is then the aperture, and the filling sets the focus
   const filling = focus.NA != null ? (focus.filling ?? null) : null;
@@ -408,7 +415,7 @@ function LensEditor({ setup, beam, index, prefix, onEdit, result, engine, record
           value={na}
           quantity="number"
           check={(v) => (v > 0 && v < n ? null : `Must be between 0 and the medium index (${formatNumber(n, 4, true)}).`)}
-          onCommit={(v) => edit(filling != null ? { kind: "lens", NA: v, filling } : { kind: "lens", NA: v })}
+          onCommit={(v) => edit(filling != null ? { kind: "lens", NA: v, filling } : { kind: "lens", NA: v, ...mapped })}
         />
         {filling != null ? (
           <NumberField
@@ -428,7 +435,7 @@ function LensEditor({ setup, beam, index, prefix, onEdit, result, engine, record
             quantity="length"
             unit="µm"
             check={positive}
-            onCommit={(v) => edit({ kind: "lens", waist: v })}
+            onCommit={(v) => edit({ kind: "lens", waist: v, ...mapped })}
             note={`Linked to the NA${order ? ` for this mode (order ${order})` : ""}. The setup keeps the ${given}.`}
           />
         )}
@@ -437,21 +444,27 @@ function LensEditor({ setup, beam, index, prefix, onEdit, result, engine, record
         changed={[
           ...(given === "half-angle" ? [`half-angle ${formatNumber((angle * 180) / Math.PI, 3, true)}°`] : []),
           ...(filling != null ? [`objective, filling ${formatNumber(filling, 3, true)}`] : []),
+          ...(filling == null && mapping === "sine" ? ["sine mapping"] : []),
         ]}
       >
         <SelectField
           id={`${prefix}-model`}
           label="Focus model"
-          value={filling != null ? "objective" : "gaussian"}
+          value={filling != null ? "objective" : mapping === "sine" ? "sine" : "gaussian"}
           options={[
-            { value: "gaussian", label: "Gaussian of this NA" },
+            { value: "gaussian", label: "Gaussian (OTT)" },
+            { value: "sine", label: "Gaussian (sine)" },
             { value: "objective", label: "Filled objective" },
           ]}
-          onChange={(m) => edit(m === "objective" ? { kind: "lens", NA: na, filling: 1 } : { kind: "lens", NA: na })}
+          onChange={(m) =>
+            edit(m === "objective" ? { kind: "lens", NA: na, filling: 1 } : m === "sine" ? { kind: "lens", NA: na, mapping: "sine" } : { kind: "lens", NA: na })
+          }
           note={
             filling != null
               ? "An aplanatic objective of this NA, its back aperture filled by the beam; the power is what passes the aperture."
-              : "The Gaussian beam whose far field reaches 1/e² at this NA, with no aperture: the tightest focus of this NA."
+              : mapping === "sine"
+                ? "The Gaussian whose angular spectrum reaches 1/e² at this NA, mapped by sin θ as an aplanatic lens does: at small NA its waist is λ / (π NA)."
+                : "OTT's Gaussian of this NA (far field mapped by tan θ), as OTT-based papers use it: a little wider than the textbook waist λ / (π NA)."
           }
         />
         <NumberField
@@ -461,7 +474,7 @@ function LensEditor({ setup, beam, index, prefix, onEdit, result, engine, record
           quantity="angle"
           unit="°"
           check={(v) => (v > 0 && v <= 90 ? null : "Must be between 0° and 90°.")}
-          onCommit={(v) => edit({ kind: "lens", angle_deg: v })}
+          onCommit={(v) => edit({ kind: "lens", angle_deg: v, ...mapped })}
         />
       </Advanced>
       <p className={styles.aside}>Drawn with its true cone angle. Its distance from the focus is not to scale.</p>

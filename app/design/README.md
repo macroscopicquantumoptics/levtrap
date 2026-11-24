@@ -280,6 +280,15 @@ frequency is lower than the Gaussian of the same NA (227 / 285 / 96.8 kHz).
 
 ![Filled objective](screens/lens-filling-desktop-light.webp)
 
+## 15. OTT's Gaussian or the textbook one (#64)
+
+Lens → Advanced → Focus model → Gaussian (sine): the far field mapped by
+sin θ, so NA 0.8 means the waist λ / (π NA) = 0.423 µm. OTT's mapping, the
+default, gives a wider focus for the same NA; the trap here is stiffer than
+OTT's (227 / 285 / 96.8 kHz).
+
+![Gaussian (sine)](screens/lens-mapping-desktop-light.webp)
+
 ## Other states
 
 A number explaining itself: the formula, the values that went in, the model

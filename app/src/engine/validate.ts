@@ -6,6 +6,7 @@
  *
  * Returns a normalised copy with every default filled in, as `parse` does.
  */
+import { paraxialBeamWaist } from "../lib/linked.ts";
 import { MATERIAL_NAMES } from "./materials.ts";
 import type { Setup } from "./types.ts";
 
@@ -165,6 +166,11 @@ function focus(f: Json, path: string): Json {
     if (key !== "NA") throw new SetupError(`${path}.filling`, "needs the objective's NA (the aperture it fills); remove it or give NA");
     out.filling = num(f.filling, `${path}.filling`, { exclusiveMin: 0, max: 10 });
   }
+  if (f.mapping !== null && f.mapping !== undefined) {
+    // how the paraxial beam meets the far field (#64): OTT's tan θ (default) or the textbook sine
+    out.mapping = choice(f.mapping, `${path}.mapping`, ["ott", "sine"]);
+    if (out.filling !== undefined && out.mapping !== "sine") throw new SetupError(`${path}.mapping`, "a filled objective maps by the sine condition; remove mapping");
+  }
   return out;
 }
 
@@ -285,6 +291,12 @@ export function validateSetup(input: unknown): Setup {
     const fo = f.focus as Json | undefined;
     if (f.kind === "beam" && fo && fo.NA !== null && fo.NA !== undefined && (fo.NA as number) >= (env.medium_index as number)) {
       throw new SetupError(`${path}.focus.NA`, `must be smaller than the medium index (${g(env.medium_index as number)})`);
+    }
+    if (f.kind === "beam" && fo && fo.waist !== null && fo.waist !== undefined && fo.mapping === "sine") {
+      const m = (f.mode as Json).indices as [number, number];
+      const order = (f.mode as Json).type === "lg" ? 2 * m[0] + Math.abs(m[1]) : m[0] + m[1];
+      const limit = (((f.wavelength as number) / (env.medium_index as number)) * paraxialBeamWaist(order)) / Math.PI;
+      if ((fo.waist as number) <= limit) throw new SetupError(`${path}.focus.waist`, `must be larger than the diffraction limit (${g(limit)} m) with the sine mapping`);
     }
     if (f.kind === "paul" && part.charge === 0) {
       throw new SetupError("particle.charge", "a Paul trap needs a charged particle; set the charge (in elementary charges)");
