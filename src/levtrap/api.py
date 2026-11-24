@@ -106,7 +106,7 @@ def _single_beam(b: dict, n_medium: float) -> Bsc:
             # the Gaussian of this NA: the paraxial beam mapped onto the far field by sin(theta), as its
             # angular spectrum is (issue #64; OTT's BscPmGauss maps by tan(theta), a wider focus)
             beam = BscPmGauss(btype, mode, polarisation=pol, angle=angle, index_medium=n_medium,
-                              wavelength0=wavelength, power=1.0, angular_scaling="sintheta")
+                              wavelength0=wavelength, power=1.0, angular_scaling="sintheta", apodisation="aplanatic")
         _BEAM_CACHE[key] = beam
     return beam
 
