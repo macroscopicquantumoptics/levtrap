@@ -7,7 +7,7 @@
  */
 import type { ThreeEvent } from "@react-three/fiber";
 import { useFrame } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
 import {
   AdditiveBlending,
   ArrowHelper,
@@ -44,6 +44,8 @@ import type { FieldBlock, MirrorFocus, SlicePlane, TracedRay } from "../../engin
 import { sliceCorners, sliceImage } from "../scene/slice.ts";
 import { beamProfile, beamToLab, type BeamGeometry, electrodes, type Electrode, lensToLab, type LensPlacement, toWorld, WORLD } from "../scene/space.ts";
 import type { Palette } from "./palette.ts";
+import { displacement, step, thermalStart, type MotionPlan, type Quadratures } from "../scene/motion.ts";
+import type { Lobe } from "../scene/lobe.ts";
 
 /** What a drawable needs to answer the pointer. */
 export interface Picking {
@@ -573,4 +575,141 @@ export function ForceArrows({ centre, shares, length, colorOf }: { centre: Vec3;
     return g;
   }, [shares, length, colorOf]);
   return <primitive object={group} position={toWorld(centre)} />;
+}
+
+// --- motion (the Play button) -------------------------------------------------------------
+
+const TRAIL_VERTEX = /* glsl */ `
+attribute float age;
+varying float vAge;
+void main() {
+  vAge = age;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+
+const TRAIL_FRAGMENT = /* glsl */ `
+uniform vec3 color;
+uniform float strength;
+varying float vAge;
+void main() {
+  gl_FragColor = vec4(color, strength * (1.0 - vAge) * (1.0 - vAge));
+}`;
+
+/** Trail samples per second on screen. */
+const TRAIL_RATE = 60;
+
+/**
+ * Moves its children (the particle) about `centre` as the trap's modes
+ * oscillate (scene/motion.ts), and draws the path of the last few periods
+ * behind it, fading with age. Runs only while mounted.
+ */
+export function Moving({ plan, gain, centre, color, children }: { plan: MotionPlan; gain: number; centre: Vec3; color: Color; children: ReactNode }) {
+  const group = useRef<Group>(null);
+  const state = useRef<{ key: string; q: Quadratures[]; t: number; since: number } | null>(null);
+  const capacity = Math.min(4000, Math.ceil(plan.trail * TRAIL_RATE) + 1);
+  const key = JSON.stringify([plan, gain, centre]);
+  const trail = useMemo(() => {
+    void key; // a new trap starts a new trail
+    const geo = new BufferGeometry();
+    geo.setAttribute("position", new Float32BufferAttribute(new Float32Array(capacity * 3), 3));
+    geo.setAttribute("age", new Float32BufferAttribute(new Float32Array(capacity).fill(1), 1));
+    geo.setDrawRange(0, 0);
+    const material = new ShaderMaterial({
+      vertexShader: TRAIL_VERTEX,
+      fragmentShader: TRAIL_FRAGMENT,
+      uniforms: { color: { value: new Vector3() }, strength: { value: 0.9 } },
+      transparent: true,
+      depthWrite: false,
+    });
+    const line = new Line(geo, material);
+    line.raycast = noRaycast;
+    line.frustumCulled = false;
+    return { line, count: 0, times: new Float64Array(capacity) };
+  }, [capacity, key]);
+  (trail.line.material as ShaderMaterial).uniforms.color.value.set(color.r, color.g, color.b);
+  const c = toWorld(centre);
+
+  useFrame((three, delta) => {
+    if (state.current?.key !== key) state.current = { key, q: thermalStart(plan), t: 0, since: 0 };
+    const s = state.current;
+    const dt = Math.min(delta, 0.1);
+    s.t += dt;
+    s.q = step(plan, s.q, dt);
+    const d = displacement(plan, s.q, s.t, gain);
+    group.current?.position.set(d[0] * WORLD, d[1] * WORLD, d[2] * WORLD);
+    // the trail: append a sample at TRAIL_RATE, drop the oldest beyond `plan.trail`
+    s.since += dt;
+    if (s.since >= 1 / TRAIL_RATE || trail.count === 0) {
+      s.since = 0;
+      const pos = trail.line.geometry.getAttribute("position") as BufferAttribute;
+      const arr = pos.array as Float32Array;
+      if (trail.count === capacity) {
+        arr.copyWithin(0, 3);
+        trail.times.copyWithin(0, 1);
+        trail.count -= 1;
+      }
+      arr.set([c[0] + d[0] * WORLD, c[1] + d[1] * WORLD, c[2] + d[2] * WORLD], 3 * trail.count);
+      trail.times[trail.count] = s.t;
+      trail.count += 1;
+      pos.needsUpdate = true;
+      trail.line.geometry.setDrawRange(0, trail.count);
+    }
+    const age = trail.line.geometry.getAttribute("age") as BufferAttribute;
+    const ages = age.array as Float32Array;
+    for (let i = 0; i < trail.count; i += 1) ages[i] = Math.min(1, (s.t - trail.times[i]) / plan.trail);
+    age.needsUpdate = true;
+    three.invalidate();
+  });
+
+  return (
+    <>
+      <primitive object={trail.line} renderOrder={4} />
+      <group ref={group}>{children}</group>
+    </>
+  );
+}
+
+// --- radiation pattern -------------------------------------------------------------------
+
+/**
+ * The scattered light's angular distribution as a surface about the particle
+ * (scene/lobe.ts): its distance from the centre in each direction is the
+ * power per solid angle there, the largest `size` metres. An angular plot,
+ * so not to scale with the trap.
+ */
+export function RadiationLobe({ shape, centre, size, palette }: { shape: Lobe; centre: Vec3; size: number; palette: Palette }) {
+  const { mesh, wire } = useMemo(() => {
+    const geo = new BufferGeometry();
+    geo.setAttribute("position", new BufferAttribute(shape.positions, 3));
+    geo.setIndex(new BufferAttribute(shape.index, 1));
+    geo.computeVertexNormals();
+    // a wire of every few rows and columns: the shape reads where the surface is faint
+    const segs: number[] = [];
+    const cols = shape.nphi + 1;
+    const rows = shape.ntheta + 2;
+    const p = shape.positions;
+    const at = (i: number, j: number) => [p[3 * (i * cols + j)], p[3 * (i * cols + j) + 1], p[3 * (i * cols + j) + 2]];
+    const everyRow = Math.max(1, Math.round(rows / 12));
+    const everyCol = Math.max(1, Math.round(shape.nphi / 16));
+    for (let i = 0; i < rows; i += everyRow) for (let j = 0; j < shape.nphi; j += 1) segs.push(...at(i, j), ...at(i, j + 1));
+    for (let j = 0; j < shape.nphi; j += everyCol) for (let i = 0; i + 1 < rows; i += 1) segs.push(...at(i, j), ...at(i + 1, j));
+    const wireGeo = new BufferGeometry();
+    wireGeo.setAttribute("position", new Float32BufferAttribute(segs, 3));
+    return { mesh: geo, wire: wireGeo };
+  }, [shape]);
+  const line = useMemo(() => {
+    const l = new LineSegments(wire, new LineBasicMaterial({ transparent: true, opacity: 0.35, depthWrite: false }));
+    l.raycast = noRaycast;
+    return l;
+  }, [wire]);
+  const color = palette.color("particle");
+  (line.material as LineBasicMaterial).color.copy(color);
+  return (
+    <group position={toWorld(centre)} scale={size * WORLD} data-testid="radiation-lobe">
+      <mesh geometry={mesh} raycast={noRaycast} renderOrder={5}>
+        <meshStandardMaterial color={color} transparent opacity={0.22} roughness={0.6} metalness={0} depthWrite={false} side={DoubleSide} />
+      </mesh>
+      <primitive object={line} renderOrder={6} />
+    </group>
+  );
 }

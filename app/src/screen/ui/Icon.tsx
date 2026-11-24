@@ -15,6 +15,8 @@ export type IconName =
   | "copy"
   | "check"
   | "table"
+  | "play"
+  | "pause"
   | PartKind;
 
 /** 16 px line icons, drawn here so the app ships no icon font. */
@@ -33,6 +35,8 @@ const PATHS: Record<IconName, string> = {
   copy: "M6 6h7v7H6zM3 10V3h7",
   check: "M3.5 8.5l3 3 6-7",
   table: "M2.5 3.5h11v9h-11zM2.5 6.5h11M2.5 9.5h11M6.5 3.5v9",
+  play: "M5 3.2v9.6L12.6 8Z",
+  pause: "M5.5 3.5v9M10.5 3.5v9",
   particle: "M8 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z",
   beam: "M2 3.5c3 0 4.5 3 6 4.5 1.5-1.5 3-4.5 6-4.5M2 12.5c3 0 4.5-3 6-4.5 1.5 1.5 3 4.5 6 4.5",
   lens: "M8 2c2 2.2 2 9.8 0 12-2-2.200-2-9.800 0-12Z",
@@ -41,7 +45,7 @@ const PATHS: Record<IconName, string> = {
   environment: "M4 4.500h.010M9 3.500h.010M12 7h.010M3 9.500h.010M7.500 8h.010M11 11.500h.010M6 12.500h.010",
 };
 
-const FILLED: Partial<Record<IconName, true>> = { particle: true };
+const FILLED: Partial<Record<IconName, true>> = { particle: true, play: true };
 const DOTTED: Partial<Record<IconName, true>> = { environment: true };
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {

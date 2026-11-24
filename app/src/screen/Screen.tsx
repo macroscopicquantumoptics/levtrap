@@ -19,6 +19,8 @@ import { pythonSnippet } from "./files/python.ts";
 import { readLinkFragment } from "./files/setupText.ts";
 import { initialState, reduce, type ScreenState } from "./store.ts";
 import { TopBar, type ShowOptions } from "./TopBar.tsx";
+import { Icon } from "./ui/Icon.tsx";
+import ui from "./ui/ui.module.css";
 import styles from "./Screen.module.css";
 
 export interface ScreenProps {
@@ -94,7 +96,10 @@ function ScreenBody({ engine }: ScreenProps) {
   const { setup, selected } = state;
   const { answer, pending, status } = useAnswer(setup, engine, params.recorded);
   const narrow = useMedia(NARROW);
-  const [show, setShow] = useState<ShowOptions>({ labels: true, grid: true, axes: false, forces: false, trueSize: false, slice: false, rays: false });
+  const [show, setShow] = useState<ShowOptions>({ labels: true, grid: true, axes: false, forces: false, toScale: false, motion: false, pattern: false, slice: false, rays: false });
+  // the radiation pattern about the particle: asked of the engine only while shown (its own channel: the Radiation tab asks too)
+  const radiated = useAnswer(setup, engine, params.recorded, ["pattern"], show.pattern, "scene:pattern");
+  const movable = Boolean(answer.result?.stable && answer.result.equilibrium && answer.result.modes.some((m) => (m.stiffness ?? 0) > 0));
   // the intensity slice asks the engine for the field, only while it is shown
   const sliced = useAnswer(setup, engine, params.recorded, ["field"], show.slice);
   // traced rays: asked of the engine only while shown, and only for a setup with a real lens
@@ -184,6 +189,8 @@ function ScreenBody({ engine }: ScreenProps) {
           overlays={show}
           field={show.slice ? { block: sliced.answer.result?.field ?? null, pending: sliced.pending, notice: sliced.answer.notice?.text ?? null } : null}
           rays={show.rays ? { lenses: realLens ? (traced.answer.result?.lenses ?? null) : null, realLens, pending: traced.pending } : null}
+          pattern={show.pattern ? { pattern: radiated.answer.result?.pattern ?? null, pending: radiated.pending, notice: radiated.answer.notice?.text ?? null } : null}
+          onScale={(toScale) => setShow((s) => ({ ...s, toScale }))}
         />
         <TopBar
           name={name}
@@ -199,6 +206,7 @@ function ScreenBody({ engine }: ScreenProps) {
         />
         {!narrow && (
           <div className={styles.corner}>
+            <PlayButton playing={show.motion} movable={movable} onPlay={(motion) => setShow((s) => ({ ...s, motion }))} />
             <AddField setup={setup} onEdit={edit} />
             <PartsRow parts={show.labels ? parts.filter((p) => p.kind === "environment") : parts} selected={selected} onSelect={select} />
           </div>
@@ -228,6 +236,10 @@ function ScreenBody({ engine }: ScreenProps) {
             onClose={() => select(null)}
             engine={engine}
             recorded={params.recorded}
+            show={show}
+            onShow={setShow}
+            movable={movable}
+            onTab={setTab}
           />
         </div>
       )}
@@ -245,6 +257,7 @@ function ScreenBody({ engine }: ScreenProps) {
           onSelect={select}
           engine={engine}
           recorded={params.recorded}
+          onEdit={(next) => edit(next)}
         />
       </div>
 
@@ -264,6 +277,27 @@ function ScreenBody({ engine }: ScreenProps) {
         }}
         onClose={closePicker}
       />
+    </div>
+  );
+}
+
+/** Play the particle's motion in the trap, with its trail (the lower left corner). */
+function PlayButton({ playing, movable, onPlay }: { playing: boolean; movable: boolean; onPlay(playing: boolean): void }) {
+  const label = playing ? "Pause the motion" : movable ? "Play the particle's motion in the trap" : "No motion to play: there is no stable trap";
+  return (
+    <div className={`${ui.island} ${styles.play}`}>
+      <button
+        type="button"
+        className={ui.iconButton}
+        aria-label={label}
+        title={label}
+        aria-pressed={playing}
+        disabled={!movable && !playing}
+        data-testid="play-motion"
+        onClick={() => onPlay(!playing)}
+      >
+        <Icon name={playing ? "pause" : "play"} />
+      </button>
     </div>
   );
 }

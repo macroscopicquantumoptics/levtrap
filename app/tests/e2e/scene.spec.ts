@@ -142,12 +142,72 @@ test("hover names the thing when the labels are hidden", async ({ page }) => {
   await expect(page.getByTestId("scene-tip")).toHaveText("Lens");
 });
 
-test("a particle too small to see is enlarged, and the Show menu can turn that off", async ({ page }) => {
+test("a particle too small to see is enlarged, and the scale toggle draws it to scale", async ({ page }) => {
   await open(page, "preset=paul-linear");
   await expect(partButton(page, "particle")).toContainText("enlarged");
-  await page.getByTestId("show-menu").click();
-  await page.getByTestId("show-true-size").click();
+  const toggle = page.getByTestId("scale-toggle");
+  await expect(toggle).toHaveText("Not to scale");
+  await expect(toggle).toHaveAttribute("title", /particle is enlarged/);
+  await toggle.click();
+  await expect(toggle).toHaveText("To scale");
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
   await expect(partButton(page, "particle")).not.toContainText("enlarged");
+  // the Show menu holds the same switch
+  await page.getByTestId("show-menu").click();
+  await expect(page.getByTestId("show-to-scale")).toHaveAttribute("aria-checked", "true");
+});
+
+test("to scale, the ideal lens's symbol is left out and its label waits at the edge", async ({ page }) => {
+  await open(page, "preset=tweezer");
+  const toggle = page.getByTestId("scale-toggle");
+  await expect(toggle).toHaveText("Not to scale");
+  await expect(toggle).toHaveAttribute("title", /lens is a symbol/);
+  await expect(partButton(page, "lens:0")).not.toHaveAttribute("data-away", "true");
+  await toggle.click();
+  await expect(partButton(page, "lens:0")).toHaveAttribute("data-away", "true");
+  await shot(page, "scale-to-scale-desktop-light");
+  await toggle.click();
+  await expect(partButton(page, "lens:0")).not.toHaveAttribute("data-away", "true");
+});
+
+test("Play moves the particle in the trap, with a trail, and says how much it is slowed and magnified", async ({ page }) => {
+  const errors = collectErrors(page);
+  await open(page, "preset=tweezer");
+  const play = page.getByTestId("play-motion");
+  await expect(play).toBeEnabled();
+  await play.click();
+  await expect(play).toHaveAttribute("aria-pressed", "true");
+  const note = page.getByTestId("motion-note");
+  await expect(note).toContainText("Thermal motion at 300 K, slowed down 150");
+  await expect(note).toContainText("magnified");
+  await expect(page.getByTestId("scale-toggle")).toHaveAttribute("title", /motion is magnified/);
+  // to scale, the motion is the thermal motion itself
+  await page.getByTestId("scale-toggle").click();
+  await expect(note).not.toContainText("magnified");
+  await page.waitForTimeout(3000);
+  await shot(page, "motion-desktop-light");
+  await play.click();
+  await expect(note).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("the particle's inspector shows its radiation pattern in the scene", async ({ page }) => {
+  const errors = collectErrors(page);
+  await open(page, "preset=tweezer");
+  await partButton(page, "particle").click();
+  await expect(page.getByTestId("particle-views")).toBeVisible();
+  await page.getByTestId("particle-show-pattern").check();
+  const note = page.getByTestId("pattern-note");
+  await expect(note).toContainText("Radiation pattern: scattered power per solid angle, peak", { timeout: 60_000 });
+  // the Show menu holds the same switch
+  await page.getByTestId("show-menu").click();
+  await expect(page.getByTestId("show-pattern")).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("Escape");
+  await shot(page, "radiation-lobe-desktop-light");
+  // and the plots are one click away
+  await page.getByTestId("particle-radiation-tab").click();
+  await expect(page.getByTestId("tab-radiation")).toHaveAttribute("aria-selected", "true");
+  expect(errors).toEqual([]);
 });
 
 test("trap axes and force arrows are drawn on request", async ({ page }) => {

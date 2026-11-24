@@ -31,6 +31,8 @@ import { angleFromNA, angleFromWaist, modeOrder, naFromAngle, radiusFromMass, sp
 import { NumberField, SelectField } from "./ui/fields.tsx";
 import { Icon } from "./ui/Icon.tsx";
 import ui from "./ui/ui.module.css";
+import type { ShowOptions } from "./TopBar.tsx";
+import type { TabId } from "./Dock.tsx";
 import styles from "./Inspector.module.css";
 
 const KIND_NOTE: Record<Part["kind"], string> = {
@@ -55,10 +57,17 @@ export interface InspectorProps {
   /** the engine, for a comparison the inspector asks for (a real lens against the aligned one) */
   engine?: (() => Engine) | null;
   recorded?: boolean;
+  /** what the scene shows: the particle's inspector can turn on what is drawn about it */
+  show?: ShowOptions;
+  onShow?(show: ShowOptions): void;
+  /** there is a stable trap, so the motion can play */
+  movable?: boolean;
+  /** open a tab of the plots drawer */
+  onTab?(tab: TabId): void;
 }
 
 /** The selected thing's inputs: at most six, the rest under one Advanced fold. */
-export function Inspector({ setup, part, result, notice, onEdit, onClose, engine = null, recorded = true }: InspectorProps) {
+export function Inspector({ setup, part, result, notice, onEdit, onClose, engine = null, recorded = true, show, onShow, movable = false, onTab }: InspectorProps) {
   const field = part.index === undefined ? undefined : setup.trap.fields[part.index];
   const removable = part.kind === "beam" || part.kind === "paul" || part.kind === "gravity";
   const prefix = `${part.kind}${part.index ?? ""}`;
@@ -84,6 +93,7 @@ export function Inspector({ setup, part, result, notice, onEdit, onClose, engine
       )}
 
       {part.kind === "particle" && <ParticleEditor key={part.id} setup={setup} result={result} prefix={prefix} onEdit={onEdit} />}
+      {part.kind === "particle" && show && onShow && <ParticleViews show={show} onShow={onShow} movable={movable} onTab={onTab} />}
       {part.kind === "environment" && <EnvironmentEditor key={part.id} setup={setup} prefix={prefix} onEdit={onEdit} />}
       {part.kind === "beam" && field?.kind === "beam" && <BeamEditor key={part.id} setup={setup} beam={field} index={part.index!} prefix={prefix} onEdit={onEdit} />}
       {part.kind === "lens" && field?.kind === "beam" && <LensEditor key={part.id} setup={setup} beam={field} index={part.index!} prefix={prefix} onEdit={onEdit} result={result} engine={engine} recorded={recorded} />}
@@ -195,6 +205,38 @@ function ParticleEditor({ setup, prefix, onEdit }: EditorProps & { result: Resul
         {!custom && <p className={ui.fieldNote}>n, k and density follow the material. Choose Custom to type them.</p>}
       </Advanced>
     </>
+  );
+}
+
+/**
+ * What to see about the particle, in the scene: its radiation pattern, its
+ * motion, the trap's axes; and the Radiation tab for the numbers. The same
+ * switches as the Show menu and the Play button.
+ */
+function ParticleViews({ show, onShow, movable, onTab }: { show: ShowOptions; onShow(show: ShowOptions): void; movable: boolean; onTab?(tab: TabId): void }) {
+  const items: { key: "pattern" | "motion" | "axes"; title: string; note: string; disabled?: boolean }[] = [
+    { key: "pattern", title: "Radiation pattern", note: "Where it scatters the light, as a surface about it; follows every edit." },
+    { key: "motion", title: "Motion", note: movable ? "Its thermal motion in the trap, slowed down, with a trail." : "No stable trap: nothing to play.", disabled: !movable && !show.motion },
+    { key: "axes", title: "Trap axes", note: "The eigen-axes of the trap through it." },
+  ];
+  return (
+    <section className={styles.views} aria-label="Show in the scene" data-testid="particle-views">
+      <h3 className={styles.viewsTitle}>Show in the scene</h3>
+      {items.map((it) => (
+        <label key={it.key} className={styles.view} data-disabled={it.disabled || undefined}>
+          <input type="checkbox" checked={show[it.key]} disabled={it.disabled} onChange={() => onShow({ ...show, [it.key]: !show[it.key] })} data-testid={`particle-show-${it.key}`} />
+          <span>
+            <span className={styles.viewTitle}>{it.title}</span>
+            <span className={styles.viewNote}>{it.note}</span>
+          </span>
+        </label>
+      ))}
+      {onTab && (
+        <button type="button" className={`${ui.button} ${styles.viewsLink}`} onClick={() => onTab("radiation")} data-testid="particle-radiation-tab">
+          Radiation plots and collection efficiency
+        </button>
+      )}
+    </section>
   );
 }
 

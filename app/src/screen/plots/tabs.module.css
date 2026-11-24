@@ -275,3 +275,24 @@
   vertical-align: middle;
   background: linear-gradient(90deg, rgb(42 120 214), rgb(247 247 247), rgb(198 47 46));
 }
+
+/* ---- design ---------------------------------------------------------------------- */
+
+.designGroup {
+  align-self: center;
+  min-width: 34px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.designTarget {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.designTarget > input {
+  margin-bottom: 9px;
+  accent-color: var(--focus-ring);
+}

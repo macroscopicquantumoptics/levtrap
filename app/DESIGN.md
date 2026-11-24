@@ -104,8 +104,32 @@ for it).
 * **Not to scale:** the distance from an ideal lens to its focus (the lens
   is a symbol of the focusing optic, placed where the cone is 40 % of the
   view wide), and a particle that would be smaller than 4.5 px. Such a particle
-  is drawn larger inside a dotted ring, and its label says "enlarged";
-  Show → True particle size turns that off.
+  is drawn larger inside a dotted ring, and its label says "enlarged".
+* **The scale toggle** (lower right, above the scale bar) says "Not to scale"
+  while anything drawn is not (its tooltip lists what: the lens symbol, an
+  enlarged particle, magnified motion). Pressed, it reads "To scale": the
+  particle at its true size, the beam's waist and cone as they are (they
+  always are), the motion not magnified, and the ideal lens's symbol left
+  out (an ideal lens has only an NA, no size or distance): its cone runs on
+  and its label waits at the edge of the view. A real lens and a mirror are
+  always drawn to scale. Show → To scale is the same switch.
+* **Motion** (the Play button, lower left; or the particle's inspector):
+  the particle moves as the trap's modes oscillate, with a trail of the last
+  ten periods of the slowest mode, fading with age. Each mode is a harmonic
+  oscillator along its eigen-axis with the thermal variance k_BT/k at the
+  gas temperature (equipartition); its two quadratures wander slowly
+  (Ornstein–Uhlenbeck, twelve periods), so the path is a slowly changing
+  Lissajous figure. Slowed down so the slowest mode takes 1.6 s (the fastest
+  at most 6 Hz); frequency ratios kept. Not to scale, it is magnified by a
+  round factor (1, 2 or 5 × 10ⁿ) to at least the drawn particle's radius; the
+  note by the corner says the slow-down and the magnification
+  (`src/screen/scene/motion.ts`). Disabled without a stable trap.
+* **Radiation pattern** (Show menu, or the particle's inspector): the
+  scattered power per solid angle as a surface about the particle, its
+  distance from the centre in each direction proportional to I(θ, φ), the
+  largest 80 px at the fitted scale (an angular plot: not to scale). From the
+  engine (`want=["pattern"]`, the same grid as the Radiation tab), asked only
+  while shown, and recomputed after every edit (`src/screen/scene/lobe.ts`).
 * **A real lens** (the asphere, E1) is drawn from its prescription at its
   true size and distance (its back surface one back focal length before the
   aligned focus), tilted and decentred as set, and the light converges to
@@ -208,6 +232,11 @@ next. The reason each one is visible is in the last column.
 | End-cap voltage | visible for a linear trap | It makes the axial confinement. A ring trap does not use it. |
 | DC voltage, geometry factors | Advanced | Zero and one for an ideal trap. |
 
+**Particle: Show in the scene.** Under the particle's inputs, the things
+drawn about it: the radiation pattern, the motion and the trap axes (the
+same switches as the Show menu and the Play button), and a button that
+opens the Radiation tab.
+
 **Gravity:** Direction visible (down, along the beam, against the beam: how
 the trap stands in the lab). The acceleration is Advanced.
 
@@ -249,6 +278,7 @@ result the strip already has, and Sweep runs one solve per value when asked.
 |---|---|
 | Forces | The force along each eigen-axis of the trap, through the equilibrium. "Dipole approximation" draws the same with the light as a point dipole, dashed: where Mie theory matters shows. |
 | Potential | The potential along each axis in k_BT (the force integrated from the equilibrium), and the harmonic trap of the same stiffness dashed: anharmonicity shows where they part. Its barriers are the depths in the strip. |
+| Design | The inverse of a sweep: type the trap you want (f_x, f_y, f_z and the depth, each ticked to aim for it; they start at the trap's own numbers) and tick the inputs that may change (by default a beam's power and NA, or a Paul trap's RF voltage and frequency). Find searches with Nelder–Mead on Σ ln²(achieved / wanted), one solve per trial (at most 40, following one trap), each input on a scale that keeps it allowed (log for a positive input, logistic for an NA). The table gives now, wanted and found; Apply puts the values found into the setup (one undo step). With fewer inputs than targets it finds the best compromise. `src/screen/plots/design.ts`. |
 | Sweep | Any input of the setup (power, wavelength, NA, radius, charge, RF voltage and frequency, pressure, temperature…) against a headline number (the frequencies, the depth, the position along the beam, the scattered power). One solve per value, with progress and Cancel; the values without a stable trap are shaded. "Follow one trap" (on by default, #50) starts each value from the equilibrium found at the one before (continuation); where that trap vanished and the engine searched afresh, a line marks the jump and the progress counts them. Outputs also include the absorbed power and the recoil heating per mode.|
 | Radiation | Where the scattered light goes, in two planes through the beam axis (polar); the fraction a lens of each NA collects, forward and backward; and the fraction of the position information a backward lens collects, per axis. The trapping lens's NA is marked. |
 | Heating | The reheating rate of each mode against pressure (10⁻⁹ to 10³ mbar), with photon recoil alone dashed, the setup's pressure marked, and a dot where recoil and gas heat equally. "At 1e-6 mbar" shows the rates as a table. |

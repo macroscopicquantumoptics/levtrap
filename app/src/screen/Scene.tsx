@@ -19,7 +19,7 @@ import {
   type Point,
 } from "./scene/geometry.ts";
 import { lightColor } from "./scene/light.ts";
-import type { Overlays, RayData, SliceData } from "./scene3d/Scene3D.tsx";
+import type { Overlays, PatternData, RayData, SliceData } from "./scene3d/Scene3D.tsx";
 import styles from "./Scene.module.css";
 
 export interface SceneProps {
@@ -41,6 +41,10 @@ export interface SceneProps {
   field?: SliceData | null;
   /** traced rays, while shown (Show → Traced rays) */
   rays?: RayData | null;
+  /** the radiation pattern, while shown (Show → Radiation pattern) */
+  pattern?: PatternData | null;
+  /** the "Not to scale" toggle in the corner was pressed */
+  onScale?(toScale: boolean): void;
 }
 
 interface LabelSpot {
@@ -55,7 +59,7 @@ const MIN_PARTICLE_PX = 4.5;
 
 const Scene3D = lazy(() => import("./scene3d/Scene3D.tsx"));
 
-const NO_OVERLAYS: Overlays = { trueSize: false, axes: false, forces: false };
+const NO_OVERLAYS: Overlays = { toScale: false, axes: false, forces: false };
 
 let webgl: boolean | undefined;
 /** Whether this browser draws WebGL (asked once). `?scene=svg` asks for the flat drawing. */
@@ -88,7 +92,7 @@ class Fallback extends Component<{ fallback: ReactNode; children: ReactNode }, {
  * that loads, where it does not, and for the preset cards' thumbnails.
  */
 export function Scene(props: SceneProps) {
-  const { setup, result, selected, onSelect, inset, labels, grid, thumbnail, overlays, field, rays } = props;
+  const { setup, result, selected, onSelect, inset, labels, grid, thumbnail, overlays, field, rays, pattern, onScale } = props;
   const [ref, size] = useSize();
   const [hover, setHover] = useState<PartId | null>(null);
   const [drawn, setDrawn] = useState(false);
@@ -134,6 +138,8 @@ export function Scene(props: SceneProps) {
               overlays={overlays ?? NO_OVERLAYS}
               field={thumbnail ? null : (field ?? null)}
               rays={thumbnail ? null : (rays ?? null)}
+              pattern={thumbnail ? null : (pattern ?? null)}
+              onScale={onScale}
               onReady={() => setDrawn(true)}
             />
           </Suspense>

@@ -84,3 +84,34 @@
   margin: 0;
   padding: 0;
 }
+
+/* "Not to scale" / "To scale": a toggle in the lower right corner, above the scale bar */
+.scaleToggle {
+  position: absolute;
+  padding: 2px 9px;
+  border: 1px dashed var(--text-faint);
+  border-radius: 999px;
+  background: var(--island);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-style: italic;
+  cursor: pointer;
+}
+
+.scaleToggle:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.scaleToggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+}
+
+.scaleToggle[aria-pressed="true"] {
+  border-style: solid;
+  border-color: var(--select);
+  background: var(--select-soft);
+  color: var(--text);
+  font-style: normal;
+}
