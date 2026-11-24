@@ -6,6 +6,7 @@
  *
  * Returns a normalised copy with every default filled in, as `parse` does.
  */
+import { paraxialBeamWaist } from "../lib/linked.ts";
 import { MATERIAL_NAMES } from "./materials.ts";
 import type { Setup } from "./types.ts";
 
@@ -285,6 +286,12 @@ export function validateSetup(input: unknown): Setup {
     const fo = f.focus as Json | undefined;
     if (f.kind === "beam" && fo && fo.NA !== null && fo.NA !== undefined && (fo.NA as number) >= (env.medium_index as number)) {
       throw new SetupError(`${path}.focus.NA`, `must be smaller than the medium index (${g(env.medium_index as number)})`);
+    }
+    if (f.kind === "beam" && fo && fo.waist !== null && fo.waist !== undefined) {
+      const m = (f.mode as Json).indices as [number, number];
+      const order = (f.mode as Json).type === "lg" ? 2 * m[0] + Math.abs(m[1]) : m[0] + m[1];
+      const limit = ((f.wavelength as number) / (env.medium_index as number)) * paraxialBeamWaist(order) / Math.PI;
+      if ((fo.waist as number) <= limit) throw new SetupError(`${path}.focus.waist`, `must be larger than the diffraction limit (${g(limit)} m)`);
     }
     if (f.kind === "paul" && part.charge === 0) {
       throw new SetupError("particle.charge", "a Paul trap needs a charged particle; set the charge (in elementary charges)");

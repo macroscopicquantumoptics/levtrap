@@ -51,7 +51,7 @@ test("the lens sits upstream inside the view, where the cone is 40 % of it", () 
   const L = lensDistance(g.w0, g.theta, half);
   near(beamRadius(L, g.w0, g.theta), 0.4 * half, 1e-9);
   // a slow cone would put the lens far away: it is kept in the view
-  const slow = lensDistance(1e-6, coneHalfAngle({ waist: 1e-6 }, 1.064e-6), half);
+  const slow = lensDistance(1e-6, Math.asin(0.3), half);
   near(slow, 0.9 * half);
   // a waist wider than that: the lens is drawn close, not past the focus
   near(lensDistance(5e-6, coneHalfAngle({ waist: 5e-6 }, 1.064e-6), half), 0.2 * half);

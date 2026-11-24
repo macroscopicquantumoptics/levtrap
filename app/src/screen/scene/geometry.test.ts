@@ -33,13 +33,13 @@ test("the cone half-angle follows the engine's definitions", () => {
   near(deg(coneHalfAngle({ NA: 0.8 }, 1.064e-6)), 53.13010235415598);
   near(deg(coneHalfAngle({ NA: 0.8 }, 1.064e-6, 1.33)), deg(Math.asin(0.8 / 1.33)));
   near(deg(coneHalfAngle({ angle_deg: 50 }, 1.064e-6)), 50);
-  // a waist W gives the paraxial divergence tan θ = λ / (π n W)
-  near(Math.tan(coneHalfAngle({ waist: 1.59e-6 }, 1.55e-6)), 1.55e-6 / (Math.PI * 1.59e-6));
+  // a waist W gives the divergence sin θ = λ / (π n W) (#64: a Gaussian's angular spectrum goes with k sin θ)
+  near(Math.sin(coneHalfAngle({ waist: 1.59e-6 }, 1.55e-6)), 1.55e-6 / (Math.PI * 1.59e-6));
 });
 
 test("waist and cone angle are two descriptions of one focus", () => {
   const w0 = waistRadius({ NA: 0.8 }, 1.064e-6);
-  near(w0, 1.064e-6 / (Math.PI * Math.tan(Math.asin(0.8))));
+  near(w0, 1.064e-6 / (Math.PI * 0.8));
   near(coneHalfAngle({ waist: w0 }, 1.064e-6), Math.asin(0.8));
   assert.equal(waistRadius({ waist: 2e-6 }, 1.064e-6), 2e-6);
 });

@@ -59,13 +59,19 @@ def _pol(p) -> tuple[complex, complex]:
 def _beam_angle(focus: dict, wavelength: float, n_medium: float, order: int) -> float:
     """Convergence angle [rad] from the focus block (NA, angle_deg or waist).
 
-    For a waist W (1/e^2 field radius of the paraxial LG/HG mode at focus)
-    OTT's far-field mapping gives tan(angle) = lambda_m w_p / (pi W) with
-    w_p = ``paraxial_beam_waist(order)`` (BscPmGauss.m).
+    The far field is the paraxial beam mapped by sin(theta) (issue #64): a
+    Gaussian's angular spectrum is exp(-(k w0 sin(theta) / 2)^2), so for a
+    waist W (1/e^2 radius of the paraxial LG/HG mode at the focus)
+    sin(angle) = lambda_m w_p / (pi W), w_p = ``paraxial_beam_waist(order)``.
+    A waist below lambda_m w_p / pi has no angle (the diffraction limit).
     """
     if focus.get("waist"):
         lam_m = wavelength / n_medium
-        return math.atan(lam_m * paraxial_beam_waist(order) / (math.pi * float(focus["waist"])))
+        s = lam_m * paraxial_beam_waist(order) / (math.pi * float(focus["waist"]))
+        if s >= 1:
+            raise ValueError(f"a waist of {float(focus['waist']):.3g} m is below the diffraction limit "
+                             f"{lam_m * paraxial_beam_waist(order) / math.pi:.3g} m")
+        return math.asin(s)
     if focus.get("angle_deg"):
         return math.radians(float(focus["angle_deg"]))
     na = float(focus["NA"])
@@ -97,8 +103,10 @@ def _single_beam(b: dict, n_medium: float) -> Bsc:
                               apodisation="aplanatic", width_sin=float(filling) * math.sin(angle),
                               truncation_angle=angle)
         else:
+            # the Gaussian of this NA: the paraxial beam mapped onto the far field by sin(theta), as its
+            # angular spectrum is (issue #64; OTT's BscPmGauss maps by tan(theta), a wider focus)
             beam = BscPmGauss(btype, mode, polarisation=pol, angle=angle, index_medium=n_medium,
-                              wavelength0=wavelength, power=1.0)
+                              wavelength0=wavelength, power=1.0, angular_scaling="sintheta")
         _BEAM_CACHE[key] = beam
     return beam
 

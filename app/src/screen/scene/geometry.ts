@@ -69,21 +69,21 @@ export const TO_VIEWER: Vec3 = unit([-1, RECEDE, RECEDE]);
 
 /**
  * Half-angle of the focused cone [rad], by the engine's own definitions
- * (api._beam_angle): NA = n sin θ; a waist W gives the paraxial divergence
- * tan θ = λ / (π n W) of the fundamental mode.
+ * (api._beam_angle): NA = n sin θ; a waist W gives the divergence
+ * sin θ = λ / (π n W) of the fundamental mode (#64).
  */
 export function coneHalfAngle(focus: Focus, wavelength: number, nMedium = 1): number {
   if (focus.kind === "asphere") return asphereHalfAngle(LENSES[focus.lens ?? "354330-C"], focus.beam_diameter);
   if (focus.kind === "parabolic_mirror") return mirrorHalfAngle(focus);
   if (focus.NA != null) return Math.asin(Math.min(1, focus.NA / nMedium));
   if (focus.angle_deg != null) return (focus.angle_deg * Math.PI) / 180;
-  return Math.atan(wavelength / (Math.PI * nMedium * focus.waist!));
+  return Math.asin(Math.min(1, wavelength / (Math.PI * nMedium * focus.waist!)));
 }
 
 /** Waist radius drawn at the focus [m]: the given waist, or the paraxial one for the cone angle. */
 export function waistRadius(focus: Focus, wavelength: number, nMedium = 1): number {
   if (focus.kind !== "asphere" && focus.kind !== "parabolic_mirror" && focus.waist != null) return focus.waist;
-  return wavelength / (Math.PI * nMedium * Math.tan(coneHalfAngle(focus, wavelength, nMedium)));
+  return wavelength / (Math.PI * nMedium * Math.sin(coneHalfAngle(focus, wavelength, nMedium)));
 }
 
 /** Radius of the drawn beam at distance `zeta` from the focus: a hyperbola from the waist to the cone. */

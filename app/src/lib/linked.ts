@@ -39,15 +39,16 @@ export const modeOrder = (type: "lg" | "hg", [i, j]: [number, number]) => (type 
 
 /**
  * The engine's relation between the waist W (1/e² radius at the focus) and
- * the convergence half-angle (api._beam_angle): tan θ = λ_m w_p / (π W),
- * λ_m = λ / n the wavelength in the medium.
+ * the convergence half-angle (api._beam_angle, #64): sin θ = λ_m w_p / (π W),
+ * λ_m = λ / n the wavelength in the medium — a Gaussian's angular spectrum
+ * goes with k sin θ. Below the diffraction limit λ_m w_p / π there is no angle (90°).
  */
 export function angleFromWaist(waist: number, wavelength: number, nMedium: number, order = 0): number {
-  return Math.atan(((wavelength / nMedium) * paraxialBeamWaist(order)) / (Math.PI * waist));
+  return Math.asin(Math.min(1, ((wavelength / nMedium) * paraxialBeamWaist(order)) / (Math.PI * waist)));
 }
 
 export function waistFromAngle(angle: number, wavelength: number, nMedium: number, order = 0): number {
-  return ((wavelength / nMedium) * paraxialBeamWaist(order)) / (Math.PI * Math.tan(angle));
+  return ((wavelength / nMedium) * paraxialBeamWaist(order)) / (Math.PI * Math.sin(angle));
 }
 
 /** NA = n sin θ. */

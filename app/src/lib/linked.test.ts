@@ -43,7 +43,7 @@ test("NA and waist are one focus, by the engine's relation", () => {
   // round trips
   close(naFromWaist(waistFromNA(0.8, 1.064e-6, 1.0), 1.064e-6, 1.0), 0.8);
   close(naFromWaist(waistFromNA(0.6, 1.55e-6, 1.33, 3), 1.55e-6, 1.33, 3), 0.6);
-  close(waistFromNA(0.8, 1.064e-6, 1.0), 2.540113e-7, 1e-6); // 254.0 nm
+  close(waistFromNA(0.8, 1.064e-6, 1.0), 1.064e-6 / (Math.PI * 0.8), 1e-9); // 423.4 nm: λ / (π NA) (#64)
 });
 
 test("mode order", () => {
