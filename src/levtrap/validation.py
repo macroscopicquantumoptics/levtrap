@@ -33,6 +33,7 @@ __all__ = [
     "compare_reference",
     "load_references",
     "mie_vs_dipole",
+    "model_of",
     "pseudo_vs_exact",
     "quantity",
     "write_readme",
@@ -82,9 +83,28 @@ def quantity(result: dict, name: str) -> float | None:
     raise KeyError(f"unknown quantity {name!r}")
 
 
+#: The entries of a Result's ``models`` each quantity is computed with: a
+#: reheating rate is recoil plus gas, so it names both.
+_MODELS_OF = {"frequency": ("modes",), "depth": ("modes",), "gas_damping": ("gas_damping",),
+              "recoil_heating": ("recoil_heating",), "reheating": ("recoil_heating", "gas_damping")}
+
+
+def model_of(result: dict, name: str) -> str:
+    """The model(s) behind a quantity of :func:`quantity`, as the Result names
+    them, e.g. ``mie`` or ``dipole-pattern + knudsen-interpolation``. A Paul
+    secular frequency is the model it names (``secular.exact.z``: ``mathieu``)."""
+    head, _, tail = name.partition(".")
+    if head == "secular":
+        kind = tail.partition(".")[0]
+        return "mathieu" if kind == "exact" else kind
+    models = {m["quantity"]: m["model"] for m in result.get("models", [])}
+    return " + ".join(models[q] for q in _MODELS_OF.get(head, ()) if q in models)
+
+
 def compare_reference(entry: dict) -> list[dict]:
     """Solve a verified entry's Setup; per expected value: the reference, the
-    computed value, their ratio and whether it is within the tolerance."""
+    computed value, their ratio, whether it is within the tolerance, and the
+    model it was computed with."""
     result = solve(entry["setup"])
     out = []
     for e in entry["expected"]:
@@ -92,7 +112,7 @@ def compare_reference(entry: dict) -> list[dict]:
         ok = got is not None and abs(got / e["value"] - 1) <= e["tolerance_rel"]
         out.append(dict(quantity=e["quantity"], reference=e["value"], computed=got, unit=e["unit"],
                         ratio=None if got is None else got / e["value"], tolerance_rel=e["tolerance_rel"],
-                        ok=ok, model=next((m["model"] for m in result["models"] if m["quantity"] == "modes"), "")))
+                        ok=ok, model=model_of(result, e["quantity"])))
     return out
 
 
@@ -232,13 +252,13 @@ def readme() -> str:
 
 
 def untested_reason(entry: dict) -> str:
-    """Why a wanted entry has no test yet (C4's acceptance: a test or a documented reason)."""
-    if entry.get("why_not_verified"):
-        return "read (C3): " + entry["why_not_verified"]
-    reason = "its numbers have not been read from the paper"
-    if not str(entry.get("schema_support", "")).startswith("current"):
-        reason += "; and the setup schema cannot express it yet"
-    return reason
+    """Why a wanted entry has no test yet (C4's acceptance: a test or a
+    documented reason): its ``why_not_verified``, which every wanted entry
+    must carry (a KeyError otherwise)."""
+    why = entry["why_not_verified"]
+    if not why.strip():
+        raise ValueError(f"{entry['id']}: why_not_verified is empty")
+    return "read: " + why
 
 
 def write_readme(path: pathlib.Path = README) -> None:

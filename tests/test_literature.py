@@ -20,10 +20,12 @@ REFS = V.load_references()
 
 
 @pytest.mark.parametrize("entry", REFS["verified"], ids=lambda e: e["id"])
-def test_verified_reference_agrees(entry):
+def test_verified_reference_agrees(entry, request):
     known = entry.get("known_disagreement")
     if known:
-        pytest.xfail(f"known disagreement, issue #{known['issue']}")
+        # still compared: once the disagreement is resolved the test XPASSes, which fails a
+        # strict xfail, so the entry's known_disagreement cannot outlive it
+        request.applymarker(pytest.mark.xfail(reason=f"known disagreement, issue #{known['issue']}", strict=True))
     rows = V.compare_reference(entry)
     assert rows, "a verified entry must expect something"
     bad = [r for r in rows if not r["ok"]]
@@ -33,14 +35,27 @@ def test_verified_reference_agrees(entry):
 
 @pytest.mark.parametrize("entry", REFS["wanted"], ids=lambda e: e["id"])
 def test_untested_reference_says_why(entry):
-    assert V.untested_reason(entry)
+    assert V.untested_reason(entry).removeprefix("read: ").strip()
+
+
+def test_an_untested_reference_without_a_reason_is_refused():
+    with pytest.raises(KeyError):
+        V.untested_reason({"id": "x"})
+    with pytest.raises(ValueError):
+        V.untested_reason({"id": "x", "why_not_verified": " "})
+
+
+NUMBER = re.compile(r"[-+]?\d[\d.]*(e[-+]?\d+)?")
 
 
 def test_the_table_is_current():
-    """The README is what the script writes now, up to the last digits of the numbers
-    (they may differ in the last place between numpy builds)."""
-    mask = lambda text: re.sub(r"[-+]?\d[\d.]*(e[-+]?\d+)?", "#", text)
-    assert mask(V.README.read_text()) == mask(V.readme()), "run: python3 -m levtrap.validation"
+    """The README is what the script writes now: the same text, and the same numbers
+    up to their last printed digit (which may differ between numpy builds)."""
+    old, new = V.README.read_text(), V.readme()
+    assert NUMBER.sub("#", old) == NUMBER.sub("#", new), "run: python3 -m levtrap.validation"
+    for a, b in zip(NUMBER.finditer(old), NUMBER.finditer(new)):
+        x, y = float(a.group().rstrip(".")), float(b.group().rstrip("."))
+        assert x == pytest.approx(y, rel=0.01, abs=1e-12), f"{a.group()} is now {b.group()}: run python3 -m levtrap.validation"
     for e in REFS["verified"] + REFS["wanted"]:
         assert e["id"] in V.README.read_text()
 
@@ -54,6 +69,15 @@ def test_quantity_names():
     with pytest.raises(KeyError):
         V.quantity(r, "colour")
 
+
+
+def test_each_quantity_names_its_own_model():
+    """The table's Model column: a reheating rate is recoil plus gas, not the modes' model."""
+    r = {"models": [{"quantity": "modes", "model": "mie"}, {"quantity": "gas_damping", "model": "knudsen"},
+                    {"quantity": "recoil_heating", "model": "dipole-pattern"}]}
+    assert [V.model_of(r, q) for q in ("frequency.y", "depth.kT", "gas_damping", "recoil_heating.y", "reheating.y",
+                                       "secular.exact.z", "secular.pseudopotential.x")] == \
+        ["mie", "mie", "knudsen", "dipole-pattern", "dipole-pattern + knudsen", "mathieu", "pseudopotential"]
 
 # --- cross-checks between models -----------------------------------------------------------
 

@@ -16,18 +16,18 @@ is marked `xfail` with the issue number.
 | jain2016_recoil (#61) | frequency.y | 1.5e+05 Hz | 2.1e+05 Hz | 1.4 | ±20 % | no | mie |
 | jain2016_recoil (#61) | frequency.z | 4.9e+04 Hz | 7.7e+04 Hz | 1.57 | ±20 % | no | mie |
 | jain2016_recoil_r527 (#61) | frequency.y | 1.49e+05 Hz | 2.1e+05 Hz | 1.41 | ±20 % | no | mie |
-| jain2016_recoil_r527 (#61) | reheating.y | 2.09e+04 1/s | 1.19e+04 1/s | 0.569 | ±35 % | no | mie |
+| jain2016_recoil_r527 (#61) | reheating.y | 2.09e+04 1/s | 1.19e+04 1/s | 0.569 | ±35 % | no | dipole-pattern + knudsen-interpolation |
 
 Not tested yet, and why:
 
 | Reference | Slot | Why not yet |
 |---|---|---|
-| yoneda2017_standing_wave | counter_propagating_or_standing_wave | read (C3): the elliptical focus cannot be expressed, and the returning pass is not described |
-| dania2024_linear_paul | linear_paul | read (C3): the paper does not report its trap drive or electrode geometry |
-| millen2015_ring_paul_cavity | ring_paul | read (C3): the electrode geometry is neither ring nor linear and r0 is not given; it does not fill the ring slot, and a better ring/wheel paper is wanted |
-| conangla2020_hybrid | hybrid_paul_optical | read (C3): only parameter ranges are given and no run records a complete set |
-| bonvin2024_hybrid_large_access | hybrid_paul_optical | read (C3): the combined trap's frequencies are not reported, and the wheel trap's geometry factors are not given |
-| vovrosh2017_parabolic_mirror | parabolic_mirror | read (C3): the input beam and the power at the focus are not stated, so the frequencies cannot be predicted |
+| yoneda2017_standing_wave | counter_propagating_or_standing_wave | read: the elliptical focus cannot be expressed, and the returning pass is not described |
+| dania2024_linear_paul | linear_paul | read: the paper does not report its trap drive or electrode geometry |
+| millen2015_ring_paul_cavity | ring_paul | read: the electrode geometry is neither ring nor linear and r0 is not given; it does not fill the ring slot, and a better ring/wheel paper is wanted |
+| conangla2020_hybrid | hybrid_paul_optical | read: only parameter ranges are given and no run records a complete set |
+| bonvin2024_hybrid_large_access | hybrid_paul_optical | read: the combined trap's frequencies are not reported, and the wheel trap's geometry factors are not given |
+| vovrosh2017_parabolic_mirror | parabolic_mirror | read: the input beam and the power at the focus are not stated, so the frequencies cannot be predicted |
 
 ## 2. Mie theory against the dipole approximation
 
