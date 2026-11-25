@@ -22,7 +22,7 @@ import { Plot, type PlotSeries, type Tone } from "./Plot.tsx";
 import { PolarPlot } from "./PolarPlot.tsx";
 import { spectrum } from "./spectrum.ts";
 import { waveRange, wavefrontPixels, weightedRms } from "./wavefront.ts";
-import { defaultRange, followFrom, jumpsAt, OUTPUTS, sweepParams, sweepValues, unstableRuns } from "./sweep.ts";
+import { defaultRange, followFrom, jumpsAt, logByDefault, OUTPUTS, sweepParams, sweepValues, unstableRuns } from "./sweep.ts";
 import styles from "./tabs.module.css";
 
 export interface TabProps {
@@ -459,7 +459,8 @@ export function SweepTab({ setup, engine }: TabProps) {
   const [from, to] = range[param.id] ?? defaultRange(param, setup);
   const [count, setCount] = useState(13);
   const [log, setLog] = useState<Record<string, boolean>>({});
-  const isLog = log[param.id] ?? param.log;
+  // log spacing starts on only over a decade or more (#72); the box overrides it
+  const isLog = log[param.id] ?? logByDefault(from, to);
   const [outputId, setOutputId] = useState("frequencies");
   const output = OUTPUTS.find((o) => o.id === outputId)!;
   const [follow, setFollow] = useState(true);
