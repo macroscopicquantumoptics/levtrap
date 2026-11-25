@@ -180,12 +180,28 @@
           "source": "arXiv:1603.03420v2 p. 2 (as frequency.x)",
           "tolerance_rel": 0.2,
           "why": "as frequency.x; the axial frequency is the most sensitive to the shape of the focus"
+        },
+        {
+          "quantity": "frequency.x/frequency.y",
+          "value": 0.82,
+          "unit": "1",
+          "source": "inferred from arXiv:1603.03420v2 p. 2: 123 kHz / 150 kHz = 0.820. Jain's thesis (ETH 2017, p. 73) gives 129 kHz for x on the same data (0.860)",
+          "tolerance_rel": 0.05,
+          "why": "power-free: the ratio tests the shape of the focus alone. ±5 % as for zheng2020_ratios: an ideal objective against a real one; the frequencies are printed to 1 kHz (under 1 %)"
+        },
+        {
+          "quantity": "frequency.z/frequency.y",
+          "value": 0.327,
+          "unit": "1",
+          "source": "inferred from arXiv:1603.03420v2 p. 2: 49 kHz / 150 kHz = 0.327",
+          "tolerance_rel": 0.05,
+          "why": "as frequency.x/frequency.y"
         }
       ],
       "known_disagreement": {
         "issue": 61
       },
-      "agreement_note": "levtrap's lens is an ideal aplanatic focus filled to NA 0.9 with all 70 mW at the focus; the paper states neither the filling factor nor how P0 was measured. Expect the absolute frequencies to within tens of percent; ±20 % is the tolerance. levtrap is 23-57 % stiffer (issue #61)."
+      "agreement_note": "levtrap's lens is an ideal aplanatic focus filled to NA 0.9 with all 70 mW at the focus; the paper states neither the filling factor nor how P0 was measured. Expect the absolute frequencies to within tens of percent; ±20 % is the tolerance. levtrap is 23-57 % stiffer (issue #61). The ratios fx/fy and fz/fy do not depend on the power; with the stated focus levtrap gives 0.719 and 0.367. No filling of an ideal NA 0.9 objective matches both: 0.7 gives 0.824 and 0.356, 0.5 gives 0.883 and 0.332 (#61; the axial is too stiff as for zheng2020_ratios, #70)."
     },
     {
       "id": "jain2016_recoil_r527",
