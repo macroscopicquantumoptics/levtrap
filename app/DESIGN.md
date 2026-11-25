@@ -205,10 +205,10 @@ next. The reason each one is visible is in the last column.
 |---|---|---|
 | Power | visible | The knob turned most often. |
 | Wavelength | visible | A lab names its laser by wavelength and power. |
-| Polarisation | visible | It is why f_x and f_y differ. |
-| Direction | visible on a second beam | "Against beam 1" or "with beam 1": the difference between a counter-propagating trap and a superposition. |
+| Polarisation | visible | It is why f_x and f_y differ. It is in the beam's own frame (#71): on a beam not along beam 1 a note says so, and against beam 1 that Circular + turns the other way in the lab. |
+| Direction | visible on a second beam | "Against beam 1" or "with beam 1": the difference between a counter-propagating trap and a superposition. Add field → Counter-propagating beam copies beam 1 but flips a circular polarisation (Circular + ↔ Circular −), so the two turn the same way in the lab and, once they interfere, make a standing wave (#71). |
 | Interferes with | visible when there is another beam | Whether the forces add or the fields do (a standing wave). |
-| Phase | visible when the beam interferes with another | Only then does it mean anything. |
+| Phase | visible when the beam interferes with another | Only then does it mean anything. Its note gives the reference: a factor e^iφ on the beam's field at its own focus, in its own frame (#71). |
 | Mode (Gaussian, LG, HG) and its indices; focus position x, y, z | Advanced | Most traps use a Gaussian beam focused at the origin. |
 
 **Lens**
@@ -375,7 +375,7 @@ be ticketed, is `docs/PARITY.md` (E2).
 | Draw the optical axis horizontal or vertical | removed | z is horizontal; gravity's direction says how the trap stands. |
 | 3D view: build, intensity or gradient, three cut planes, glow, contrast, log brightness, show particle, force arrows, reset | Show menu (D3): intensity slice, force arrows, trap axes | The scene is always there; nothing to build. The sliders go. |
 | Sweep: vary, from, to, steps, show, run, cancel | Plots drawer: Sweep (D5) | |
-| "Start here" panel, "What am I looking at?" notes, glossary | removed | Every number explains itself; the help is three lines. |
+| "Start here" panel, "What am I looking at?" notes, glossary | removed | Every number explains itself; the help is three lines, plus a folded Conventions section (#71): beam frames, the phase reference, the power of beams that interfere, the NA ↔ waist mapping (#64), and what Depth and Reheating include. |
 
 `web/lens.html` (lens tilt), all in E1:
 

@@ -100,6 +100,13 @@ Rules:
 * Unknown keys are kept and reported, not dropped.
 * Lab frame: z is the optical axis of the first beam, y is up. A Paul trap
   is centred at the origin; a linear trap's axis is z.
+* A beam's `polarisation` and `phase` are in its own frame (#71,
+  `src/levtrap/optics.py`): the beam is built along +z and turned the
+  shortest way to its `direction`; one along −z is turned by π about x, so
+  its y is the lab's −y and `"circular+"` on it turns the other way in the
+  lab. `phase` multiplies the beam's coefficients by e^{iφ} about its own
+  focus. Beams linked by `coherent_with` are rescaled together to the sum of
+  their `power`s; the others keep their own.
 * Paul trap a and q follow Leibfried et al., RMP 75, 281 (2003) (see
   `src/levtrap/fields/paul.py` for the per-geometry formulas).
 

@@ -328,6 +328,14 @@ function BeamEditor({ setup, beam, index, prefix, onEdit }: EditorProps & { beam
           value={pol}
           options={pol === "custom" ? [...POLARISATIONS, { value: "custom", label: "Custom (Jones vector)" }] : POLARISATIONS}
           onChange={(v) => v !== "custom" && edit({ polarisation: v as Polarisation })}
+          note={
+            // polarisation is in each beam's own frame and carried by its rotation (#71)
+            relation === "against"
+              ? `In this beam's own frame: its x is the lab's x, its y the lab's −y. So Circular + here turns the other way in the lab from Circular + on ${nameOf(first.i).toLowerCase()}.`
+              : relation === "custom"
+                ? "In this beam's own frame, turned the shortest way from the lab's z to this beam's direction."
+                : null
+          }
         />
         {relation !== "first" && (
           <SelectField
@@ -352,7 +360,22 @@ function BeamEditor({ setup, beam, index, prefix, onEdit }: EditorProps & { beam
             note={partner ? null : "Beams that do not interfere add their forces."}
           />
         )}
-        {partner && <NumberField id={`${prefix}-phase`} label="Phase" value={beam.phase ?? 0} quantity="phase" unit="π rad" onCommit={(v) => edit({ phase: v })} />}
+        {partner && (
+          <NumberField
+            id={`${prefix}-phase`}
+            label="Phase"
+            value={beam.phase ?? 0}
+            quantity="phase"
+            unit="π rad"
+            onCommit={(v) => edit({ phase: v })}
+            // the phase reference (#71): a factor on the beam's own coefficients (optics._group_beam)
+            note={
+              <>
+                Multiplies this beam&apos;s field by e<sup>iφ</sup> at its own focus, in its own frame.
+              </>
+            }
+          />
+        )}
       </Fields>
       <Advanced changed={changed}>
         <SelectField
