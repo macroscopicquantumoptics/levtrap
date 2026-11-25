@@ -74,8 +74,10 @@ correction it was not made for.
   aberration, so a fitted 0.085 waves would be an *assumed* parameter that
   the compared quantities depend on, which references.md does not allow.
   Both entries keep their `known_disagreement`.
-- **A lens aberration in the Setup is possible, but not part of #70.**
-  A `focus.aberration` (Zernike, waves rms) for the ideal lens would let a
-  user model a real objective. The far field can already be projected onto
-  the beam (`lens.project_farfield`, used for the asphere), so the field
-  side exists. It would be a schema and app change of its own.
+- **A real objective can now be modelled (#83).** `focus.aberration` on a
+  filled objective takes Zernike terms in waves rms (`spherical`, `coma_x`,
+  `coma_y`, `astigmatism_0`, `astigmatism_45`). The aberrated far field is
+  projected onto the beam by quadrature, and matches the Richards–Wolf
+  integral with the same pupil phase to 2 × 10⁻⁵
+  (`tests/test_focus_richards_wolf.py`). A user can set the 0.085 waves of
+  §2 by hand to see its effect; the literature entries do not.

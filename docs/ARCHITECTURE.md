@@ -76,6 +76,9 @@ Rules:
                                                       //  objective's aperture (1/e^2 radius / aperture, #61);
                                                       //  + optional "mapping": "ott" (default, tan theta, as
                                                       //  OTT-based papers) or "sine" (textbook Gaussian, #64);
+                                                      //  + optional "aberration" with "filling": Zernike terms
+                                                      //  in waves rms over the pupil, {"spherical", "coma_x",
+                                                      //  "coma_y", "astigmatism_0", "astigmatism_45"} (#83);
                                                       // or {"kind": "asphere", "lens": "354330-C",
                                                       //  "beam_diameter": 2.5e-3, "tilt_deg": [0, 0],
                                                       //  "decentre": [0, 0]} (E1); or {"kind": "parabolic_mirror",
