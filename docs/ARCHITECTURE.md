@@ -147,7 +147,9 @@ Models per field:
   "depth": {"J": 3e-19, "K": 2.2e4, "kT": 72},
   "optical": {"P_sca": …, "P_abs": …, "Qsca": …, "Qabs": …},
   "paul": {"q": {...}, "a": {...}, "stable": true, "secular": {...}, "micromotion": [...]},
-  "rates": {"gas_damping": …, "recoil_heating": [...], "reheating_phonons_per_s": [...]},
+  "rates": {"gas_damping": …, "recoil_heating": [...], "reheating_phonons_per_s": [...],
+            "modes": [{"recoil_scattered": …, "recoil_incident": …, "recoil_cross": …, …}],  // recoil split (#78)
+            "scattered_moments": {"mean": [...], "second": [[...]]}},  // <n>, <n n> of the Mie pattern (#78)
   "lenses": [{"field": 0, "focus_shift": [...], "clipping_loss": …, …,      // per beam through an asphere (E1)
               "rays": [...], "wavefront": {...}}],                         // with want "lens": traced rays, W map (#49)
   "mirrors": [{"field": 0, "reflected": 0.98, "rim_angle_deg": 112.6,     // per beam from a parabolic mirror (E3)

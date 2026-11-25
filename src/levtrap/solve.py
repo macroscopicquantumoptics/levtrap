@@ -297,7 +297,8 @@ def solve(setup: dict | str, want: Iterable[str] = (), start=None) -> dict:
         result["breakdown"] = breakdown(s, fields, optical, paul, r_eq, modes, trap)
     q = eff["Qsca_multipoles"]
     rates, rate_models = rates_block(s, modes=modes, mass=mass, P_sca=sc["P_sca"], P_abs=sc["P_abs"],
-                                     ed_fraction=q["ED"] / eff["Qsca"] if eff["Qsca"] > 0 else None)
+                                     ed_fraction=q["ED"] / eff["Qsca"] if eff["Qsca"] > 0 else None,
+                                     scattering=_recoil_parts(beams, parts))
     result["rates"] = rates
     result["models"] += rate_models
     if "curves" in want or "dipole" in want:
@@ -331,6 +332,24 @@ def solve(setup: dict | str, want: Iterable[str] = (), start=None) -> dict:
                                      notes=["Thorlabs 354330-C, Zemax prescription; far field projected on VSWFs"]))
     result["time"] = time.perf_counter() - t0
     return result
+
+
+def _recoil_parts(beams: list[dict], parts: list[dict]) -> list[dict] | None:
+    """Per optical field, its Mie scattered pattern at the equilibrium and the
+    beams whose photons it scatters (direction, power weight), for
+    :func:`levtrap.rates.rates_block` (#78). ``None`` (the dipole fallback)
+    when a field has no pattern (it scatters nothing)."""
+    from .optics import coherent_groups
+    groups = coherent_groups(beams)
+    if len(groups) != len(parts) or any("second" not in p for p in parts):
+        return None
+    out = []
+    for group, p in zip(groups, parts):
+        w = np.array([max(float(beams[i]["power"]), 0.0) for i in group])
+        w = w / w.sum() if w.sum() > 0 else np.full(len(group), 1 / len(group))
+        out.append(dict(P_sca=p["P_sca"], mean=p["mean"], second=p["second"],
+                        beams=[(beams[i]["direction"], float(wi)) for i, wi in zip(group, w)]))
+    return out
 
 
 def _mirrors(s: dict) -> dict:

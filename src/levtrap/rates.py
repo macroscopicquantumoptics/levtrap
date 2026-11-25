@@ -15,10 +15,14 @@ Everything is SI.  Rates are angular rates [1/s] unless they are phonon rates
 Direction-resolved recoil
 -------------------------
 The recoil rate needs the second moment ``<n n>`` (3x3) of the direction
-``n`` of the scattered photons, weighted by the scattered power.  Here it
-comes from the electric-dipole pattern, :func:`dipole_second_moment`.  The
-radiation-pattern ticket (C2) supplies the Mie far field: pass its tensor as
-``scattered_moment`` to :func:`recoil_heating`; nothing else changes.
+``n`` of the scattered photons, weighted by the scattered power, and their
+mean ``<n>`` for the forward/backward cross term.  A solve takes both from
+the Mie scattered field at the equilibrium (``scattering`` in
+:func:`rates_block`, from ``OpticalField.scattering``; #78), so a resonant
+particle whose scattering is dominated by a magnetic or quadrupole multipole
+gets its own pattern.  Without it (a caller that passes no ``scattering``)
+the electric-dipole pattern of the beams' polarisation,
+:func:`dipole_second_moment`, is the fallback, and its model says so.
 """
 
 from __future__ import annotations
@@ -33,7 +37,7 @@ from .derived import C, KB
 __all__ = [
     "HBAR", "AMU", "GASES", "gas_properties", "mean_speed", "mean_free_path", "knudsen",
     "gas_damping", "epstein_damping", "stokes_damping", "gas_heating", "jones_vector",
-    "dipole_second_moment", "recoil_heating", "crossover_pressure", "mode_rates", "rates_block",
+    "dipole_second_moment", "recoil_heating", "recoil_tensors", "crossover_pressure", "mode_rates", "rates_block",
 ]
 
 HBAR = 1.054_571_817e-34  # reduced Planck constant [J s] (CODATA 2018, exact h / 2 pi)
@@ -188,22 +192,28 @@ def dipole_second_moment(polarisation) -> np.ndarray:
 
 def recoil_heating(P_sca: float, wavelength0: float, mass: float, Omega: float, axis: Sequence[float],
                    scattered_moment: np.ndarray, beam_direction: Sequence[float] = (0, 0, 1),
-                   n_medium: float = 1.0) -> dict:
+                   n_medium: float = 1.0, scattered_mean: Sequence[float] | None = None, *,
+                   beam_moment: np.ndarray | None = None, cross_moment: np.ndarray | None = None) -> dict:
     """Photon-recoil heating of one mode [phonons/s].
 
     Scattering N = P_sca / (hbar omega) photons per second, each of momentum
-    hbar k (k = n_medium omega / c), diffuses the momentum along the unit
-    vector ``u`` as d<p_u^2>/dt = (hbar k)^2 N A_u with
+    hbar k (k = n_medium omega / c), kicks the particle by hbar k (e_in - n)
+    per photon: a photon taken out of the beam along e_in and sent out along
+    n.  For independent (Poissonian) events the momentum along the unit
+    vector ``u`` diffuses as d<p_u^2>/dt = (hbar k)^2 N A_u with
 
-        A_u = u . <n n> . u  +  (u . e_in)^2
+        A_u = <(u . (e_in - n))^2>
+            = u . <n n> . u  +  (u . e_in)^2  -  2 (u . e_in)(u . <n>)
 
     The first term is the scattered photons (``scattered_moment`` = <n n>,
-    e.g. :func:`dipole_second_moment`); the second is the shot noise of the
-    photons removed from the beam, along its direction e_in (plane-wave
-    limit; the angular spread of a focused beam is neglected).  The forward /
-    backward cross term vanishes for any pattern symmetric under n -> -n
-    (true for a dipole; C2 must add it for Mie patterns).  The energy grows
-    at d<p_u^2>/dt / (2 m), so
+    from the Mie far field or :func:`dipole_second_moment`); the second is
+    the shot noise of the photons removed from the beam, along its direction
+    e_in (plane-wave limit; the angular spread of a focused beam is
+    neglected); the third is their cross term (#78), which needs the mean
+    direction ``scattered_mean`` = <n> and vanishes for any pattern symmetric
+    under n -> -n (a dipole).  A forward-peaked Mie pattern (<n> . e_in > 0)
+    makes it negative: a photon scattered forwards hardly kicks the particle.
+    The energy grows at d<p_u^2>/dt / (2 m), so
 
         Gamma_u = A_u omega P_sca / (2 m c^2 Omega)  * n_medium^2.
 
@@ -213,17 +223,61 @@ def recoil_heating(P_sca: float, wavelength0: float, mass: float, Omega: float, 
     incident shot noise adds A = 1 (Seberson & Robicheaux, PRA 102, 033505
     (2020)), giving 7/5 in total for a linearly polarised dipole.
 
-    Returns ``scattered``, ``incident`` and ``total`` [phonons/s].
+    Several beams or fields: ``beam_moment`` = sum_b w_b e_b e_b^T replaces
+    e_in e_in^T, and ``cross_moment`` = sum_f w_f e_f <n>_f^T replaces
+    e_in <n>^T (see :func:`recoil_tensors`).
+
+    Returns ``scattered``, ``incident`` (the beam photons), ``cross`` and
+    ``total`` [phonons/s].
     """
     u = np.asarray(axis, float)
     u = u / np.linalg.norm(u)
     e = np.asarray(beam_direction, float)
     e = e / np.linalg.norm(e)
+    B = np.outer(e, e) if beam_moment is None else np.asarray(beam_moment, float)
+    if cross_moment is not None:
+        X = np.asarray(cross_moment, float)
+    elif scattered_mean is not None:
+        X = np.outer(e, np.real(np.asarray(scattered_mean, float)))
+    else:
+        X = np.zeros((3, 3))
     omega = 2 * math.pi * C / wavelength0
     unit = omega * P_sca * n_medium**2 / (2 * mass * C**2 * Omega)
     sca = float(u @ np.real(scattered_moment) @ u) * unit
-    inc = float(u @ e) ** 2 * unit
-    return dict(scattered=sca, incident=inc, total=sca + inc)
+    inc = float(u @ B @ u) * unit
+    cross = -2 * float(u @ X @ u) * unit
+    return dict(scattered=sca, incident=inc, cross=cross, total=sca + inc + cross)
+
+
+def recoil_tensors(parts: Sequence[dict]) -> dict:
+    """The power-weighted tensors of :func:`recoil_heating` for several fields.
+
+    ``parts``: one dict per optical field with ``P_sca`` [W], ``mean`` (<n>,
+    lab frame), ``second`` (<n n>, lab frame) and ``beams``, a list of
+    ``(direction, weight)`` of the beams the field's photons are taken from
+    (weights summing to 1).  Incoherent fields scatter independently, so
+    their patterns add weighted by their scattered power; within a coherent
+    group the beam photons are averaged over the beams by power and taken as
+    uncorrelated with the scattered direction (exact for one beam).
+
+    Returns ``second`` (<n n>), ``mean`` (<n>), ``beam`` (sum w e e^T) and
+    ``cross`` (sum w e_mean <n>^T), each weighted by P_sca / sum P_sca.
+    """
+    P = np.array([max(float(p["P_sca"]), 0.0) for p in parts])
+    w = P / P.sum() if P.sum() > 0 else np.full(len(parts), 1 / len(parts))
+    S, B, X, m = np.zeros((3, 3)), np.zeros((3, 3)), np.zeros((3, 3)), np.zeros(3)
+    for wf, p in zip(w, parts):
+        ebar = np.zeros(3)
+        for d, wb in p["beams"]:
+            e = np.asarray(d, float)
+            e = e / np.linalg.norm(e)
+            B += wf * wb * np.outer(e, e)
+            ebar += wb * e
+        mean = np.real(np.asarray(p["mean"], float))
+        S += wf * np.real(np.asarray(p["second"], float))
+        X += wf * np.outer(ebar, mean)
+        m += wf * mean
+    return dict(second=S, mean=m, beam=B, cross=X)
 
 
 def crossover_pressure(recoil: float, Omega: float, radius: float, mass: float, gas: str,
@@ -258,18 +312,25 @@ def crossover_pressure(recoil: float, Omega: float, radius: float, mass: float, 
 
 def mode_rates(*, Omega: float | None, axis: Sequence[float], gamma: float, temperature: float,
                P_sca: float, wavelength0: float, mass: float, radius: float, gas: str,
-               scattered_moment: np.ndarray, beam_direction=(0, 0, 1), n_medium: float = 1.0) -> dict:
-    """All rates of one mode; values are ``None`` when the mode is not trapped."""
-    keys = ("gas_heating", "recoil_heating", "recoil_scattered", "recoil_incident", "reheating",
-            "Q", "coherence_time", "coherent_oscillations", "crossover_pressure")
+               scattered_moment: np.ndarray, beam_direction=(0, 0, 1), n_medium: float = 1.0,
+               scattered_mean=None, beam_moment=None, cross_moment=None) -> dict:
+    """All rates of one mode; values are ``None`` when the mode is not trapped.
+
+    ``recoil_scattered``, ``recoil_incident`` (the beam photons) and
+    ``recoil_cross`` add up to ``recoil_heating`` (:func:`recoil_heating`).
+    """
+    keys = ("gas_heating", "recoil_heating", "recoil_scattered", "recoil_incident", "recoil_cross",
+            "reheating", "Q", "coherence_time", "coherent_oscillations", "crossover_pressure")
     if Omega is None or not np.isfinite(Omega) or Omega <= 0:
         return dict.fromkeys(keys)
-    rec = recoil_heating(P_sca, wavelength0, mass, Omega, axis, scattered_moment, beam_direction, n_medium)
+    rec = recoil_heating(P_sca, wavelength0, mass, Omega, axis, scattered_moment, beam_direction, n_medium,
+                         scattered_mean, beam_moment=beam_moment, cross_moment=cross_moment)
     gh = gas_heating(gamma, temperature, Omega)
     tot = gh + rec["total"]
     return dict(
         gas_heating=gh,
         recoil_heating=rec["total"], recoil_scattered=rec["scattered"], recoil_incident=rec["incident"],
+        recoil_cross=rec["cross"],
         reheating=tot,
         Q=(Omega / gamma) if gamma > 0 else None,
         coherence_time=(1 / tot) if tot > 0 else None,
@@ -288,13 +349,32 @@ def _beam_moment(beams: Iterable[dict]) -> tuple[np.ndarray, bool]:
     return sum(wi * m for wi, m in zip(w, moments)), same
 
 
+def _usable(parts) -> bool:
+    return bool(parts) and all(
+        np.all(np.isfinite(np.asarray(p["second"], float))) and np.all(np.isfinite(np.asarray(p["mean"], float)))
+        and np.isfinite(p["P_sca"]) for p in parts) and sum(max(p["P_sca"], 0.0) for p in parts) > 0
+
+
+def _parallel(directions) -> bool:
+    """All directions along one axis (either way)."""
+    d = [np.asarray(v, float) / np.linalg.norm(v) for v in directions]
+    return all(abs(abs(float(v @ d[0])) - 1) <= 1e-9 for v in d[1:])
+
+
 def rates_block(s: dict, *, modes: list[dict], mass: float, P_sca: float, P_abs: float,
-                ed_fraction: float | None = None) -> tuple[dict, list[dict]]:
+                ed_fraction: float | None = None, scattering: Sequence[dict] | None = None
+                ) -> tuple[dict, list[dict]]:
     """The Result's ``rates`` block for a parsed setup ``s``.
 
-    ``modes``: the Result's modes (``axis``, ``frequency`` [Hz]).  ``ed_fraction``:
-    the electric-dipole share of the scattered power, used for the validity of
-    the dipole recoil pattern.  Returns ``(block, models)``.
+    ``modes``: the Result's modes (``axis``, ``frequency`` [Hz]).
+    ``scattering``: per optical field, the Mie scattered pattern at the
+    equilibrium (``P_sca``, ``mean``, ``second`` in the lab frame, and
+    ``beams``: ``(direction, power weight)`` of the beams it scatters; see
+    :func:`recoil_tensors`).  With it the recoil uses the Mie pattern
+    (model ``mie-pattern``, #78); without it the electric-dipole pattern of
+    the beams' polarisation (``dipole-pattern``), whose validity
+    ``ed_fraction``, the electric-dipole share of the scattered power, sets.
+    Returns ``(block, models)``.
     """
     env = s["environment"]
     T, p, gas = env["temperature"], env["pressure"], env["gas"]
@@ -307,33 +387,43 @@ def rates_block(s: dict, *, modes: list[dict], mass: float, P_sca: float, P_abs:
     g = gas_properties(gas, T)
     kn = knudsen(p, radius, g["viscosity"], g["mass"], T)
     gamma = gas_damping(p, radius, mass, g["viscosity"], g["mass"], T)
-    moment, same_pol = _beam_moment(beams)
+    mie = _usable(scattering)
+    validity = "ok"
+    if mie:
+        tens = recoil_tensors(scattering)
+        pattern = dict(scattered_moment=tens["second"], scattered_mean=tens["mean"],
+                       beam_moment=tens["beam"], cross_moment=tens["cross"])
+        recoil_notes = ["scattered photons: Mie pattern at the equilibrium; "
+                        "beam photons: plane-wave shot noise along each beam"]
+        mixed = [p_ for p_ in scattering if len(p_["beams"]) > 1 and not _parallel([d for d, _ in p_["beams"]])]
+        if mixed:
+            validity = "approximate"
+            recoil_notes.append("coherent beams along different axes: the beam photons are averaged over the "
+                                "beams by power, as if each photon came from one beam")
+    else:
+        moment, same_pol = _beam_moment(beams)
+        pattern = dict(scattered_moment=moment, beam_direction=beams[0]["direction"])
+        recoil_notes = ["scattered photons: electric-dipole pattern; beam photons: plane-wave shot noise"]
+        if ed_fraction is not None and ed_fraction < 0.95:
+            validity = "approximate"
+            recoil_notes.append(f"electric dipole carries {100 * ed_fraction:.0f}% of the scattered power; "
+                                "the dipole pattern is approximate")
+        if not _parallel([b["direction"] for b in beams]):
+            validity = "approximate"
+            recoil_notes.append("beams along different axes: recoil from the beam photons taken along "
+                                "the first beam, scattered pattern from each beam's own polarisation")
+        if not same_pol:
+            validity = "approximate"
+            recoil_notes.append("beams of different polarisation: patterns averaged by power, interference ignored")
 
     per_mode = []
     for m in modes:
         f = m.get("frequency")
         Om = 2 * math.pi * f if f else None
         r = mode_rates(Omega=Om, axis=m["axis"], gamma=gamma, temperature=T, P_sca=P_sca,
-                       wavelength0=wl, mass=mass, radius=radius, gas=gas, scattered_moment=moment,
-                       beam_direction=beams[0]["direction"], n_medium=n_medium)
+                       wavelength0=wl, mass=mass, radius=radius, gas=gas, n_medium=n_medium, **pattern)
         per_mode.append(dict(name=m.get("name"), axis=m["axis"], **r))
 
-    recoil_notes = ["scattered photons: electric-dipole pattern; beam photons: plane-wave shot noise"]
-    validity = "ok"
-    if ed_fraction is not None and ed_fraction < 0.95:
-        validity = "approximate"
-        recoil_notes.append(f"electric dipole carries {100 * ed_fraction:.0f}% of the scattered power; "
-                            "the dipole pattern is approximate (Mie pattern pending)")
-    d0 = np.asarray(beams[0]["direction"], float)
-    d0 = d0 / np.linalg.norm(d0)
-    if any(abs(abs(float(np.asarray(b["direction"], float) @ d0)) / np.linalg.norm(b["direction"]) - 1) > 1e-9
-           for b in beams[1:]):
-        validity = "approximate"
-        recoil_notes.append("beams along different axes: recoil from the beam photons taken along "
-                            "the first beam, scattered pattern from each beam's own polarisation")
-    if not same_pol:
-        validity = "approximate"
-        recoil_notes.append("beams of different polarisation: patterns averaged by power, interference ignored")
     if n_medium != 1:
         validity = "approximate"
         recoil_notes.append("photon momentum taken as n hbar omega / c in the medium")
@@ -359,9 +449,13 @@ def rates_block(s: dict, *, modes: list[dict], mass: float, P_sca: float, P_abs:
         P_sca=P_sca,
         P_abs=P_abs,
     )
+    if mie:
+        # the scattered photons' direction moments (lab frame), for "how is this computed" (#78)
+        block["scattered_moments"] = dict(mean=[float(v) for v in tens["mean"]],
+                                          second=[[float(v) for v in row] for row in tens["second"]])
     models = [
         dict(quantity="gas_damping", model="knudsen-interpolation", validity=damping_validity,
              notes=damping_notes),
-        dict(quantity="recoil_heating", model="dipole-pattern", validity=validity, notes=recoil_notes),
+        dict(quantity="recoil_heating", model="mie-pattern" if mie else "dipole-pattern", validity=validity, notes=recoil_notes),
     ]
     return block, models

@@ -154,7 +154,12 @@ class OpticalField:
         return (np.asarray(q).reshape(3, -1).T @ self.R.T) * beam.power * (self.n_medium / C)
 
     def scattering(self, r) -> dict:
-        """Scattered and absorbed power [W] with the particle at r."""
+        """Scattered and absorbed power [W] with the particle at r, and the
+        direction moments of the scattered photons in the lab frame: ``mean``
+        <n> and ``second`` <n n^T> of the Mie far field weighted by dP_sca/dOmega
+        (:func:`levtrap.pattern.direction_moments`), for the recoil heating (#78).
+        A direction n' in the beam's frame is R n' in the lab."""
+        from ..pattern import direction_moments
         r = self._own(r)[0]
         # the whole beam: the fractions below are of the translated beam's power, high orders included
         b = self.beam.translate_xyz(r) if np.any(r != 0) else self.beam
@@ -163,7 +168,12 @@ class OpticalField:
         if abs(pb["abs"]) < 1e-12:  # round-off for (nearly) lossless particles
             pb["abs"] = max(pb["abs"], 0.0)
         P = self.beam.power
-        return dict(P_sca=pb["sca"] * P, P_abs=pb["abs"] * P)
+        out = dict(P_sca=pb["sca"] * P, P_abs=pb["abs"] * P)
+        if pb["sca"] > 0:
+            mom = direction_moments(sbeam if sbeam.type == "scattered" else sbeam.scattered_field(b))
+            out["mean"] = self.R @ np.real(mom["mean"])
+            out["second"] = self.R @ np.real(mom["second"]) @ self.R.T
+        return out
 
     def model(self) -> ModelInfo:
         return ModelInfo("mie")
