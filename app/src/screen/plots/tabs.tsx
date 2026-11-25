@@ -388,8 +388,8 @@ export function RadiationTab({ setup, engine, recorded, onPattern }: TabProps & 
       value={view}
       options={[
         { value: "pattern", label: "Where the light goes" },
-        { value: "collection", label: "Light collected against NA" },
-        { value: "information", label: "Position information against NA" },
+        { value: "collection", label: "Light collected" },
+        { value: "information", label: "Position information" },
       ]}
       onChange={setView}
     />
@@ -407,7 +407,7 @@ export function RadiationTab({ setup, engine, recorded, onPattern }: TabProps & 
             { id: "xz", label: "x-z plane", tone: "x", angle: xz.angle, value: xz.value },
             { id: "yz", label: "y-z plane", tone: "y", angle: yz.angle, value: yz.value },
           ]}
-          controls={choose}
+          controls={<span className={styles.controls}>{choose}</span>}
         />
       </div>
     );
@@ -432,7 +432,8 @@ export function RadiationTab({ setup, engine, recorded, onPattern }: TabProps & 
   } else {
     series = (["x", "y", "z"] as const).map((ax) => ({
       id: ax,
-      label: `${ax}, ${lens.label.toLowerCase()}`,
+      // the title names the lens; the legend names the axis, as the other plots do
+      label: `along ${ax}`,
       tone: ax,
       points: curve(informationAgainstNA(pattern, direction, ax)),
     }));
@@ -443,7 +444,7 @@ export function RadiationTab({ setup, engine, recorded, onPattern }: TabProps & 
     }
   }
   const controls = (
-    <>
+    <span className={styles.controls}>
       {choose}
       {view === "information" && (
         <SelectField<LensDirection>
@@ -454,7 +455,7 @@ export function RadiationTab({ setup, engine, recorded, onPattern }: TabProps & 
           onChange={setDirection}
         />
       )}
-    </>
+    </span>
   );
   return (
     <div className={styles.tab} data-pending={solving.pending || undefined}>
