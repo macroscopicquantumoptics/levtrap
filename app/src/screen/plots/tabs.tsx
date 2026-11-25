@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Engine } from "../../engine/client.ts";
 import { isAbortError } from "../../engine/client.ts";
-import type { LensResult, Result, Setup } from "../../engine/types.ts";
+import type { LensResult, Pattern, Result, Setup } from "../../engine/types.ts";
 import { formatNumber, formatSci, formatSI } from "../../lib/format.ts";
 import { toFieldText } from "../../lib/units.ts";
 import { answerFromError } from "../answer.ts";
@@ -17,7 +17,7 @@ import { useAnswer } from "../hooks.ts";
 import { canonical, environmentOf, pressureText, subscript } from "../model.ts";
 import { NumberField, SelectField } from "../ui/fields.tsx";
 import ui from "../ui/ui.module.css";
-import { axisCuts, harmonic, heatingCurves, polarCut, potential } from "./data.ts";
+import { atTrapNA, axisCuts, collectedAgainstNA, harmonic, heatingCurves, informationAgainstNA, LENS_DIRECTIONS, polarCut, potential, type LensDirection } from "./data.ts";
 import { Plot, type PlotSeries, type Tone } from "./Plot.tsx";
 import { PolarPlot } from "./PolarPlot.tsx";
 import { spectrum } from "./spectrum.ts";
@@ -364,14 +364,20 @@ function WavefrontMap({ lens, name }: { lens: LensResult; name: string }) {
 
 // --- Radiation -------------------------------------------------------------------------------
 
-export function RadiationTab({ setup, engine, recorded }: TabProps) {
+/** The Radiation tab; it hands the pattern up once it is computed, for the results export (#75). */
+export function RadiationTab({ setup, engine, recorded, onPattern }: TabProps & { onPattern?(setup: Setup, pattern: Pattern): void }) {
   const light = setup.trap.fields.some((f) => f.kind === "beam");
   const solving = useAnswer(setup, engine, recorded, ["pattern"], light);
   type View = "pattern" | "collection" | "information";
   const [view, setView] = useState<View>("pattern");
+  const [direction, setDirection] = useState<LensDirection>("backward");
+  const pattern = solving.answer.result?.pattern;
+  const fresh = !solving.pending && pattern ? pattern : null;
+  useEffect(() => {
+    if (fresh && onPattern) onPattern(setup, fresh);
+  }, [fresh, setup, onPattern]);
   if (!light) return <Note title="Radiation">There is no light in this trap, so nothing is scattered.</Note>;
   const wait = waiting("Radiation", solving, "the radiation pattern");
-  const pattern = solving.answer.result?.pattern;
   if (wait) return wait;
   if (!pattern) return <Note title="Radiation">The radiation pattern was not computed for this result.</Note>;
   const { theta, phi } = pattern.grid;
@@ -407,18 +413,49 @@ export function RadiationTab({ setup, engine, recorded }: TabProps) {
     );
   }
   const NA = pattern.NA;
-  const series: PlotSeries[] =
-    view === "collection"
-      ? [
-          { id: "forward", label: "forward (+z)", tone: "a", points: NA.map((na, i) => [na, pattern.collection.forward[i]] as [number, number]) },
-          { id: "backward", label: "backward (−z)", tone: "b", points: NA.map((na, i) => [na, pattern.collection.backward[i]] as [number, number]) },
-        ]
-      : (["x", "y", "z"] as const).map((ax) => ({
-          id: ax,
-          label: `${ax}, backward`,
-          tone: ax,
-          points: NA.map((na, i) => [na, pattern.information_efficiency.backward[ax][i]] as [number, number]),
-        }));
+  const curve = (values: number[] | null) => (values ?? []).map((v, i) => [NA[i], v] as [number, number]);
+  const lens = LENS_DIRECTIONS.find((d) => d.value === direction) ?? LENS_DIRECTIONS[0];
+  const percent = (v: number) => `${formatNumber(100 * v, 2, true)} %`;
+  const trapNA = pattern.trap_NA ? formatNumber(pattern.trap_NA, 2, true) : "";
+  let series: PlotSeries[];
+  let atTrap: string | null = null;
+  if (view === "collection") {
+    // forward and backward, and the two together: the cones do not overlap for NA ≤ n, so the fractions add (#75)
+    series = [
+      { id: "forward", label: "forward (+z)", tone: "a", points: curve(collectedAgainstNA(pattern, "forward")) },
+      { id: "backward", label: "backward (−z)", tone: "b", points: curve(collectedAgainstNA(pattern, "backward")) },
+      { id: "both", label: "forward + backward", tone: "ink", points: curve(collectedAgainstNA(pattern, "both")) },
+    ];
+    const [b, f, both] = (["backward", "forward", "both"] as const).map((d) => atTrapNA(pattern, d));
+    if (b && f && both)
+      atTrap = `At the trapping lens's NA ${trapNA}: the trapping lens collects ${percent(b.collection)} of the scattered light looking back, a lens of the same NA opposite it ${percent(f.collection)}, the two together ${percent(both.collection)}.`;
+  } else {
+    series = (["x", "y", "z"] as const).map((ax) => ({
+      id: ax,
+      label: `${ax}, ${lens.label.toLowerCase()}`,
+      tone: ax,
+      points: curve(informationAgainstNA(pattern, direction, ax)),
+    }));
+    const at = atTrapNA(pattern, direction);
+    if (at) {
+      const who = direction === "backward" ? "the trapping lens collects" : direction === "forward" ? "a forward lens of the same NA collects" : "the trapping lens and a forward lens of the same NA collect";
+      atTrap = `At the trapping lens's NA ${trapNA}, ${who} of the position information: x ${percent(at.information.x)}, y ${percent(at.information.y)}, z ${percent(at.information.z)}.`;
+    }
+  }
+  const controls = (
+    <>
+      {choose}
+      {view === "information" && (
+        <SelectField<LensDirection>
+          id="radiation-direction"
+          label="Lens"
+          value={direction}
+          options={LENS_DIRECTIONS.map((d) => ({ value: d.value, label: d.label }))}
+          onChange={setDirection}
+        />
+      )}
+    </>
+  );
   return (
     <div className={styles.tab} data-pending={solving.pending || undefined}>
       <Plot
@@ -426,14 +463,19 @@ export function RadiationTab({ setup, engine, recorded }: TabProps) {
         title={
           view === "collection"
             ? "Fraction of the scattered power a lens of each NA collects"
-            : "Fraction of the position information a backward lens collects (Tebbenjohanns et al., PRA 100, 043821)"
+            : `Fraction of the position information ${lens.phrase} collects (Tebbenjohanns et al., PRA 100, 043821)`
         }
         x={{ label: "Collection NA", unit: "" }}
         y={{ label: view === "collection" ? "Collected" : "Information collected", unit: "" }}
         series={series}
-        markers={pattern.trap_NA ? [{ x: pattern.trap_NA, label: `trapping lens: NA ${formatNumber(pattern.trap_NA, 2, true)}` }] : []}
-        controls={choose}
+        markers={pattern.trap_NA ? [{ x: pattern.trap_NA, label: `trapping lens: NA ${trapNA}` }] : []}
+        controls={controls}
       />
+      {atTrap && (
+        <p className={styles.atTrap} data-testid="radiation-at-trap">
+          {atTrap}
+        </p>
+      )}
     </div>
   );
 }

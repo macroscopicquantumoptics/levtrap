@@ -1,9 +1,12 @@
 /**
  * The numbers of a Result as a file: CSV (one quantity per row, SI units,
  * the model behind it) or JSON (the setup and the engine's whole Result).
+ * The radiation pattern is solved apart from the main answer; once the
+ * Radiation tab or the scene has it for this setup it goes into both (#75).
  */
-import type { Result, Setup } from "../../engine/types.ts";
+import type { Pattern, Result, Setup } from "../../engine/types.ts";
 import { shownFrequency } from "../answer.ts";
+import { atTrapNA, collectedAgainstNA, informationAgainstNA, LENS_DIRECTIONS } from "../plots/data.ts";
 import { csvText } from "./download.ts";
 
 export interface Row {
@@ -62,7 +65,38 @@ export function resultRows(result: Result): Row[] {
     for (const m of result.rates.modes) add("reheating", m.name, m.reheating, "phonons/s", recoil);
     for (const m of result.rates.modes) add("recoil exceeds gas heating below", m.name, m.crossover_pressure, "Pa", recoil);
   }
+  if (result.pattern) patternRows(result.pattern, add, modelOf(result, "pattern") || "mie (ok)");
   return rows;
+}
+
+/**
+ * The Radiation tab's numbers (#75): what a lens of each NA collects, in each
+ * direction and forward + backward together, and what lenses of the trapping
+ * lens's NA collect.
+ */
+function patternRows(p: Pattern, add: (quantity: string, axis: string, value: Row["value"], unit: string, model?: string) => void, model: string) {
+  add("scattered power (pattern)", "", p.P_sca, "W", model);
+  for (const d of LENS_DIRECTIONS) {
+    const light = collectedAgainstNA(p, d.value);
+    if (light) p.NA.forEach((na, i) => add(`light collected by ${d.name} at NA ${na}`, "", light[i], "", model));
+    for (const ax of ["x", "y", "z"] as const) {
+      const info = informationAgainstNA(p, d.value, ax);
+      if (info) p.NA.forEach((na, i) => add(`position information collected by ${d.name} at NA ${na}`, ax, info[i], "", model));
+    }
+  }
+  for (const d of LENS_DIRECTIONS) {
+    const at = atTrapNA(p, d.value);
+    if (!at) continue;
+    const name = `${d.name} at the trapping lens's NA ${p.trap_NA}`;
+    add(`light collected by ${name}`, "", at.collection, "", model);
+    for (const ax of ["x", "y", "z"] as const) add(`position information collected by ${name}`, ax, at.information[ax], "", model);
+  }
+}
+
+/** The main answer with the pattern computed apart for the same setup, if there is one (#75). */
+export function withPattern(result: Result | null, pattern: Pattern | null | undefined): Result | null {
+  if (!result || !pattern || result.pattern) return result;
+  return { ...result, pattern };
 }
 
 export function resultsCsv(result: Result): string {

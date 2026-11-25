@@ -214,7 +214,14 @@ export interface Pattern {
   information_efficiency: Record<string, { x: number[]; y: number[]; z: number[] }>;
   /** NA of the trapping lens, and what it collects looking back at the particle */
   trap_NA?: number | null;
-  at_trap_NA?: Record<string, unknown> | null;
+  /** at trap_NA: backward is the trapping lens itself, forward a lens of the same NA opposite it (#75) */
+  at_trap_NA?: { forward: ConeFractions; backward: ConeFractions } | null;
+}
+
+/** What a lens collects: fractions of P_sca and of the 4π position information per axis. */
+export interface ConeFractions {
+  collection: number;
+  information: { x: number; y: number; z: number };
 }
 
 /** Rates of one mode (rates.mode_rates). Heating rates are in phonons/s. */

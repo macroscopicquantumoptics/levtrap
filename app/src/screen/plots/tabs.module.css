@@ -120,6 +120,15 @@
   accent-color: var(--focus-ring);
 }
 
+/* what lenses of the trapping lens's NA collect, under the Radiation tab's plot (#75) */
+.atTrap {
+  flex: none;
+  margin: 0;
+  padding: 2px 6px 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
 /* ---- heating table ------------------------------------------------------------- */
 
 .heatingHead {
