@@ -110,6 +110,31 @@ with all 70 mW at the focus.
     filled objective at 0.7, #63), levtrap gives 14.8 × 10³ /s.
   - The gas is not stated: He instead of N₂ would lower the gas heating 2.6×.
   - Both are tracked in issue #61.
+- **Ratios.** fx/fy = 0.820 and fz/fy = 0.327 do not depend on the power.
+  levtrap gives 0.719 and 0.367 with the stated focus. No filling of an ideal
+  NA 0.9 objective matches both: 0.7 gives 0.824 and 0.356, 1.0 gives 0.781
+  and 0.353, and fz/fy reaches 0.332 only at 0.5, where fx/fy is 0.883. The
+  axial is 7–10 % too stiff, as for Zheng 2020 (#70).
+- **The sources for the filling (#61).** None states it:
+  - Jain's thesis (V. Jain, "Levitated optomechanics at the photon recoil
+    limit", Diss. ETH No. 24440, 2017) describes the same data (ch. 4) but
+    no beam diameter or objective model: the fibre output "is then fed
+    directly into the trapping objective in the vacuum chamber" (p. 32).
+    Its only statement on the focus is a model: "For an objective with
+    NA = 0.90, the waist is 1.7 times larger than the paraxial estimate"
+    (p. 96). It gives x = 129 kHz for the data the PRL gives as 123 kHz
+    (p. 73).
+  - Gas: "a combination Pirani and ion gauge (InstruTech Hornet and IGM402
+    Module)" (p. 33); the chamber was baked, backfilled with dry nitrogen
+    and pumped to 3 × 10⁻⁸ mbar (p. 34). No composition was measured, so
+    N₂ stays an assumption.
+  - Frimmer et al. (arXiv 1608.00998, 1704.02289) on a 100× NA 0.9 objective
+    in the same lab: 46/115/141 kHz at "≈ 50 mW", the same ratios as Jain
+    to 0.5 %, but their power is 24 % off Jain's calibration
+    (f²/P = 398 against 315–331 kHz²/mW), so only the ratios carry over.
+  - Gieseler's thesis (ICFO 2014) is a different trap (Nikon 50×, NA 0.8);
+    Tebbenjohanns' thesis (ETH 2020) is Jain's apparatus with a later
+    objective (Olympus NA 0.85, "overfilled").
 
 ### Zheng *et al.* 2020: single-beam tweezer, frequency ratios
 

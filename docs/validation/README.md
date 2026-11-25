@@ -15,6 +15,8 @@ is marked `xfail` with the issue number.
 | jain2016_recoil (#61) | frequency.x | 1.23e+05 Hz | 1.51e+05 Hz | 1.23 | ±20 % | no | mie |
 | jain2016_recoil (#61) | frequency.y | 1.5e+05 Hz | 2.1e+05 Hz | 1.4 | ±20 % | no | mie |
 | jain2016_recoil (#61) | frequency.z | 4.9e+04 Hz | 7.7e+04 Hz | 1.57 | ±20 % | no | mie |
+| jain2016_recoil (#61) | frequency.x/frequency.y | 0.82 | 0.719 | 0.877 | ±5 % | no | mie |
+| jain2016_recoil (#61) | frequency.z/frequency.y | 0.327 | 0.367 | 1.12 | ±5 % | no | mie |
 | jain2016_recoil_r527 (#61) | frequency.y | 1.49e+05 Hz | 2.1e+05 Hz | 1.41 | ±20 % | no | mie |
 | jain2016_recoil_r527 (#61) | reheating.y | 2.09e+04 1/s | 1.19e+04 1/s | 0.569 | ±35 % | no | dipole-pattern + knudsen-interpolation |
 | zheng2020_ratios (#70) | frequency.y/frequency.x | 1.27 | 1.3 | 1.03 | ±5 % | yes | mie |
