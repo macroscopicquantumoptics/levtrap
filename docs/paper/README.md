@@ -38,6 +38,14 @@ verified (#52).
 
 ## How close is it?
 
+**levtrap and OTT give the same trap.** Run in OTT itself (MATLAB, OTT v1 @
+e6736643) with the same inputs, the beam coefficients and the axial and radial
+forces agree with levtrap to about 1e-14, and the solver's z_eq sits on OTT's
+force zero (`tests/test_ott_dark_trap.py`). The differences from the paper listed
+below are therefore not in levtrap's code: they come from the inputs or conventions
+the paper doesn't state, or from the paper. The result-by-result audit is in
+[`CHECKLIST.md`](CHECKLIST.md).
+
 The values below are approximate readings from the published figures, not
 numbers stated in the text.
 
