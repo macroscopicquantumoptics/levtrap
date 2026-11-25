@@ -275,6 +275,10 @@ function Help({ status }: { status: EngineStatus | null }) {
               Source
             </a>{" "}
             ·{" "}
+            <a href={`${REPO}/tree/main/docs`} target="_blank" rel="noreferrer" data-testid="help-docs">
+              Docs
+            </a>{" "}
+            ·{" "}
             <a href={issueUrl(6)} target="_blank" rel="noreferrer">
               Roadmap
             </a>

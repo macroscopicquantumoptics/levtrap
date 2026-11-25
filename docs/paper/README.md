@@ -20,8 +20,10 @@ split that darkens the focus is computed in the script (`dark_split`); the
 app has no such helper.
 
 The trap itself can be built in the app (two coherent LG beams, circular
-polarisation, phase π); it is not a preset until a dark-trap reference is
-verified (#52).
+polarisation, phase π), and it is the preset "WS₂ bottle beam (dark trap)"
+(#52). The preset is marked illustrative: the paper does not give the power
+split, so the preset uses the one that darkens the focus, and no dark-trap
+number is checked against the paper in docs/validation.
 
 | Paper figure | levtrap output | In scope? |
 |---|---|---|

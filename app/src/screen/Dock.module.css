@@ -48,6 +48,17 @@
   color: var(--text);
 }
 
+/* a tab that cannot compute for this setup: greyed, its reason in the tooltip (#81); it still opens, to say why */
+.tab[data-unavailable] {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.tab[data-unavailable]:hover,
+.tab[data-unavailable][aria-selected="true"] {
+  color: var(--text-muted);
+}
+
 .tab[aria-selected="true"]::after {
   content: "";
   position: absolute;

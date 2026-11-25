@@ -89,11 +89,12 @@
   cursor: pointer;
 }
 
-/* ---- narrow screens: one column; the inspector is a sheet under the dock ------ */
+/* ---- narrow screens: one column; the parts row and the inspector sit under the dock ------ */
 
 @media (max-width: 720px) {
+  /* stage, dock, parts row, inspector: the parts row stays while a part is selected (#81) */
   .screen {
-    grid-template-rows: minmax(170px, 1fr) auto auto;
+    grid-template-rows: minmax(170px, 1fr) auto auto auto;
   }
 
   .dock {
@@ -101,9 +102,9 @@
   }
 
   .inspector {
-    grid-row: 3;
+    grid-row: 4;
     justify-self: stretch;
-    max-height: 46dvh;
+    max-height: 42dvh;
     margin: 0 8px 8px;
   }
 

@@ -6,7 +6,7 @@ import { PRESETS } from "../presets.ts";
 import { RECORDED } from "../recorded.ts";
 import { pythonLiteral, pythonSnippet } from "./python.ts";
 import { resultRows, resultsCsv, resultsJson } from "./results.ts";
-import { linkFragment, readLinkFragment, readSetupText, setupFileText, shareUrl } from "./setupText.ts";
+import { linkFragment, readLinkFragment, readSetupText, roundNumber, setupFileText, shareUrl } from "./setupText.ts";
 
 /** Every preset, and each edited a little: what people save and share. */
 function setups(): Setup[] {
@@ -40,6 +40,22 @@ test("share, then load the link: the identical setup", () => {
   }
   // a preset's link is short enough to paste anywhere
   assert.ok(linkFragment(PRESETS[0].setup).length < 400, String(linkFragment(PRESETS[0].setup).length));
+});
+
+test("a link and a file carry no float noise: 129.8 mW is stored as 0.1298 (#81)", () => {
+  const noisy = withField<BeamField>(PRESETS[0].setup, 0, { power: 129.8 * 1e-3 });
+  assert.equal((noisy.trap.fields[0] as BeamField).power, 0.12980000000000003);
+  const back = readLinkFragment(linkFragment(noisy));
+  assert.ok(back?.ok);
+  if (back?.ok) assert.equal((back.setup.trap.fields[0] as BeamField).power, 0.1298);
+  assert.match(setupFileText(noisy), /"power": 0\.1298,/);
+  // only noise goes: a number with more than twelve real digits is kept, as are integers
+  assert.equal(roundNumber(Math.PI), Math.PI);
+  assert.equal(roundNumber(1.23456789012345e-7), 1.23456789012345e-7);
+  assert.equal(roundNumber(0.1 + 0.2), 0.3);
+  assert.equal(roundNumber(1.55e-6 * 1e9 * 1e-9), 1.55e-6);
+  assert.equal(roundNumber(123456789012345), 123456789012345);
+  assert.equal(roundNumber(-0.30000000000000004), -0.3);
 });
 
 test("the link replaces the query's preset and any fragment", () => {
