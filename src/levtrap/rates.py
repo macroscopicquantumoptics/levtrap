@@ -361,6 +361,14 @@ def _parallel(directions) -> bool:
     return all(abs(abs(float(v @ d[0])) - 1) <= 1e-9 for v in d[1:])
 
 
+def _same_way(directions) -> bool:
+    """All directions the same, not merely along one axis (#78): opposing beams
+    of one coherent group (a standing wave) average their beam photons to
+    about zero, which drops their correlation with the scattered direction."""
+    d = [np.asarray(v, float) / np.linalg.norm(v) for v in directions]
+    return all(abs(float(v @ d[0]) - 1) <= 1e-9 for v in d[1:])
+
+
 def rates_block(s: dict, *, modes: list[dict], mass: float, P_sca: float, P_abs: float,
                 ed_fraction: float | None = None, scattering: Sequence[dict] | None = None
                 ) -> tuple[dict, list[dict]]:
@@ -395,11 +403,12 @@ def rates_block(s: dict, *, modes: list[dict], mass: float, P_sca: float, P_abs:
                        beam_moment=tens["beam"], cross_moment=tens["cross"])
         recoil_notes = ["scattered photons: Mie pattern at the equilibrium; "
                         "beam photons: plane-wave shot noise along each beam"]
-        mixed = [p_ for p_ in scattering if len(p_["beams"]) > 1 and not _parallel([d for d, _ in p_["beams"]])]
+        mixed = [p_ for p_ in scattering if len(p_["beams"]) > 1 and not _same_way([d for d, _ in p_["beams"]])]
         if mixed:
             validity = "approximate"
-            recoil_notes.append("coherent beams along different axes: the beam photons are averaged over the "
-                                "beams by power, as if each photon came from one beam")
+            recoil_notes.append("coherent beams in different directions (e.g. a standing wave): the beam photons "
+                                "are averaged over the beams by power, as if uncorrelated with the scattered "
+                                "direction")
     else:
         moment, same_pol = _beam_moment(beams)
         pattern = dict(scattered_moment=moment, beam_direction=beams[0]["direction"])

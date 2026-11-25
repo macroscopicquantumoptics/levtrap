@@ -170,6 +170,23 @@ def test_result_rates_vacuum_and_large_sphere():
     assert big["rates"]["scattered_moments"]["mean"][2] > 0.3  # strongly forward
 
 
+
+def test_a_coherent_standing_wave_flags_its_recoil():
+    """Two coherent opposing beams average their beam photons to about zero, so
+    the model drops their correlation with the scattered direction: approximate (#78).
+    Two incoherent opposing beams are each their own field: ok."""
+    s = json.loads(json.dumps(DEFAULT_SETUP))
+    s["particle"]["radius"] = 50e-9
+    b1 = s["trap"]["fields"][0]
+    b2 = dict(b1, id="beam2", direction=[0, 0, -1])
+    s["trap"]["fields"] = [b1, b2]
+    incoherent = {m["quantity"]: m for m in solve(s)["models"]}["recoil_heating"]
+    assert incoherent["validity"] == "ok"
+    b2["coherent_with"] = b1["id"]
+    coherent = {m["quantity"]: m for m in solve(s)["models"]}["recoil_heating"]
+    assert coherent["model"] == "mie-pattern" and coherent["validity"] == "approximate"
+    assert any("standing wave" in n for n in coherent["notes"])
+
 def test_rates_block_without_pattern_falls_back_to_the_dipole():
     """Without a Mie pattern (a caller that passes none) the dipole pattern is used, and a
     sphere whose electric dipole carries little of the scattered power is flagged (#78)."""
