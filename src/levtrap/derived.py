@@ -24,6 +24,7 @@ from .special import ka2nmax
 __all__ = [
     "C", "KB", "mie_efficiencies", "multipole_decomposition", "sphere_mass",
     "force_si", "stiffness_si", "trap_frequency", "recoil_rate", "recoil_ratio", "power_balance",
+    "multipole_power",
     "intensity_si",
 ]
 
@@ -122,6 +123,33 @@ def recoil_ratio(P_sca: float, wavelength0: float, mass: float, Omega: float) ->
     return recoil_rate(P_sca, wavelength0, mass, Omega) / Omega
 
 
+def multipole_power(sbeam: Bsc) -> dict:
+    """Scattered power per multipole, in the units of the beam's power (#80).
+
+    The scattered beam's physical outgoing amplitudes are 2p (on the M waves,
+    the magnetic multipoles) and 2q (on the N waves, the electric ones), so the
+    power radiated by the electric and magnetic multipoles of order n is
+
+        P_E(n) = 4 sum_m |q_nm|^2,     P_M(n) = 4 sum_m |p_nm|^2.
+
+    The VSWFs are orthogonal on a sphere at infinity, so these add up to the
+    total scattered power of :func:`power_balance` with no cross terms. This is
+    the beam's own split, not the plane wave's (Q_sca of :func:`mie_efficiencies`):
+    a focused or structured beam (the dark trap of arXiv:2607.09896) excites each
+    order with its own weight. Labels as in :func:`multipole_decomposition`
+    (ED, MD, EQ, MQ, EO, MO, and 'higher' for n >= 4).
+    """
+    n, _ = sbeam.get_mode_indices()
+    pm = 4 * np.sum(np.abs(sbeam.a) ** 2, axis=1)  # M waves: magnetic multipoles
+    pe = 4 * np.sum(np.abs(sbeam.b) ** 2, axis=1)  # N waves: electric multipoles
+    out = {}
+    for order in (1, 2, 3):
+        out[_LABELS[(order, "E")]] = float(pe[n == order].sum())
+        out[_LABELS[(order, "M")]] = float(pm[n == order].sum())
+    out["higher"] = float(pe[n > 3].sum() + pm[n > 3].sum())
+    return out
+
+
 def power_balance(ibeam: Bsc, sbeam: Bsc) -> dict:
     """Scattered and absorbed power fractions for a beam on a particle.
 
@@ -132,7 +160,9 @@ def power_balance(ibeam: Bsc, sbeam: Bsc) -> dict:
         P_sca = sum |2p|^2 + |2q|^2
         P_abs = P_inc - sum |a + 2p|^2 + |b + 2q|^2
 
-    Returns fractions of the incident beam power.
+    Returns fractions of the incident beam power: ``sca``, ``abs``, and
+    ``sca_multipoles``, the scattered fraction split per multipole
+    (:func:`multipole_power`, #80).
     """
     n = max(ibeam.Nmax, sbeam.Nmax)
     i, s = ibeam.set_Nmax(n), sbeam.set_Nmax(n)
@@ -142,7 +172,8 @@ def power_balance(ibeam: Bsc, sbeam: Bsc) -> dict:
     # |a|^2 - |a + 2p|^2 = -4 (Re(a* p) + |p|^2)
     pabs = -4 * np.sum(np.real(np.conj(i.a) * s.a) + np.abs(s.a) ** 2
                        + np.real(np.conj(i.b) * s.b) + np.abs(s.b) ** 2)
-    return dict(sca=float(psca / pin), abs=float(pabs / pin))
+    split = {k: v / pin for k, v in multipole_power(s).items()}
+    return dict(sca=float(psca / pin), abs=float(pabs / pin), sca_multipoles=split)
 
 
 def intensity_si(beam: Bsc, xyz, power: float) -> np.ndarray:

@@ -12,12 +12,15 @@ python examples/paper_2607_09896.py      # ~6 min, writes docs/paper/*.png + pap
 
 The script computes every trap with `levtrap.solve.solve` (equilibrium,
 frequencies, depths, scattered and absorbed power). The force map over the
-intensity (Fig. 1a/S1) and the scattered power per multipole (Figs. 1b, 2c)
-are not part of a Result; the script computes them from the same beam and
-T-matrix (`levtrap.api.build_beam`, `build_tmatrix`), and the MQ-only case
-with the engine's multipole mask, which the app does not offer. The power
-split that darkens the focus is computed in the script (`dark_split`); the
-app has no such helper.
+intensity (Fig. 1a/S1) is not part of a Result; the script computes it from
+the same beam and T-matrix (`levtrap.api.build_beam`, `build_tmatrix`), and
+the MQ-only case with the engine's multipole mask, which the app does not
+offer. The scattered power per multipole (Figs. 1b, 2c) is in a Result at the
+equilibrium (`optical.P_sca_multipoles`, #80) and under More in the app;
+the script computes it itself so that a wavelength with no equilibrium is
+taken at the focus, and `tests/test_multipoles.py` checks that the two agree
+for the 300 nm sphere. The power split that darkens the focus is computed
+in the script (`dark_split`); the app has no such helper.
 
 The trap itself can be built in the app (two coherent LG beams, circular
 polarisation, phase π); it is not a preset until a dark-trap reference is

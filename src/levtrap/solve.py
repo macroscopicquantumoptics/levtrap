@@ -272,6 +272,9 @@ def solve(setup: dict | str, want: Iterable[str] = (), start=None) -> dict:
     at = r_eq if r_eq is not None else centre
     parts = [f.scattering(at) for f in optical]
     sc = dict(P_sca=sum(x["P_sca"] for x in parts), P_abs=sum(x["P_abs"] for x in parts))
+    # the scattered power per multipole for these beams at the equilibrium (#80): the fields
+    # are incoherent with each other, so their splits add
+    split = {k: sum(x["P_sca_multipoles"][k] for x in parts) for k in parts[0]["P_sca_multipoles"]}
     result: dict[str, Any] = dict(
         version=RESULT_VERSION,
         engine=__version__,
@@ -283,6 +286,8 @@ def solve(setup: dict | str, want: Iterable[str] = (), start=None) -> dict:
         optical=dict(P_sca=sc["P_sca"], P_abs=sc["P_abs"], power=P,
                      Qext=eff["Qext"], Qsca=eff["Qsca"], Qabs=eff["Qabs"],
                      size_parameter=eff["x"],
+                     # plane-wave Q_sca per multipole (Mie), and the beams' own split of P_sca (#80)
+                     Qsca_multipoles=eff["Qsca_multipoles"], P_sca_multipoles=split,
                      Nmax=dict(beam=max(f.beam.Nmax for f in optical), particle=optical[0].T.Nmax[0])),
         models=[dict(quantity="modes", **paul_model.as_dict()) if paul_model else
                 dict(quantity="modes", model="mie", validity="ok", notes=[]),
