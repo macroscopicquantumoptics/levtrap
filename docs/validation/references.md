@@ -8,18 +8,24 @@ Machine-readable copy: [`references.json`](references.json).
 ## Status
 
 All seven candidate papers were read in full (C3, issue #15), from their
-arXiv full text. The journal versions were not available here; where a
+arXiv full text. C4 (#16) read about thirty more, listed at the end; five
+are recorded here. The journal versions were not available here; where a
 journal version may differ, the entry says so.
 
 | Slot | Entry | Status |
 |---|---|---|
 | Single-beam high-NA tweezer, silica, vacuum | Jain 2016 | **verified** (two entries); disagrees, issue #61 |
+| Single-beam high-NA tweezer, silica, vacuum | Zheng 2020 | **verified**, frequency ratios only; f_y/f_x agrees, f_y/f_z disagrees, issue #70 |
 | Counter-propagating / standing wave | Yoneda and Aikawa 2017 | read; not verifiable: elliptical focus, return pass not described |
 | Linear Paul trap, nanoparticle | Dania 2024 | read; not verifiable: trap drive and geometry not reported |
 | Ring / wheel Paul trap | Millen 2015 | read; not verifiable, and not a ring trap: a better paper is wanted |
 | Hybrid Paul + optical | Conangla 2020 | read; not verifiable: parameter ranges only |
 | Hybrid Paul + optical | Bonvin 2024 | read; not verifiable: no combined-trap frequencies |
 | Parabolic mirror | Vovrosh 2017 | read; not verifiable: input beam and focal power not stated |
+| Counter-propagating / standing wave | Kamba and Aikawa 2023 | read (C4); not verifiable: focal power, returned fraction, focus positions |
+| Linear Paul trap, nanoparticle | Bykov 2019 | read (C4); not verifiable: charge from the radial frequencies; a factor of two in the end-cap term |
+| Parabolic mirror | Dinter 2024 | read (C4); not verifiable: beam diameter only as an undefined filling factor |
+| Dark trap (WS₂, two LG beams) | Illetschek 2026 | read (C4); not verifiable: the power split is not stated |
 
 **What "verified" means.** Every parameter of the Setup and every expected
 value was read from the paper, with its page, figure or table. Each one is
@@ -104,6 +110,47 @@ with all 70 mW at the focus.
     filled objective at 0.7, #63), levtrap gives 14.8 × 10³ /s.
   - The gas is not stated: He instead of N₂ would lower the gas heating 2.6×.
   - Both are tracked in issue #61.
+
+### Zheng *et al.* 2020: single-beam tweezer, frequency ratios
+
+**Citation.** Y. Zheng, L.-M. Zhou, Y. Dong, C.-W. Qiu, X.-D. Chen,
+G.-C. Guo, F.-W. Sun, "Robust optical-levitation-based metrology of
+nanoparticle's position and mass". Read from arXiv
+[2002.02320](https://arxiv.org/abs/2002.02320) v1, with its supplement; the
+journal version was not available here.
+
+**Stated (supplement p. 7–8 unless noted):**
+- 1064 nm, "linearly polarized along X axis";
+- a Nikon CFI LU Plan Fluor EPI 100X, "the numerical aperture (NA) of the
+  objective was 0.9";
+- "a Gaussian intensity distribution with a beam diameter of 4.5 mm which
+  was measured with a CCD camera beam profiler", and "The back pupil
+  diameter of the objective was 3.6 mm";
+- R = 75.4 ± 1.5 nm and ρ = 2.02 ± 0.10 g/cm³ (p. 4, Table II), from the gas
+  damping with an independently calibrated mass; air at 298 K (Table II);
+- "∼ 200 mW" of laser (p. 5), where it was measured not stated.
+
+**Inferred.** `filling` = 4.5 / 3.6 = 1.25, the diameter taken as the 1/e²
+one.
+
+**Measured.** "the natural frequency ratio between X, Y, and Z should be
+1.31 : 1 : 2.93, comparing with the experimental result 1.27 : 1 : 3.07"
+(p. 8). These are f_Y/f_i: with f_X = 135 450 Hz (Table II), f_Y = 172 kHz,
+where Fig. 6b's Y sweep lies.
+
+**Assumed.** n = 1.45 and the pressure (1e-3 Pa, the pressure of Fig. 6);
+the power is the stated 200 mW. Frequency ratios depend on none of them.
+
+**Comparison.** Only `frequency.y/frequency.x` and `frequency.y/frequency.z`:
+the power at the focus is not stated, and the ratios depend on the shape of
+the focus alone. The tolerance, ±5 %, is how far the paper's own model of an
+ideal objective (1.31, 2.93) misses its measurement; levtrap models the same
+ideal objective.
+
+**Result.** levtrap gives 1.302 (+2.5 %, agrees) and 2.859 (−6.9 %,
+disagrees): its axial frequency is too stiff, as for Jain 2016 (z/y 7–10 %
+high at any filling). In the dipole limit levtrap gives 1.311 and 2.879,
+next to the paper's model. Tracked in issue #70.
 
 ## Read, not verifiable
 
@@ -300,6 +347,100 @@ paper's Eq. 21 (inferred), so the mirror may differ between datasets.
 **Why it is not verified.** The trap frequencies cannot be predicted
 without the input beam and the focal power.
 
+### Kamba and Aikawa 2023: standing wave (read in C4)
+
+**Citation.** M. Kamba, K. Aikawa, "Revealing the velocity uncertainties
+of a levitated particle in the quantum ground state", arXiv
+[2306.16598](https://arxiv.org/abs/2306.16598) v2.
+
+**Stated.** 1550 nm; "a power of 176 mW is focused with an objective lens
+(NA= 0.85) to a beam waist of around 1.2 µm"; "Approximately a quarter of
+the incident power is retro-reflected ... to form a standing-wave optical
+trap"; "The reflected light has a beam waist of around 1.7 µm" (p. 5);
+R = 174(3) nm, m = 4.9(3) × 10⁻¹⁷ kg; 2 × 10⁻⁶ Pa; "{Ωx, Ωy} = 2π × {62, 74}
+kHz" and "Ωz/2π = 209 kHz" (p. 2).
+
+**Missing.** The power at the focus (the objective's transmission), the
+exact returned fraction, where the two foci sit and which antinode holds
+the particle, the polarisation axis.
+
+**Why it is not verified.** The axial frequency depends on all of those.
+It is still the best standing-wave paper found: unlike Yoneda 2017, both
+waists and the returned fraction are printed.
+
+### Bykov *et al.* 2019: linear Paul trap (read in C4)
+
+**Citation.** D. S. Bykov, P. Mestres, L. Dania, L. Schmöger, T. E. Northup,
+"Direct loading of nanoparticles under high vacuum into a Paul trap for
+levitodynamical experiments", arXiv
+[1905.04204](https://arxiv.org/abs/1905.04204) v2.
+
+**Stated (p. 2–3).** 2r0 = 1.8 mm, 2z0 = 2.8 mm; "ΩRF = 2π × 7.7 kHz";
+"VRF = 830 V is the RF drive amplitude"; "VDC = 130 V is the voltage on the
+end-cap electrodes"; kRF = 0.93, kDC = 0.38; silica R = (150 ± 20) nm,
+2.0 g/cm³; 7 × 10⁻³ mbar; "the charge is between 85 and 95 elementary
+charges"; damping (890 ± 50) Hz/mbar from the spectra.
+
+**Measured.** Spectra only (Fig. 2): about 700 Hz along the axis, and two
+radial peaks near 910 and 1038 Hz, read by eye.
+
+**Why it is not verified.**
+- The charge was found from the radial frequencies, so they cannot test
+  levtrap.
+- The axial frequency could, but the printed end-cap term (Eq. 2) and the
+  quoted charge disagree by a factor of two: with kDC as printed, levtrap's
+  κ_z is 0.19 and gives 571 Hz; with the factor that reproduces 85–95 e it is
+  0.38 and gives 807 Hz, against about 700 Hz.
+- No other Paul-trap paper read in C4 counts the charge independently and
+  prints the drive of the same run.
+
+### Dinter *et al.* 2024: parabolic mirror (read in C4)
+
+**Citation.** T. J. Dinter, R. Roberts, T. Volz, M. K. Schmidt, C. Laplane,
+"Three-Dimensional and Selective Displacement Sensing of a Levitated
+Nanoparticle via Spatial Mode Decomposition", arXiv
+[2409.08827](https://arxiv.org/abs/2409.08827) v4 (v1 and v2 hold a
+different dataset; do not mix them).
+
+**Stated.** 1550 nm, "a power of 160 mW"; the mirror's "focal length (1 mm)
+and radius (2 mm)"; "a filling factor of ≈ 1"; x polarised;
+"(Ωz, Ωx, Ωy)/2π ≈ (91, 111, 207) kHz"; ≈ 130 nm radius; 1.8 × 10⁻³ mbar.
+
+**Why it is not verified.** The beam diameter is given only as a filling
+factor of about one, undefined, with an iris in front of the mirror. levtrap's
+weak transverse frequency depends strongly on it: f_y/f_x is 1.95 with a 3 mm
+and 2.45 with a 4 mm beam (measured 1.86), while f_y/f_z stays at 2.14
+(measured 2.27).
+
+### Illetschek *et al.* 2026: WS₂ dark trap (read in C4)
+
+**Citation.** P. Illetschek, G. Fedorovich, A. Seredin, G. Tselikov,
+V. S. Volkov, N. Kiesel, M. Aspelmeyer, M. Petrov, A. V. Zasedatelev, "Dark
+Optical Trapping of Resonant Transition-Metal Dichalcogenide Particles",
+arXiv [2607.09896](https://arxiv.org/abs/2607.09896) v1. A computed trap
+(optical tweezers toolbox), not an experiment; the app's WS₂ preset follows it.
+
+**Stated (p. 2–4).** 1550 nm; an LG(0,0) beam of waist 1.59 µm and an LG(1,0)
+beam of 0.866 µm, "relative phase relation of π", both circularly polarised;
+"total power P0 = 0.8 W"; WS₂ n = 3.79, 7.50 g/cm³.
+
+**Read from Fig. 2.** Stable for radii of about 288.8–307.8 nm; z_eq/λ of
+0.114, 0.048, 0.049, 0.091 at 290, 295, 300, 305 nm; axial 17.9, 17.6, 14.6,
+10.6 and radial 25.5, 15.9, 10.3, 6.5 "Ω (kHz)" at the same radii.
+
+**Missing.** The power split between the two beams, the waist convention,
+whether "Ω (kHz)" is angular.
+
+**What levtrap gives.** With the preset's split (0.30 / 0.50 W, the one that
+darkens the focus) levtrap is stable from 291.2 to 305.7 nm, with z_eq three
+times the paper's and the radial frequency above the axial everywhere. A
+split of about 0.22 : 0.78 (LG00 : LG10) reproduces the stable range
+(288.9–307.6 nm) and the axial-to-radial ratios within 1.5 %, but every
+frequency is then 1.8 times the paper's under the Ω/2π reading (11.5 times
+under the angular one), and z_eq is 20–30 nm further downstream.
+
+**Why it is not verified.** The power split is not stated.
+
 ## Candidates for the open slots
 
 Seen in searches and not yet read:
@@ -311,3 +452,22 @@ Seen in searches and not yet read:
 - **Standing wave:** arXiv 1207.1567 (nanospheres in a standing wave and a
   cavity).
 - **Dual-beam:** arXiv 2208.02032 (a dual-beam fibre trap with silica).
+
+Read in C4 (#16) and not recorded, with what each lacks:
+- **Paul traps:** Bullier 2020 (1906.09580; no drive; a dumbbell),
+  Pontin 2020 (1907.06046), Dania 2021 (2007.04434; drive given as ranges),
+  Penny 2021 (2102.01060), Bykov 2023 (2210.07583; two particles),
+  Bykov 2025 (2403.02034; charge method not stated, a second, fast drive),
+  Dania 2022 (2112.14990), Penny 2023 (2111.03123), Bullier 2019
+  (1905.00884), Message 2025 (2501.03677), Nagornykh 2015 (1503.08170),
+  Delord 2018 (1801.07798). In each, the charge comes from the measured
+  frequencies or the drive of the measured run is missing.
+- **Dual beam / standing wave:** Ranjit 2016 (1603.02122) and 2015
+  (1503.08799), Harvey 2022 (2208.02032), Dana 2026 (2609.29829), Monteiro
+  2013 (1207.1567), Li 2011 (1101.1283), Kamba 2025 (2504.17944): power per
+  beam, return pass or focus positions missing.
+- **Tweezer:** Grinin 2025 (2504.18389; where the power is measured), Shen 2021
+  (2107.09659; a metalens), Tebbenjohanns 2019 (1812.09875; filling).
+- **Jain's own apparatus (#61):** Jain's thesis (ETH 2017) gives no beam
+  diameter or objective model; Frimmer 2016/2017 (1608.00998, 1704.02289)
+  report the same frequency ratios on a 100× NA 0.9 objective.

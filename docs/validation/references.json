@@ -4,7 +4,7 @@
   "entry_format": {
     "verified": {
       "id": "short slug, also the preset name",
-      "slot": "one of: single_beam_tweezer | counter_propagating_or_standing_wave | linear_paul | ring_paul | hybrid_paul_optical | parabolic_mirror",
+      "slot": "one of: single_beam_tweezer | counter_propagating_or_standing_wave | linear_paul | ring_paul | hybrid_paul_optical | parabolic_mirror | dark_trap",
       "citation": {
         "authors": "...",
         "title": "...",
@@ -15,7 +15,7 @@
       "setup": "a Setup file (docs/ARCHITECTURE.md section 4); must pass levtrap.setup.parse unless schema_gaps is non-empty (SI units: environment.pressure in Pa, not mbar)",
       "schema_gaps": "list of setup keys that the current schema does not support yet, written as ARCHITECTURE.md section 4 says the future schema will (e.g. focus.kind = 'parabolic_mirror')",
       "provenance": "map from setup key path to {value, source, flag}; flag is 'stated' (printed in the paper), 'inferred' (worked out from printed values, working in source) or 'assumed' (not in the paper; the value levtrap needs, and why it does not matter for the expected quantities); source names page/section/figure/table",
-      "expected": "list of {quantity, value, unit, source, tolerance_rel, why}; quantity is a name levtrap.validation.quantity reads (frequency.x|y|z|max|min, depth.kT|K, gas_damping, secular.exact|pseudopotential.<axis>, recoil_heating.<axis>, reheating.<axis>)",
+      "expected": "list of {quantity, value, unit, source, tolerance_rel, why}; quantity is a name levtrap.validation.quantity reads (frequency.x|y|z|max|min, depth.kT|K, gas_damping, secular.exact|pseudopotential.<axis>, recoil_heating.<axis>, reheating.<axis>, or a ratio of two of them, e.g. frequency.y/frequency.x, with unit '1')",
       "known_disagreement": "optional {issue: N}: the entry disagrees with levtrap beyond its tolerance and issue #N tracks it; tests/test_literature.py marks it xfail. Never widen the tolerance instead (C4, issue #16)",
       "agreement_note": "what agreement to expect and why"
     },
@@ -331,6 +331,151 @@
         "issue": 61
       },
       "agreement_note": "What the paper measures is the total reheating (Eq. 12: n(t) ≈ n0 + Γ t with the feedback off): recoil plus gas. At 3e-8 mbar levtrap's gas heating (N2) is 5.7e3 /s, about as large as its recoil (6.2e3 /s at its 210 kHz): the paper's assumption that gas heating is negligible does not hold for this rate. So the entry compares reheating.y. levtrap gives 11.9e3 /s against 20.9e3 measured; the rest follows the focus (the frequencies, #61) and the unstated gas."
+    },
+    {
+      "id": "zheng2020_ratios",
+      "slot": "single_beam_tweezer",
+      "citation": {
+        "authors": "Y. Zheng, L.-M. Zhou, Y. Dong, C.-W. Qiu, X.-D. Chen, G.-C. Guo, F.-W. Sun",
+        "title": "Robust optical-levitation-based metrology of nanoparticle's position and mass",
+        "journal": "arXiv:2002.02320 (2020)",
+        "doi": null,
+        "arxiv": "2002.02320",
+        "metadata_source": "title and authors from the arXiv PDF (v1, with its supplementary pages); the journal version was not available here and is not cited"
+      },
+      "schema_gaps": [],
+      "setup": {
+        "version": 1,
+        "particle": {
+          "radius": 7.54e-08,
+          "n": 1.45,
+          "k": 0.0,
+          "density": 2020.0
+        },
+        "environment": {
+          "pressure": 0.001,
+          "temperature": 298.0,
+          "gas": "air",
+          "medium_index": 1.0
+        },
+        "trap": {
+          "fields": [
+            {
+              "kind": "beam",
+              "id": "beam1",
+              "wavelength": 1.064e-06,
+              "power": 0.2,
+              "focus": {
+                "kind": "lens",
+                "NA": 0.9,
+                "filling": 1.25
+              },
+              "mode": {
+                "type": "lg",
+                "indices": [
+                  0,
+                  0
+                ]
+              },
+              "polarisation": "x"
+            }
+          ]
+        }
+      },
+      "provenance": {
+        "trap.fields[0].wavelength": {
+          "value": 1.064e-06,
+          "source": "arXiv:2002.02320v1 Suppl. p. 7: 'The laser wavelength was 1064 nm.'",
+          "flag": "stated"
+        },
+        "trap.fields[0].power": {
+          "value": 0.2,
+          "source": "arXiv:2002.02320v1 p. 5: 'the 1064 nm Gaussian beam laser (∼ 200 mW)'; where it was measured is not stated. Only frequency ratios are compared, and they do not depend on the power",
+          "flag": "stated"
+        },
+        "trap.fields[0].focus.NA": {
+          "value": 0.9,
+          "source": "arXiv:2002.02320v1 Suppl. p. 7: 'the numerical aperture (NA) of the objective was 0.9' (Nikon CFI LU Plan Fluor EPI 100X)",
+          "flag": "stated"
+        },
+        "trap.fields[0].focus.filling": {
+          "value": 1.25,
+          "source": "arXiv:2002.02320v1 Suppl. p. 7-8: 'a Gaussian intensity distribution with a beam diameter of 4.5 mm which was measured with a CCD camera beam profiler' and 'The back pupil diameter of the objective was 3.6 mm': 4.5 mm / 3.6 mm = 1.25 (the diameter is taken as the 1/e² one, which a Gaussian fit of a beam profiler gives)",
+          "flag": "inferred"
+        },
+        "trap.fields[0].mode": {
+          "value": "LG00",
+          "source": "arXiv:2002.02320v1 Suppl. p. 7: 'Gaussian intensity distribution'",
+          "flag": "stated"
+        },
+        "trap.fields[0].polarisation": {
+          "value": "x",
+          "source": "arXiv:2002.02320v1 Suppl. p. 7: 'the laser was linearly polarized along X axis'",
+          "flag": "stated"
+        },
+        "particle.radius": {
+          "value": 7.54e-08,
+          "source": "arXiv:2002.02320v1 p. 4 and Table II: 'R = 75.4 ± 1.5 nm' (from the gas damping with the calibrated mass)",
+          "flag": "stated"
+        },
+        "particle.density": {
+          "value": 2020.0,
+          "source": "arXiv:2002.02320v1 p. 4: 'the density was ρ = 2.02 ± 0.10 g/cm3'",
+          "flag": "stated"
+        },
+        "particle.n": {
+          "value": 1.45,
+          "source": "not stated; silica at 1064 nm. In the Rayleigh regime (k a = 0.45) the frequency ratios hardly depend on it",
+          "flag": "assumed"
+        },
+        "particle.k": {
+          "value": 0.0,
+          "source": "not stated; silica is taken as lossless",
+          "flag": "assumed"
+        },
+        "environment.temperature": {
+          "value": 298.0,
+          "source": "arXiv:2002.02320v1 Table II: 'T 298 K'",
+          "flag": "stated"
+        },
+        "environment.gas": {
+          "value": "air",
+          "source": "arXiv:2002.02320v1 Table II: 'mass of the air molecule'",
+          "flag": "stated"
+        },
+        "environment.pressure": {
+          "value": 0.001,
+          "source": "arXiv:2002.02320v1 Fig. 6: the frequency sweeps at 1e-5 mbar = 1e-3 Pa; at which pressure the ratios were taken is not stated. The conservative trap, and so its frequencies, do not depend on it",
+          "flag": "assumed"
+        },
+        "environment.medium_index": {
+          "value": 1.0,
+          "source": "vacuum chamber, pressures of mbar and below",
+          "flag": "inferred"
+        }
+      },
+      "expected": [
+        {
+          "quantity": "frequency.y/frequency.x",
+          "value": 1.27,
+          "unit": "1",
+          "source": "arXiv:2002.02320v1 Suppl. p. 8: 'the natural frequency ratio between X, Y, and Z should be 1.31 : 1 : 2.93, comparing with the experimental result 1.27 : 1 : 3.07.' The ratios are f_Y/f_i: with f_X = 135450 Hz (Table II), f_Y = 1.27 f_X = 172 kHz, which is where Fig. 6b's Y sweep lies",
+          "tolerance_rel": 0.05,
+          "why": "the paper's own model of an ideal NA 0.9 objective filled by the measured beam, the model levtrap shares, misses its measurement by 3 % (1.31 vs 1.27) and 5 % (2.93 vs 3.07); the paper puts this down to an objective designed for visible light and to the beam's shape. levtrap cannot be expected to do better than that model, so ±5 %"
+        },
+        {
+          "quantity": "frequency.y/frequency.z",
+          "value": 3.07,
+          "unit": "1",
+          "source": "arXiv:2002.02320v1 Suppl. p. 8 (as frequency.y/frequency.x)",
+          "tolerance_rel": 0.05,
+          "why": "as frequency.y/frequency.x"
+        }
+      ],
+      "known_disagreement": {
+        "issue": 70
+      },
+      "agreement_note": "Frequency ratios only: the power at the focus is not stated, but the ratios depend on the shape of the focus alone, which the paper pins down (NA, measured beam diameter, pupil diameter). Expect levtrap to land where the paper's own ideal-objective model does (1.31 and 2.93), within the ±5 % by which that model misses the measurement. levtrap gets f_y/f_x = 1.302 (+2.5 %) and f_y/f_z = 2.859 (−6.9 %): the axial frequency is too stiff (issue #70)."
     }
   ],
   "wanted": [
@@ -652,6 +797,230 @@
         "which spectral peak is which axis (the figures disagree)"
       ],
       "why_not_verified": "the input beam and the power at the focus are not stated, so the frequencies cannot be predicted"
+    },
+    {
+      "id": "kamba2023_standing_wave",
+      "slot": "counter_propagating_or_standing_wave",
+      "citation": {
+        "authors": "M. Kamba, K. Aikawa",
+        "title": "Revealing the velocity uncertainties of a levitated particle in the quantum ground state",
+        "journal": "arXiv:2306.16598 (2023)",
+        "doi": null,
+        "arxiv": "2306.16598",
+        "metadata_source": "arXiv PDF (v2); the journal version was not available here and is not cited"
+      },
+      "trap_type": "a focused beam partly retro-reflected into a standing wave, silica nanoparticle in ultra-high vacuum",
+      "skeleton": {
+        "particle": {
+          "material": "SiO2"
+        },
+        "trap": {
+          "fields": [
+            {
+              "kind": "beam",
+              "focus": {
+                "kind": "lens"
+              },
+              "id": "incident"
+            },
+            {
+              "kind": "beam",
+              "focus": {
+                "kind": "lens"
+              },
+              "id": "return",
+              "coherent_with": "incident"
+            }
+          ]
+        }
+      },
+      "schema_support": "current",
+      "schema_gaps": [],
+      "needed": [
+        "wavelength",
+        "power at the focus",
+        "waist of each pass",
+        "returned fraction of the power",
+        "focus positions of the two passes",
+        "polarisation",
+        "particle radius and mass"
+      ],
+      "expected_quantities": [
+        "trap frequencies along x, y, z"
+      ],
+      "agreement_note": "Both passes are round Gaussian foci, so levtrap's two coherent counter-propagating beams express the trap; the axial frequency depends on the returned power and on where the two foci sit.",
+      "read": "Gives the wavelength, the power before the objective, both waists, the returned fraction (as an approximate quarter), the particle's radius and mass, the pressure and all three measured frequencies.",
+      "missing": [
+        "power at the focus (the transmission of the objective)",
+        "the exact returned fraction",
+        "the focus positions of the two passes and which antinode holds the particle",
+        "the polarisation axis"
+      ],
+      "why_not_verified": "the power at the focus, the exact returned fraction and the relative focus positions are not stated, and the axial frequency depends on all three"
+    },
+    {
+      "id": "bykov2019_linear_paul",
+      "slot": "linear_paul",
+      "citation": {
+        "authors": "D. S. Bykov, P. Mestres, L. Dania, L. Schmöger, T. E. Northup",
+        "title": "Direct loading of nanoparticles under high vacuum into a Paul trap for levitodynamical experiments",
+        "journal": "arXiv:1905.04204 (2019)",
+        "doi": null,
+        "arxiv": "1905.04204",
+        "metadata_source": "arXiv PDF (v2); the journal version was not available here and is not cited"
+      },
+      "trap_type": "linear Paul trap with end caps, a charged silica nanoparticle",
+      "skeleton": {
+        "particle": {
+          "material": "SiO2"
+        },
+        "trap": {
+          "fields": [
+            {
+              "kind": "paul",
+              "geometry": "linear"
+            }
+          ]
+        }
+      },
+      "schema_support": "current",
+      "schema_gaps": [],
+      "needed": [
+        "RF amplitude and frequency",
+        "end-cap voltage",
+        "r0, z0 and both geometry factors",
+        "particle radius, density and charge"
+      ],
+      "expected_quantities": [
+        "secular frequencies along the axis and in the radial plane",
+        "gas damping per pressure"
+      ],
+      "agreement_note": "An ideal linear quadrupole with geometry factors; the paper's radial modes are split, which an ideal trap cannot give.",
+      "read": "Gives the full drive (RF amplitude and frequency, end-cap voltage), r0, z0, both geometry factors, the nominal radius and density, a charge range, and spectra from which the secular frequencies can be read; also the gas damping per pressure.",
+      "missing": [
+        "an independently counted charge: the charge comes from the radial frequencies, so they cannot test levtrap",
+        "printed secular frequencies (only read off the spectra)",
+        "a consistent axial geometry factor: the printed axial term and the quoted charge differ by a factor of two",
+        "the DC offset that splits the radial modes"
+      ],
+      "why_not_verified": "the charge was found from the radial frequencies (so they cannot test levtrap), the axial frequency is only read off a spectrum, and the paper's axial formula and its quoted charge disagree by a factor of two in the end-cap term"
+    },
+    {
+      "id": "dinter2024_parabolic_mirror",
+      "slot": "parabolic_mirror",
+      "citation": {
+        "authors": "T. J. Dinter, R. Roberts, T. Volz, M. K. Schmidt, C. Laplane",
+        "title": "Three-Dimensional and Selective Displacement Sensing of a Levitated Nanoparticle via Spatial Mode Decomposition",
+        "journal": "arXiv:2409.08827 (2024)",
+        "doi": null,
+        "arxiv": "2409.08827",
+        "metadata_source": "arXiv PDF (v4; v1 and v2 hold a different dataset); the journal version was not available here and is not cited"
+      },
+      "trap_type": "single beam focused by a deep parabolic mirror, silica nanoparticle",
+      "skeleton": {
+        "particle": {
+          "material": "SiO2"
+        },
+        "trap": {
+          "fields": [
+            {
+              "kind": "beam",
+              "focus": {
+                "kind": "parabolic_mirror"
+              }
+            }
+          ]
+        }
+      },
+      "schema_support": "current",
+      "schema_gaps": [],
+      "needed": [
+        "wavelength",
+        "power at the focus",
+        "mirror focal length, rim and hole radii",
+        "beam diameter on the mirror",
+        "polarisation",
+        "particle radius"
+      ],
+      "expected_quantities": [
+        "trap frequencies along x, y, z"
+      ],
+      "agreement_note": "focus.kind 'parabolic_mirror' models the mirror; the weak transverse frequency depends strongly on how much of the mirror the beam fills, so the beam diameter must be known as a 1/e² diameter.",
+      "read": "Gives the wavelength, a power, the mirror's focal length and radius, a filling factor of about one, the polarisation, an approximate radius and all three measured frequencies (v4).",
+      "missing": [
+        "the beam diameter as a 1/e² diameter (the filling factor is not defined, and an iris may clip the beam)",
+        "the power at the focus",
+        "the hole radius"
+      ],
+      "why_not_verified": "the beam diameter is given only as an undefined filling factor of about one, and levtrap's weak transverse frequency changes by a quarter between a 3 and a 4 mm beam"
+    },
+    {
+      "id": "illetschek2026_ws2_dark_trap",
+      "slot": "dark_trap",
+      "citation": {
+        "authors": "P. Illetschek, G. Fedorovich, A. Seredin, G. Tselikov, V. S. Volkov, N. Kiesel, M. Aspelmeyer, M. Petrov, A. V. Zasedatelev",
+        "title": "Dark Optical Trapping of Resonant Transition-Metal Dichalcogenide Particles",
+        "journal": "arXiv:2607.09896 (2026)",
+        "doi": null,
+        "arxiv": "2607.09896",
+        "metadata_source": "arXiv PDF (v1, with its supplementary material)"
+      },
+      "trap_type": "two coherent circularly polarised Laguerre-Gauss beams, opposite in phase, that hold a high-index WS2 sphere above a dark focus (a computed trap, not an experiment)",
+      "skeleton": {
+        "particle": {
+          "material": "WS2"
+        },
+        "trap": {
+          "fields": [
+            {
+              "kind": "beam",
+              "focus": {
+                "kind": "lens"
+              },
+              "id": "lg00",
+              "mode": {
+                "type": "lg"
+              }
+            },
+            {
+              "kind": "beam",
+              "focus": {
+                "kind": "lens"
+              },
+              "id": "lg10",
+              "mode": {
+                "type": "lg"
+              },
+              "coherent_with": "lg00"
+            }
+          ]
+        }
+      },
+      "schema_support": "current",
+      "schema_gaps": [],
+      "needed": [
+        "wavelength",
+        "waist of each beam",
+        "power of each beam",
+        "relative phase",
+        "polarisation",
+        "particle radius, index and density"
+      ],
+      "expected_quantities": [
+        "range of radii with a stable trap",
+        "equilibrium position along the beam",
+        "axial and radial frequencies",
+        "trap depths"
+      ],
+      "agreement_note": "The paper computes with the optical tweezers toolbox, as levtrap does; agreement should be close once the beams are the same.",
+      "read": "Gives the wavelength, both waists and modes, the relative phase, circular polarisation, the total power, the WS2 index and density, and (in figures) the stable range of radii, the equilibrium position and the frequencies against the radius.",
+      "missing": [
+        "the split of the power between the two beams",
+        "the waist convention",
+        "whether the frequencies are angular or not ('Ω (kHz)')",
+        "printed numbers (all results are figures)"
+      ],
+      "why_not_verified": "the power split between the two beams is not stated; with the split that best matches the paper's stable range of radii, levtrap's frequencies are 1.8 times the paper's under either reading of its frequency axis (references.md)"
     }
   ]
 }

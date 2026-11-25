@@ -1,7 +1,7 @@
 import type { Setup } from "../engine/types.ts";
 
 /** The trap types of docs/validation/references.json. */
-export type Slot = "single_beam_tweezer" | "counter_propagating_or_standing_wave" | "linear_paul" | "ring_paul" | "hybrid_paul_optical" | "parabolic_mirror";
+export type Slot = "single_beam_tweezer" | "counter_propagating_or_standing_wave" | "linear_paul" | "ring_paul" | "hybrid_paul_optical" | "parabolic_mirror" | "dark_trap";
 
 /** One literature setup (C3): checked against the paper ("verified", with its setup) or still to check ("wanted"). */
 export interface Reference {

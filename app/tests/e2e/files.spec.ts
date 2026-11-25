@@ -120,6 +120,8 @@ test("the picker says where each preset's values come from", async ({ page }) =>
   // the tweezer's paper is read (C3), but levtrap disagrees with it: named, with the issue, and not used (#61)
   await expect(page.getByTestId("preset-tweezer-source")).toContainText("levtrap disagrees with Jain et al., Phys. Rev. Lett. 116, 243601 (2016) (issue #61)");
   await expect(page.getByTestId("preset-counter-source")).toContainText("to be checked against Yoneda and Aikawa");
+  // the WS2 paper is read (C4), but its power split is not stated: still to check
+  await expect(page.getByTestId("preset-ws2-bottle-source")).toContainText("to be checked against Illetschek et al., arXiv:2607.09896");
   await expect(page.getByTestId("presets-sources").locator("a")).toHaveCount(4);
   await shot(page, "presets-sources-desktop-light");
 });

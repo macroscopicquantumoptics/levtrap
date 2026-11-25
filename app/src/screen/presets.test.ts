@@ -34,10 +34,11 @@ test("today every preset is example values, waiting for its paper or naming one 
     assert.ok(p.references.length > 0, `${p.id} names a paper to check`);
     assert.ok(p.references.every((r) => (r.status === "wanted" || r.disagrees) && r.slot === p.slot));
   }
-  // the tweezer's paper is read (C3) but levtrap disagrees with it (#61): named, not used
+  // the tweezer's papers are read (C3, C4) but levtrap disagrees with both (#61, #70): named, not used
   const tweezer = PRESETS.find((p) => p.id === "tweezer")!;
   assert.equal(shortCitation(tweezer.references[0]), "Jain et al., Phys. Rev. Lett. 116, 243601 (2016)");
-  assert.ok(tweezer.references.every((r) => r.status === "verified" && r.disagrees === 61));
+  assert.ok(tweezer.references.every((r) => r.status === "verified" && r.disagrees));
+  assert.deepEqual([...new Set(tweezer.references.map((r) => r.disagrees))], [61, 70]);
 });
 
 test("a verified paper's setup replaces the example of its trap type, and is cited", () => {
@@ -70,7 +71,8 @@ test("the WS2 bottle beam is illustrative, not validated, and its focus is dark"
   const ws2 = PRESETS.find((p) => p.id === "ws2-bottle")!;
   assert.ok(ws2.illustrative);
   assert.match(ws2.source, /^Illustrative, not validated: after Illetschek et al\., arXiv:2607\.09896/);
-  assert.deepEqual(ws2.references, []);
+  // its paper is read (C4) but does not state the power split: named, still to check
+  assert.deepEqual(ws2.references.map((r) => [r.id, r.status]), [["illetschek2026_ws2_dark_trap", "wanted"]]);
   const [b1, b2] = ws2.setup.trap.fields as BeamField[];
   // two coherent beams, opposite in phase, 0.8 W together
   assert.equal(b2.coherent_with, b1.id);

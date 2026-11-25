@@ -101,6 +101,55 @@ export const REFERENCES: Reference[] = [
     "disagrees": 61
   },
   {
+    "id": "zheng2020_ratios",
+    "slot": "single_beam_tweezer",
+    "status": "verified",
+    "authors": "Y. Zheng, L.-M. Zhou, Y. Dong, C.-W. Qiu, X.-D. Chen, G.-C. Guo, F.-W. Sun",
+    "title": "Robust optical-levitation-based metrology of nanoparticle's position and mass",
+    "journal": "arXiv:2002.02320 (2020)",
+    "doi": null,
+    "setup": {
+      "version": 1,
+      "particle": {
+        "radius": 7.54e-8,
+        "n": 1.45,
+        "k": 0,
+        "density": 2020
+      },
+      "environment": {
+        "pressure": 0.001,
+        "temperature": 298,
+        "gas": "air",
+        "medium_index": 1
+      },
+      "trap": {
+        "fields": [
+          {
+            "kind": "beam",
+            "id": "beam1",
+            "wavelength": 0.000001064,
+            "power": 0.2,
+            "focus": {
+              "kind": "lens",
+              "NA": 0.9,
+              "filling": 1.25
+            },
+            "mode": {
+              "type": "lg",
+              "indices": [
+                0,
+                0
+              ]
+            },
+            "polarisation": "x"
+          }
+        ]
+      }
+    },
+    "schema_gaps": [],
+    "disagrees": 70
+  },
+  {
     "id": "yoneda2017_standing_wave",
     "slot": "counter_propagating_or_standing_wave",
     "status": "wanted",
@@ -152,6 +201,42 @@ export const REFERENCES: Reference[] = [
     "authors": "J. Vovrosh et al. (full author list to be read from the paper)",
     "title": "Parametric feedback cooling of levitated optomechanics in a parabolic mirror trap",
     "journal": "J. Opt. Soc. Am. B 34, 1421-1428 (2017)",
+    "doi": null
+  },
+  {
+    "id": "kamba2023_standing_wave",
+    "slot": "counter_propagating_or_standing_wave",
+    "status": "wanted",
+    "authors": "M. Kamba, K. Aikawa",
+    "title": "Revealing the velocity uncertainties of a levitated particle in the quantum ground state",
+    "journal": "arXiv:2306.16598 (2023)",
+    "doi": null
+  },
+  {
+    "id": "bykov2019_linear_paul",
+    "slot": "linear_paul",
+    "status": "wanted",
+    "authors": "D. S. Bykov, P. Mestres, L. Dania, L. Schmöger, T. E. Northup",
+    "title": "Direct loading of nanoparticles under high vacuum into a Paul trap for levitodynamical experiments",
+    "journal": "arXiv:1905.04204 (2019)",
+    "doi": null
+  },
+  {
+    "id": "dinter2024_parabolic_mirror",
+    "slot": "parabolic_mirror",
+    "status": "wanted",
+    "authors": "T. J. Dinter, R. Roberts, T. Volz, M. K. Schmidt, C. Laplane",
+    "title": "Three-Dimensional and Selective Displacement Sensing of a Levitated Nanoparticle via Spatial Mode Decomposition",
+    "journal": "arXiv:2409.08827 (2024)",
+    "doi": null
+  },
+  {
+    "id": "illetschek2026_ws2_dark_trap",
+    "slot": "dark_trap",
+    "status": "wanted",
+    "authors": "P. Illetschek, G. Fedorovich, A. Seredin, G. Tselikov, V. S. Volkov, N. Kiesel, M. Aspelmeyer, M. Petrov, A. V. Zasedatelev",
+    "title": "Dark Optical Trapping of Resonant Transition-Metal Dichalcogenide Particles",
+    "journal": "arXiv:2607.09896 (2026)",
     "doi": null
   }
 ];
