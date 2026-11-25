@@ -43,7 +43,7 @@ test("the numbers of the second row explain themselves too", async ({ page }) =>
   await page.getByTestId("more-absorbed").click();
   const explain = page.getByTestId("explain");
   await expect(explain).toContainText("Absorbed power");
-  await expect(explain).toContainText("14.0 aW");
+  await expect(explain).toContainText("14.2 aW"); // the engine now; the recording was stale (re-recorded in #80)
   await expect(page.getByTestId("formula")).toHaveAttribute("data-formula", "absorbed-power");
   await page.keyboard.press("Escape");
   await page.getByTestId("more-damping").click();
