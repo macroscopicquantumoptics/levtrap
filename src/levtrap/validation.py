@@ -60,8 +60,15 @@ def quantity(result: dict, name: str) -> float | None:
     * ``secular.exact.<axis>`` / ``secular.pseudopotential.<axis>``: Paul secular frequencies [Hz];
     * ``recoil_heating.<axis>``: [phonons/s], photon recoil alone;
     * ``reheating.<axis>``: [phonons/s], recoil plus gas, what a reheating
-      measurement with the feedback off sees.
+      measurement with the feedback off sees;
+    * ``<quantity>/<quantity>``: a ratio, e.g. ``frequency.y/frequency.x``,
+      which a paper that does not state the power at the focus can still
+      test: frequency ratios depend on the shape of the focus only.
     """
+    if "/" in name:
+        top, _, bottom = name.partition("/")
+        a, b = quantity(result, top), quantity(result, bottom)
+        return None if a is None or not b else a / b
     head, _, tail = name.partition(".")
     if head == "frequency":
         freqs = {m["name"]: m["frequency"] for m in result["modes"] if m.get("frequency")}
@@ -93,7 +100,7 @@ def model_of(result: dict, name: str) -> str:
     """The model(s) behind a quantity of :func:`quantity`, as the Result names
     them, e.g. ``mie`` or ``dipole-pattern + knudsen-interpolation``. A Paul
     secular frequency is the model it names (``secular.exact.z``: ``mathieu``)."""
-    head, _, tail = name.partition(".")
+    head, _, tail = name.partition("/")[0].partition(".")
     if head == "secular":
         kind = tail.partition(".")[0]
         return "mathieu" if kind == "exact" else kind
@@ -202,7 +209,8 @@ def readme() -> str:
             known = e.get("known_disagreement")
             name = f"{e['id']} (#{known['issue']})" if known else e["id"]
             for c in compare_reference(e):
-                lines.append(f"| {name} | {c['quantity']} | {_fmt(c['reference'])} {c['unit']} | {_fmt(c['computed'])} {c['unit']} "
+                unit = "" if c["unit"] == "1" else f" {c['unit']}"  # a ratio has no unit
+                lines.append(f"| {name} | {c['quantity']} | {_fmt(c['reference'])}{unit} | {_fmt(c['computed'])}{unit} "
                              f"| {_fmt(c['ratio'])} | ±{_fmt(100 * c['tolerance_rel'], 2)} % | {_fmt(c['ok'])} | {c['model']} |")
         lines.append("")
     else:

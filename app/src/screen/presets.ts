@@ -25,8 +25,8 @@ export interface Preset {
   blurb: string;
   /** where the values come from */
   source: string;
-  /** the trap type, as references.json names it ("dark_trap" has no reference entry yet) */
-  slot: Slot | "dark_trap";
+  /** the trap type, as references.json names it */
+  slot: Slot;
   /** shown as an illustration only: not validated against any paper */
   illustrative?: boolean;
   /** the paper the values are from (verified), or the papers they will come from (wanted) */

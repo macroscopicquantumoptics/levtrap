@@ -65,7 +65,8 @@ def test_quantity_names():
          "rates": {"gas_damping": 3.0, "modes": [{"name": "x", "recoil_heating": 7.0, "reheating": 8.0}]},
          "paul": {"secular": {"exact": {"z": 9.0}}}}
     assert [V.quantity(r, q) for q in ("frequency.x", "frequency.max", "frequency.min", "depth.kT", "gas_damping",
-                                       "recoil_heating.x", "reheating.x", "secular.exact.z", "frequency.y")] == [2, 2, 1, 5, 3, 7, 8, 9, None]
+                                       "recoil_heating.x", "reheating.x", "secular.exact.z", "frequency.y",
+                                       "frequency.x/frequency.z", "frequency.x/frequency.y")] == [2, 2, 1, 5, 3, 7, 8, 9, None, 2, None]
     with pytest.raises(KeyError):
         V.quantity(r, "colour")
 
@@ -76,8 +77,8 @@ def test_each_quantity_names_its_own_model():
     r = {"models": [{"quantity": "modes", "model": "mie"}, {"quantity": "gas_damping", "model": "knudsen"},
                     {"quantity": "recoil_heating", "model": "dipole-pattern"}]}
     assert [V.model_of(r, q) for q in ("frequency.y", "depth.kT", "gas_damping", "recoil_heating.y", "reheating.y",
-                                       "secular.exact.z", "secular.pseudopotential.x")] == \
-        ["mie", "mie", "knudsen", "dipole-pattern", "dipole-pattern + knudsen", "mathieu", "pseudopotential"]
+                                       "secular.exact.z", "secular.pseudopotential.x", "frequency.y/frequency.z")] == \
+        ["mie", "mie", "knudsen", "dipole-pattern", "dipole-pattern + knudsen", "mathieu", "pseudopotential", "mie"]
 
 # --- cross-checks between models -----------------------------------------------------------
 

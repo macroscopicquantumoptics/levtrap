@@ -16,7 +16,7 @@ from levtrap.setup import parse, unknown_keys
 REFS = pathlib.Path(__file__).resolve().parents[1] / "docs" / "validation" / "references.json"
 DATA = json.loads(REFS.read_text())
 SLOTS = {"single_beam_tweezer", "counter_propagating_or_standing_wave", "linear_paul", "ring_paul",
-         "hybrid_paul_optical", "parabolic_mirror"}
+         "hybrid_paul_optical", "parabolic_mirror", "dark_trap"}
 
 
 def _numbers(x, path=""):
