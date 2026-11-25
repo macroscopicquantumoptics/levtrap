@@ -93,7 +93,8 @@ def _single_beam(b: dict, n_medium: float) -> Bsc:
     pol = _pol(b["polarisation"])
     filling = b["focus"].get("filling")
     mapping = b["focus"].get("mapping", "ott")
-    key = (btype, mode, round(angle, 12), pol, wavelength, n_medium, filling, mapping)
+    aberration = {k: float(v) for k, v in (b["focus"].get("aberration") or {}).items() if float(v)}
+    key = (btype, mode, round(angle, 12), pol, wavelength, n_medium, filling, mapping, tuple(sorted(aberration.items())))
     beam = _BEAM_CACHE.get(key)
     if beam is None:
         if len(_BEAM_CACHE) > 32:
@@ -105,7 +106,7 @@ def _single_beam(b: dict, n_medium: float) -> Bsc:
             beam = BscPmGauss(btype, mode, polarisation=pol, angle=angle, index_medium=n_medium,
                               wavelength0=wavelength, power=1.0, angular_scaling="sintheta",
                               apodisation="aplanatic", width_sin=float(filling) * math.sin(angle),
-                              truncation_angle=angle)
+                              truncation_angle=angle, aberration=aberration or None)
         elif mapping == "sine":
             # the Gaussian of this NA as its angular spectrum has it (#64): the paraxial beam mapped by
             # sin(theta), weighted by sqrt(cos theta) as an aplanatic lens does, so it fades to 0 at 90 degrees;

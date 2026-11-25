@@ -108,3 +108,71 @@ def test_spherical_aberration_softens_the_axis():
     aberrated = ratios_at_peak(0.09)
     assert aberrated[1] == pytest.approx(3.07, rel=0.01)
     assert abs(aberrated[0] / ideal[0] - 1) < 0.02  # the transverse ratio hardly moves
+
+
+# --- #83: an aberrated objective (focus.aberration) -------------------------------------------
+
+def richards_wolf_2d(points, filling, aberration):
+    """As :func:`richards_wolf`, for any pupil phase: the double integral over the pupil.
+    The ray towards k = (sin t cos p, sin t sin p, cos t) leaves the pupil at azimuth p + pi."""
+    from levtrap.bsc import wavefront
+    t = np.linspace(0, np.arcsin(NA), 1201)
+    p = np.linspace(0, 2 * np.pi, 129)[:-1]
+    T, P = np.meshgrid(t, p, indexing="ij")
+    s, c = np.sin(T), np.cos(T)
+    pupil = np.exp(-(s / (filling * NA)) ** 2) * np.sqrt(c) * np.exp(2j * np.pi * wavefront(aberration, s / NA, P + np.pi))
+    pol = np.stack([c * np.cos(P) ** 2 + np.sin(P) ** 2, (c - 1) * np.cos(P) * np.sin(P), -s * np.cos(P)])
+    wt = np.full(t.size, t[1] - t[0])
+    wt[[0, -1]] *= 0.5
+    w = pupil * s * wt[:, None]
+    out = []
+    for x, y, z in points:
+        e = w * np.exp(1j * K * (x * s * np.cos(P) + y * s * np.sin(P) + z * c))
+        out.append([np.sum(pol[i] * e) for i in range(3)])
+    return np.array(out)
+
+
+def aberrated_beam(filling, aberration):
+    s = copy.deepcopy(DEFAULT_SETUP)
+    s["trap"]["fields"][0].update(wavelength=WL, focus={"kind": "lens", "NA": NA, "filling": filling,
+                                                        "aberration": aberration})
+    return _single_beam(parse(s)["trap"]["fields"][0], 1.0)
+
+
+@pytest.mark.parametrize("aberration", [{"spherical": 0.09}, {"spherical": -0.05}, {"coma_x": 0.1}, {"coma_y": 0.1},
+                                        {"astigmatism_0": 0.1}, {"astigmatism_45": 0.1},
+                                        {"spherical": 0.05, "coma_x": 0.03, "astigmatism_45": -0.04}],
+                         ids=lambda a: ",".join(a))
+def test_an_aberrated_objective_is_the_richards_wolf_focus_with_that_pupil_phase(aberration):
+    u = np.linspace(-0.6e-6, 0.6e-6, 9)
+    z = 0 * u
+    pts = np.concatenate([np.stack([u, z, z], 1), np.stack([z, u, z], 1), np.stack([z, z, 2 * u], 1),
+                          np.stack([u, u, u], 1) / np.sqrt(3), np.stack([u, -u, 0.5 * u], 1)])
+    I_rw = intensity(richards_wolf_2d(pts, 1.25, aberration))
+    I_lt = intensity(aberrated_beam(1.25, aberration).em_field_xyz(pts))
+    np.testing.assert_allclose(I_lt, I_lt.max() / I_rw.max() * I_rw, atol=2e-5 * I_lt.max())
+
+
+def test_no_aberration_is_the_unaberrated_beam():
+    plain = levtrap_beam(1.25)
+    for zero in ({}, {"spherical": 0.0, "coma_x": 0.0}):
+        b = aberrated_beam(1.25, zero)
+        assert b.Nmax == plain.Nmax
+        np.testing.assert_array_equal(b.a, plain.a)
+        np.testing.assert_array_equal(b.b, plain.b)
+
+
+def test_solve_with_the_aberration_that_explains_zheng():
+    """#70: 0.09 waves of spherical aberration bring f_y/f_z of Zheng's objective to the
+    measured 3.07; a small sphere sits at the intensity peak, where the Richards-Wolf
+    curvature gives 3.059 (docs/validation/focus.md)."""
+    from levtrap.solve import solve
+    s = copy.deepcopy(DEFAULT_SETUP)
+    s["particle"] = dict(radius=20e-9, n=1.45, k=0.0, density=2020.0)
+    s["trap"]["fields"][0].update(wavelength=WL, power=0.2,
+                                  focus={"kind": "lens", "NA": NA, "filling": 1.25, "aberration": {"spherical": 0.09}})
+    r = solve(s)
+    f = {m["name"]: m["frequency"] for m in r["modes"]}
+    assert r["stable"]
+    assert f["y"] / f["z"] == pytest.approx(3.059, rel=0.01)
+    assert f["y"] / f["x"] == pytest.approx(1.298, rel=0.01)

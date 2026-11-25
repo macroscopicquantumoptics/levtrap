@@ -42,13 +42,20 @@ export interface Environment {
  * An ideal lens: give exactly one of NA, waist [m] or angle_deg. With NA,
  * `filling` makes it an aplanatic objective whose aperture (sin θ = NA / n)
  * the beam fills: its 1/e² radius is `filling` times the aperture's (#61).
- * Without it the focus is the Gaussian of that NA, with no aperture.
+ * Without it the focus is the Gaussian of that NA, with no aperture. A filled
+ * objective may carry an `aberration`.
  */
 export type IdealFocus = { kind?: "lens"; mapping?: "ott" | "sine" } & (
-  | { NA: number; filling?: number; waist?: never; angle_deg?: never }
-  | { waist: number; NA?: never; angle_deg?: never; filling?: never }
-  | { angle_deg: number; NA?: never; waist?: never; filling?: never }
+  | { NA: number; filling?: number; aberration?: Aberration; waist?: never; angle_deg?: never }
+  | { waist: number; NA?: never; angle_deg?: never; filling?: never; aberration?: never }
+  | { angle_deg: number; NA?: never; waist?: never; filling?: never; aberration?: never }
 );
+
+/**
+ * A filled objective's wavefront error (#83): Zernike terms (Noll-normalised)
+ * in waves rms over its pupil, rho = sin θ / NA, the azimuth from x.
+ */
+export type Aberration = Partial<Record<"spherical" | "astigmatism_0" | "astigmatism_45" | "coma_x" | "coma_y", number>>;
 
 /**
  * A real lens, ray traced (levtrap.lens): the beam is collimated,

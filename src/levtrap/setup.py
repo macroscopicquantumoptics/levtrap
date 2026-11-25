@@ -26,6 +26,10 @@ VERSION = 1
 
 GASES = ("N2", "He", "air")
 POLARISATIONS = ("x", "y", "circular+", "circular-")
+#: Zernike terms ``focus.aberration`` may name (#83; :data:`levtrap.bsc.ZERNIKE`), and their limit in waves rms.
+ABERRATIONS = ("spherical", "astigmatism_0", "astigmatism_45", "coma_x", "coma_y")
+ABERRATION_MAX = 1.0
+
 #: Real lenses a beam can be focused by (``focus.kind = "asphere"``, :mod:`levtrap.lens`).
 LENSES = ("354330-C",)
 
@@ -188,6 +192,16 @@ def _focus(f: dict, path: str) -> dict:
         if key != "NA":
             raise SetupError(f"{path}.filling", "needs the objective's NA (the aperture it fills); remove it or give NA")
         out["filling"] = _num(f["filling"], f"{path}.filling", exclusive_min=0, max=10)
+    if f.get("aberration") is not None:
+        # a real objective's wavefront error (#83): Zernike terms, rms waves, over its pupil (rho = sin theta / NA)
+        if out.get("filling") is None:
+            raise SetupError(f"{path}.aberration", "needs a filled objective (NA and filling): the pupil it is measured over")
+        ab = _obj(f["aberration"], f"{path}.aberration")
+        unknown = [k for k in ab if k not in ABERRATIONS]
+        if unknown:
+            raise SetupError(f"{path}.aberration.{unknown[0]}", f"unknown term; known: {', '.join(ABERRATIONS)}")
+        out["aberration"] = {k: _num(v, f"{path}.aberration.{k}", min=-ABERRATION_MAX, max=ABERRATION_MAX)
+                             for k, v in ab.items()}
     if f.get("mapping") is not None:
         # how the paraxial beam meets the far field (#64): OTT's tan(theta) (default) or the textbook sine
         out["mapping"] = _choice(f["mapping"], f"{path}.mapping", ("ott", "sine"))
@@ -357,7 +371,7 @@ _KNOWN = {
     "trap": {"fields"},
     "beam": {"kind", "id", "wavelength", "power", "focus", "mode", "polarisation", "direction",
              "position", "phase", "coherent_with"},
-    "focus": {"kind", "NA", "waist", "angle_deg", "filling", "mapping", "lens", "beam_diameter", "tilt_deg", "decentre",
+    "focus": {"kind", "NA", "waist", "angle_deg", "filling", "mapping", "aberration", "lens", "beam_diameter", "tilt_deg", "decentre",
               "focal_length", "rim_radius", "hole_radius"},
     "mode": {"type", "indices"},
     "paul": {"kind", "id", "geometry", "rf_voltage", "rf_frequency", "dc_voltage", "endcap_voltage",
