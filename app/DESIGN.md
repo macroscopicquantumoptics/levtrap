@@ -221,6 +221,7 @@ next. The reason each one is visible is in the last column.
 | NA and waist w₀ | visible, linked | Two descriptions of one focus: typing one updates the other (the waist through the mode's order). The setup keeps the one typed last. They set the trap's geometry, and with it every frequency. |
 | Half-angle | Advanced, linked | The third description of the same focus. |
 | Focus model, Filling | Advanced; Filling then visible in place of the waist | "Gaussian (OTT)" (the default: OTT's paraxial beam mapped by tan θ, as OTT-based papers use NA and waist), "Gaussian (sine)" (#64: mapped by sin θ as its angular spectrum is, with an aplanatic √cos θ; at small NA the textbook waist λ / (π NA), and a tighter focus than OTT's) or "Filled objective" (#61): an aplanatic objective of that NA whose back aperture the beam fills, the filling being the beam's 1/e² radius over the aperture's. Papers state an objective's NA, rarely how it was filled; the trap softens as the filling falls, most along the beam. |
+| Aberration (#83) | Advanced, for a filled objective only: spherical, astigmatism 0° / 45°, coma x / y, each in waves rms, between −1 and 1; the fold's summary names the nonzero ones | A real objective's wavefront error over its pupil (Zernike). Spherical aberration softens the trap most along the beam: about 0.085 λ rms, just past the Maréchal limit 0.07, brings a 100× NA 0.9 objective to the measured frequency ratios (docs/validation/focus.md, #70). Kept through edits of the NA and the filling; dropped with another focus model. |
 
 **Paul trap**
 
