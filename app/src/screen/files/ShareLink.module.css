@@ -1,0 +1,59 @@
+/*
+ * The share link shown in place of the clipboard (#74): over the results,
+ * under the scene, so it covers none of the scene's labels; the stage gives
+ * it the room and the scene refits.
+ */
+.share {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin-bottom: 8px;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.text,
+.hint {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  color: var(--text-muted);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* the link scrolls inside the field, never the screen */
+.field {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--scene);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.field:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}

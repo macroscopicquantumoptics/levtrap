@@ -14,6 +14,7 @@ import { DEFAULT_PRESET, presetById, presetForSetup } from "./presets.ts";
 import { Scene } from "./Scene.tsx";
 import { restoreSetup, saveSetup, type Restored } from "./autosave.ts";
 import { fileActions, type Notice } from "./files/actions.ts";
+import { ShareLink } from "./files/ShareLink.tsx";
 import { PythonDialog } from "./files/PythonDialog.tsx";
 import { pythonSnippet } from "./files/python.ts";
 import { readLinkFragment } from "./files/setupText.ts";
@@ -213,7 +214,7 @@ function ScreenBody({ engine }: ScreenProps) {
         )}
       </div>
 
-      {notice && (
+      {notice && !notice.link && (
         <div className={styles.notice} data-tone={notice.tone} role="status" data-testid={notice.testId}>
           <p>{notice.text}</p>
           <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss">
@@ -245,6 +246,7 @@ function ScreenBody({ engine }: ScreenProps) {
       )}
 
       <div className={styles.dock}>
+        {notice?.link && <ShareLink link={notice.link} onClose={() => setNotice(null)} />}
         <Dock
           setup={setup}
           answer={answer}
