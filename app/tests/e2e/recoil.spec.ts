@@ -14,7 +14,9 @@ for (const scheme of ["light", "dark"] as Scheme[]) {
     await settled(page);
     await page.getByTestId("more").click();
     const recoil = page.getByTestId("more-recoil");
-    await expect(recoil).toContainText("Photon recoil Γ/Ω");
+    // the row's label is its <dt>; the button holds the three values, x · y · z
+    await expect(page.getByTestId("more-numbers")).toContainText("Photon recoil Γ/Ω");
+    await expect(recoil).toHaveText(/^[\d.]+ · [\d.]+ · [\d.]+$/);
     await recoil.click();
     const explain = page.getByTestId("explain");
     await expect(page.getByTestId("formula")).toHaveAttribute("data-formula", "recoil");

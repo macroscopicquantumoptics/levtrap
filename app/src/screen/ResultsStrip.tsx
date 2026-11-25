@@ -165,7 +165,7 @@ function Figure({ id, label, value, unit, also, open, onOpen, explain }: FigureP
   const close = useCallback(() => onOpen(false), [onOpen]);
   useDismiss(node, open, close);
   return (
-    <div className={styles.cell} ref={setNode}>
+    <div className={styles.cell} ref={setNode} data-open-end={opensLeftwards(node, open)}>
       <button
         type="button"
         className={styles.number}
@@ -194,6 +194,12 @@ function Figure({ id, label, value, unit, also, open, onOpen, explain }: FigureP
   );
 }
 
+/** An explanation (348 px) that would run past the window's right edge opens leftwards instead. */
+function opensLeftwards(node: HTMLElement | null, open: boolean): "" | undefined {
+  if (!open || !node || typeof window === "undefined") return undefined;
+  return node.getBoundingClientRect().left + 360 > window.innerWidth ? "" : undefined;
+}
+
 function Popover({ explain, onClose }: { explain: () => Explanation; onClose(): void }) {
   return (
     <Suspense fallback={null}>
@@ -217,7 +223,7 @@ function Pair({ id, label, value, explain, open, onOpen }: PairProps) {
   const close = useCallback(() => onOpen(false), [onOpen]);
   useDismiss(node, open, close);
   return (
-    <div className={styles.pair} ref={setNode}>
+    <div className={styles.pair} ref={setNode} data-open-end={opensLeftwards(node, open)}>
       <dt>{label}</dt>
       <dd>
         <button
