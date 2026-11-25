@@ -47,7 +47,7 @@ test("the counter beam of a circular beam turns the same way in the lab and make
 
 for (const scheme of ["light", "dark"] as const) {
   test(`Help has a folded Conventions section (${scheme})`, async ({ page }) => {
-    await open(page, "", "desktop", scheme);
+    await open(page, "preset=tweezer", "desktop", scheme);
     await page.getByTestId("help").click();
     const conventions = page.getByTestId("help-conventions");
     await expect(conventions).toBeVisible();
@@ -61,7 +61,7 @@ for (const scheme of ["light", "dark"] as const) {
 }
 
 test("the Conventions section fits a phone", async ({ page }) => {
-  await open(page, "", "phone");
+  await open(page, "preset=tweezer", "phone");
   await page.getByTestId("help").click();
   await page.getByTestId("help-conventions").locator("summary").click();
   await expect(page.getByTestId("help-conventions").locator("dt", { hasText: "Frames" })).toBeVisible();
