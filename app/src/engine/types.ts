@@ -230,8 +230,12 @@ export interface ModeRates {
   axis: Vec3;
   gas_heating: number | null;
   recoil_heating: number | null;
+  /** the scattered photons' part of recoil_heating */
   recoil_scattered: number | null;
+  /** the beam photons' part (plane-wave shot noise along the beam) */
   recoil_incident: number | null;
+  /** their cross term, -2 (u·e_in)(u·<n>): negative for forward scattering (#78) */
+  recoil_cross: number | null;
   /** gas + recoil */
   reheating: number | null;
   Q: number | null;
@@ -268,6 +272,9 @@ export interface Rates {
   recoil_heating: (number | null)[];
   reheating_phonons_per_s: (number | null)[];
   modes: ModeRates[];
+  /** direction moments of the scattered photons (lab frame) from the Mie pattern at the
+   * equilibrium; absent when the dipole pattern was used (#78) */
+  scattered_moments?: { mean: Vec3; second: [Vec3, Vec3, Vec3] };
   /** W */
   P_sca: number;
   P_abs: number;

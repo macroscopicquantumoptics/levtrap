@@ -29,6 +29,7 @@ const MODELS: Record<string, string> = {
   pseudopotential: "Pseudopotential approximation of the RF field",
   "knudsen-interpolation": "Knudsen-number interpolation from the free-molecular to the continuum limit",
   "dipole-pattern": "Photon recoil with the scattered light's dipole pattern",
+  "mie-pattern": "Photon recoil with the scattered light's Mie pattern",
 };
 
 const VALIDITY: Record<string, string> = { ok: "Valid here", approximate: "Approximate here" };
@@ -443,6 +444,50 @@ export function secondaryNumbers(result: Result, setup: Setup): Secondary[] {
         model: model(result, "recoil_heating"),
       }),
     });
+    // Γ_recoil/Ω, the number papers quote, split into scattered photons and beam photons (#78)
+    const omegaOf = (name: string) => {
+      const f = result.modes.find((m) => m.name === name)?.frequency;
+      return f ? 2 * Math.PI * f : null;
+    };
+    const perOmega = (v: number | null | undefined, name: string) => {
+      const om = omegaOf(name);
+      return v == null || om == null ? null : v / om;
+    };
+    const recoilRatio = r.modes.map((m) => perOmega(m.recoil_heating, m.name));
+    if (recoilRatio.some((v) => v != null)) {
+      const value = triple(recoilRatio, (v) => formatSci(v, 3));
+      const mean = r.scattered_moments?.mean;
+      out.push({
+        id: "recoil",
+        label: `Photon recoil Γ/Ω (${modeNames})`,
+        value,
+        explain: () => ({
+          title: "Photon recoil per oscillation",
+          value,
+          copy: recoilRatio.map((v) => (v == null ? "" : String(v))).join(", "),
+          formula: "recoil",
+          inputs: [
+            ...r.modes.flatMap((m) => {
+              const rows = [
+                { symbol: String.raw`\Gamma_{\mathrm{sca},${m.name}}/\Omega_{${m.name}}`, value: formatSci(perOmega(m.recoil_scattered, m.name), 3), note: `scattered photons, along ${m.name}` },
+                { symbol: String.raw`\Gamma_{\mathrm{beam},${m.name}}/\Omega_{${m.name}}`, value: formatSci(perOmega(m.recoil_incident, m.name), 3), note: `photons taken from the beam, along ${m.name}` },
+              ];
+              const cross = m.recoil_cross ?? 0;
+              if (m.recoil_heating != null && Math.abs(cross) > 1e-6 * Math.abs(m.recoil_heating)) {
+                rows.push({
+                  symbol: String.raw`\Gamma_{\times,${m.name}}/\Omega_{${m.name}}`,
+                  value: formatSci(perOmega(cross, m.name), 3),
+                  note: cross < 0 ? `forward scattering gives back part of the beam photon's kick, along ${m.name}` : `backward scattering adds to the beam photon's kick, along ${m.name}`,
+                });
+              }
+              return rows;
+            }),
+            ...(mean ? [{ symbol: String.raw`\langle \hat{n} \rangle`, value: mean.map((v) => formatNumber(Math.abs(v) < 1e-9 ? 0 : v, 3)).join(" · "), note: "mean direction of the scattered photons (x · y · z)" }] : []),
+          ],
+          model: model(result, "recoil_heating"),
+        }),
+      });
+    }
     const crossover = r.modes.map((m) => m.crossover_pressure);
     if (crossover.every((p) => p != null)) {
       const value = `${crossover.map((p) => toFieldText(p!, "pressure", "mbar", 2)).join(" · ")} mbar`;

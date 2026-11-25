@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { explainDepth, explainFrequency, secondaryNumbers } from "./explain.ts";
 import { PRESETS } from "./presets.ts";
 import { RECORDED } from "./recorded.ts";
+import { formatSci } from "../lib/format.ts";
 
 const tweezer = PRESETS.find((p) => p.id === "tweezer")!;
 const paul = PRESETS.find((p) => p.id === "paul-linear")!;
@@ -81,11 +82,11 @@ test("the depth is explained in joules, kelvin and per axis", () => {
 
 test("the second row: every number of a tweezer and of a Paul trap, explained", () => {
   const ids = (id: "tweezer" | "paul-linear") => secondaryNumbers(RECORDED[id]!, PRESETS.find((p) => p.id === id)!.setup).map((s) => s.id);
-  assert.deepEqual(ids("tweezer"), ["position", "stiffness", "mass", "scattered", "absorbed", "damping", "reheating", "crossover"]);
+  assert.deepEqual(ids("tweezer"), ["position", "stiffness", "mass", "scattered", "absorbed", "damping", "reheating", "recoil", "crossover"]);
   assert.deepEqual(ids("paul-linear"), ["position", "stiffness", "mass", "mathieu-q", "mathieu-a", "micromotion"]);
   const rows = secondaryNumbers(RECORDED.tweezer!, tweezer.setup);
   const row = (id: string) => rows.find((r) => r.id === id)!;
-  assert.equal(row("absorbed").value, "14.0 aW");
+  assert.equal(row("absorbed").value, "14.2 aW");
   assert.equal(row("scattered").explain().formula, "scattered-power");
   assert.equal(row("damping").explain().formula, "gas-damping");
   // the mass formula holds for the numbers shown
@@ -95,6 +96,28 @@ test("the second row: every number of a tweezer and of a Paul trap, explained", 
   const r = RECORDED["paul-linear"]!;
   const A = Math.abs(r.paul!.q.y * r.equilibrium![1]) / 2;
   assert.ok(Math.abs(A - r.paul!.micromotion![1]) < 1e-6 * A);
+});
+
+test("photon recoil per oscillation: Γ/Ω per mode, split into scattered photons, beam photons and their cross term (#78)", () => {
+  const result = RECORDED.tweezer!;
+  const recoil = secondaryNumbers(result, tweezer.setup).find((s) => s.id === "recoil")!;
+  const e = recoil.explain();
+  assert.equal(e.formula, "recoil");
+  assert.match(e.model!.name, /Mie pattern/);
+  const z = result.rates!.modes.find((m) => m.name === "z")!;
+  const Om = 2 * Math.PI * result.modes.find((m) => m.name === "z")!.frequency!;
+  // the shown Γ/Ω along z is the engine's recoil over Ω, and its parts add up to it (recorded to 7 figures)
+  assert.ok(Math.abs(z.recoil_scattered! + z.recoil_incident! + z.recoil_cross! - z.recoil_heating!) < 1e-6 * z.recoil_heating!);
+  assert.equal(recoil.value.split(" · ")[2], formatSci(z.recoil_heating! / Om, 3));
+  const symbols = e.inputs.map((i) => i.symbol);
+  for (const part of ["sca", "beam"]) assert.ok(symbols.includes(String.raw`\Gamma_{\mathrm{${part}},z}/\Omega_{z}`), part);
+  // along the beam the beam photons weigh 1 against the scattered photons' 2/5: about 2.5 times
+  const ratio = z.recoil_incident! / z.recoil_scattered!;
+  assert.ok(ratio > 2.4 && ratio < 2.6, `${ratio}`);
+  // a slightly forward pattern: the cross term is shown along z, and lowers the heating
+  assert.ok(symbols.includes(String.raw`\Gamma_{\times,z}/\Omega_{z}`));
+  assert.ok(!symbols.includes(String.raw`\Gamma_{\times,x}/\Omega_{x}`));
+  assert.ok(z.recoil_cross! < 0);
 });
 
 test("a real lens adds what it does to the focus: moved, clipped, the trap axis tilted", async () => {
