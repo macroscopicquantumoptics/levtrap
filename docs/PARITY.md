@@ -58,7 +58,7 @@ and the displacement spectrum with feedback cooling (E4,
 | Trap depth | In the app | The strip, in k_BT and K (D4). |
 | Q_sca, Q_abs (plane wave), size parameter | In the app | In the explanations of scattered and absorbed power (D4). |
 | Scattered and absorbed power at z_eq | In the app | More (D4). |
-| Γ/Ω (recoil heating over trap frequency) | In the app | Plots → Heating, as phonons/s and the oscillations before one phonon (D1, D5). |
+| Γ/Ω (recoil heating over trap frequency) | In the app | Plots → Heating, as phonons/s and the oscillations before one phonon (D1, D5); More → Photon recoil Γ/Ω, split into scattered and beam photons (#78). |
 | Mass | In the app | More (D4). |
 | N_max of beam and particle | Dropped | A convergence detail; it stays in the Result (`optical.Nmax`) and the results JSON (D6). |
 | Plot: force through the trap along x, y, z | In the app | Plots → Forces, along the eigen-axes (D5, #41). |

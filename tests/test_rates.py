@@ -1,9 +1,10 @@
-"""rates.py: gas damping limits, dipole recoil per axis, crossover pressure, the Result block.
+"""rates.py: gas damping limits, dipole and Mie recoil per axis, crossover pressure, the Result block.
 
 Reference values are analytic limits only (no literature numbers):
 * free-molecular: Epstein (1924) drag with diffuse reflection, written out here;
 * continuum: Stokes drag 6 pi eta R / m;
-* recoil: the electric-dipole radiation pattern integrated numerically here.
+* recoil: the electric-dipole radiation pattern integrated numerically here; the
+  Mie pattern of a small sphere reproduces it, one at a quadrupole resonance does not (#78).
 """
 
 import json
@@ -136,17 +137,21 @@ def test_result_rates_block(default):
         assert m["reheating"] == pytest.approx(m["gas_heating"] + m["recoil_heating"])
         assert m["Q"] == pytest.approx(Om / r["gas_damping"])
         assert m["coherent_oscillations"] == pytest.approx(Om * m["coherence_time"])
-        assert m["recoil_heating"] == pytest.approx(m["recoil_scattered"] + m["recoil_incident"])
-    # x-polarised beam along z: scattered recoil along x is half that along y (same P_sca)
+        assert m["recoil_heating"] == pytest.approx(m["recoil_scattered"] + m["recoil_incident"] + m["recoil_cross"])
+    # x-polarised beam along z: scattered recoil along x is half that along y (same P_sca); the
+    # 100 nm silica sphere is nearly a dipole, so its Mie pattern gives this to 1 % (#78)
     x, y, z = r["modes"]
     fx, fy = default["modes"][0]["frequency"], default["modes"][1]["frequency"]
-    assert x["recoil_scattered"] * fx == pytest.approx(y["recoil_scattered"] * fy / 2)
-    assert z["recoil_incident"] > 0 and x["recoil_incident"] == 0
+    assert x["recoil_scattered"] * fx == pytest.approx(y["recoil_scattered"] * fy / 2, rel=0.01)
+    assert z["recoil_incident"] > 0 and x["recoil_incident"] == pytest.approx(0, abs=1e-9 * z["recoil_incident"])
+    # slightly forward scattering (<n_z> > 0): the cross term lowers the heating along the beam only
+    assert z["recoil_cross"] < 0 and abs(x["recoil_cross"]) < 1e-9 * abs(z["recoil_cross"])
     assert r["P_sca"] == default["optical"]["P_sca"] and r["P_abs"] == default["optical"]["P_abs"]
+    np.testing.assert_allclose(r["scattered_moments"]["second"], rates.dipole_second_moment("x"), atol=0.004)
     models = {m["quantity"]: m for m in default["models"]}
     assert models["gas_damping"]["model"] == "knudsen-interpolation"
-    assert models["recoil_heating"]["model"] == "dipole-pattern"
-    assert models["recoil_heating"]["validity"] == "ok"  # small silica sphere: dipole scattering
+    assert models["recoil_heating"]["model"] == "mie-pattern"
+    assert models["recoil_heating"]["validity"] == "ok"
 
 
 def test_result_rates_vacuum_and_large_sphere():
@@ -156,9 +161,112 @@ def test_result_rates_vacuum_and_large_sphere():
     assert r["gas_damping"] == 0.0
     assert all(m["Q"] is None and m["gas_heating"] == 0.0 for m in r["modes"])
     assert all(m["reheating"] == m["recoil_heating"] > 0 for m in r["modes"])
+    # a large sphere is not a dipole, but its own Mie pattern is used (#78): no longer approximate
     s["particle"]["radius"] = 600e-9
-    models = {m["quantity"]: m for m in solve(s)["models"]}
-    assert models["recoil_heating"]["validity"] == "approximate"
+    big = solve(s)
+    models = {m["quantity"]: m for m in big["models"]}
+    assert models["recoil_heating"]["model"] == "mie-pattern"
+    assert models["recoil_heating"]["validity"] == "ok"
+    assert big["rates"]["scattered_moments"]["mean"][2] > 0.3  # strongly forward
+
+
+
+def test_a_coherent_standing_wave_flags_its_recoil():
+    """Two coherent opposing beams average their beam photons to about zero, so
+    the model drops their correlation with the scattered direction: approximate (#78).
+    Two incoherent opposing beams are each their own field: ok."""
+    s = json.loads(json.dumps(DEFAULT_SETUP))
+    s["particle"]["radius"] = 50e-9
+    b1 = s["trap"]["fields"][0]
+    b2 = dict(b1, id="beam2", direction=[0, 0, -1])
+    s["trap"]["fields"] = [b1, b2]
+    incoherent = {m["quantity"]: m for m in solve(s)["models"]}["recoil_heating"]
+    assert incoherent["validity"] == "ok"
+    b2["coherent_with"] = b1["id"]
+    coherent = {m["quantity"]: m for m in solve(s)["models"]}["recoil_heating"]
+    assert coherent["model"] == "mie-pattern" and coherent["validity"] == "approximate"
+    assert any("standing wave" in n for n in coherent["notes"])
+
+def test_rates_block_without_pattern_falls_back_to_the_dipole():
+    """Without a Mie pattern (a caller that passes none) the dipole pattern is used, and a
+    sphere whose electric dipole carries little of the scattered power is flagged (#78)."""
+    from levtrap.setup import parse
+    s = parse(DEFAULT_SETUP)
+    s["particle"].update(density=RHO)
+    modes = [dict(name=a, axis=list(v), frequency=1e5) for a, v in (("x", (1, 0, 0)), ("y", (0, 1, 0)), ("z", (0, 0, 1)))]
+    block, models = rates.rates_block(s, modes=modes, mass=M, P_sca=1e-9, P_abs=0.0, ed_fraction=0.5)
+    assert models[1]["model"] == "dipole-pattern" and models[1]["validity"] == "approximate"
+    assert any("electric dipole carries 50%" in n for n in models[1]["notes"])
+    assert "scattered_moments" not in block
+    x, y, z = block["modes"]
+    assert y["recoil_scattered"] == pytest.approx(2 * x["recoil_scattered"], rel=1e-12)
+    assert z["recoil_incident"] == pytest.approx(2.5 * z["recoil_scattered"], rel=1e-12)  # 1 against 2/5
+    assert z["recoil_cross"] == 0
+
+
+def test_cross_term_forward_and_backward():
+    """A photon scattered straight forward gives no kick: with <n> = e_in and <n n> = e_in e_in,
+    A_z = 1 + 1 - 2 = 0; straight back, A_z = 1 + 1 + 2 = 4 (#78)."""
+    P, wl, Om = 1e-4, 1064e-9, 2 * math.pi * 1e5
+    unit = 2 * math.pi * C / wl * P / (2 * M * C**2 * Om)
+    zz = np.diag([0.0, 0.0, 1.0])
+    fwd = rates.recoil_heating(P, wl, M, Om, (0, 0, 1), zz, scattered_mean=(0, 0, 1))
+    back = rates.recoil_heating(P, wl, M, Om, (0, 0, 1), zz, scattered_mean=(0, 0, -1))
+    assert fwd["total"] == pytest.approx(0, abs=1e-12 * unit)
+    assert back["total"] == pytest.approx(4 * unit, rel=1e-12)
+    assert back["cross"] == pytest.approx(2 * unit, rel=1e-12)
+    # an axis normal to the beam has no cross term
+    assert rates.recoil_heating(P, wl, M, Om, (1, 0, 0), zz, scattered_mean=(0, 0, 1))["cross"] == 0
+
+
+def test_recoil_tensors_two_beams():
+    """Two incoherent fields along +z and -z: the beam term along z stays 1, the cross terms of
+    their forward-peaked patterns add as e_f <n>_f, both negative (#78)."""
+    S = np.diag([0.1, 0.1, 0.8])
+    parts = [dict(P_sca=1.0, mean=(0, 0, 0.5), second=S, beams=[((0, 0, 1), 1.0)]),
+             dict(P_sca=3.0, mean=(0, 0, -0.5), second=S, beams=[((0, 0, -1), 1.0)])]
+    t = rates.recoil_tensors(parts)
+    np.testing.assert_allclose(t["beam"], np.diag([0, 0, 1.0]), atol=1e-15)
+    np.testing.assert_allclose(t["cross"], np.diag([0, 0, 0.5]), atol=1e-15)
+    np.testing.assert_allclose(t["mean"], [0, 0, -0.25], atol=1e-15)
+    np.testing.assert_allclose(t["second"], S, atol=1e-15)
+
+
+def _scattered_moments(radius, n):
+    """<n> and <n n> of the Mie pattern for a sphere at the focus of an x-polarised NA 0.8 beam."""
+    from levtrap.api import _single_beam, _tmatrix
+    from levtrap.fields import OpticalField
+    beam = _single_beam(dict(wavelength=1.064e-6, mode=dict(type="lg", indices=[0, 0]),
+                             focus=dict(kind="lens", NA=0.8), polarisation="x"), 1.0)
+    T, _ = _tmatrix(dict(radius=radius, n=n, k=0.0), 1.064e-6, 1.0)
+    return OpticalField(beam, T, 1.0).scattering(np.zeros(3))
+
+
+def test_mie_pattern_of_a_small_sphere_is_the_dipole_one():
+    """A 50 nm silica sphere scatters as an electric dipole: its Mie <n n> is
+    diag(1/5, 2/5, 2/5) to well within 1 % and <n> is nearly 0 (#78)."""
+    sc = _scattered_moments(50e-9, 1.45)
+    np.testing.assert_allclose(sc["second"], rates.dipole_second_moment("x"), atol=0.004)
+    assert np.trace(sc["second"]) == pytest.approx(1, rel=1e-9)
+    assert np.linalg.norm(sc["mean"]) < 0.02
+
+
+def test_mie_pattern_at_a_quadrupole_resonance_is_not_the_dipole_one():
+    """A 210 nm sphere of index 3.5 at 1064 nm, at its magnetic quadrupole resonance (73 % of the
+    scattered power), scatters nothing like a dipole: <n n> is off by more than 0.1 and the
+    pattern is forward-peaked, so the recoil along y and z differs from the dipole estimate (#78)."""
+    from levtrap.derived import mie_efficiencies
+    q = mie_efficiencies(210e-9, 1.064e-6, 3.5)
+    assert q["Qsca_multipoles"]["MQ"] / q["Qsca"] > 0.7
+    sc = _scattered_moments(210e-9, 3.5)
+    assert np.trace(sc["second"]) == pytest.approx(1, rel=1e-9)
+    assert np.abs(sc["second"] - rates.dipole_second_moment("x")).max() > 0.1
+    assert sc["mean"][2] > 0.1
+    P, wl, Om = 1e-4, 1064e-9, 2 * math.pi * 1e5
+    for ax in ((0, 1, 0), (0, 0, 1)):
+        mie = rates.recoil_heating(P, wl, M, Om, ax, sc["second"], scattered_mean=sc["mean"])["total"]
+        dip = rates.recoil_heating(P, wl, M, Om, ax, rates.dipole_second_moment("x"))["total"]
+        assert abs(mie / dip - 1) > 0.1
 
 
 def test_gas_damping_is_jain_2016_eq_7_in_ultrahigh_vacuum():

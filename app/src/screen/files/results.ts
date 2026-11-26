@@ -66,6 +66,10 @@ export function resultRows(result: Result): Row[] {
     add("gas damping", "", result.rates.gas_damping, "1/s", modelOf(result, "gas_damping"));
     const recoil = modelOf(result, "recoil_heating");
     for (const m of result.rates.modes) add("reheating", m.name, m.reheating, "phonons/s", recoil);
+    for (const m of result.rates.modes) add("recoil heating", m.name, m.recoil_heating, "phonons/s", recoil);
+    for (const m of result.rates.modes) add("recoil heating by scattered photons", m.name, m.recoil_scattered, "phonons/s", recoil);
+    for (const m of result.rates.modes) add("recoil heating by beam photons", m.name, m.recoil_incident, "phonons/s", recoil);
+    for (const m of result.rates.modes) add("recoil heating cross term", m.name, m.recoil_cross, "phonons/s", recoil);
     for (const m of result.rates.modes) add("recoil exceeds gas heating below", m.name, m.crossover_pressure, "Pa", recoil);
   }
   if (result.pattern) patternRows(result.pattern, add, modelOf(result, "pattern") || "mie (ok)");

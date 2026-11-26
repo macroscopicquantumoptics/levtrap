@@ -155,7 +155,12 @@ class OpticalField:
 
     def scattering(self, r) -> dict:
         """Scattered and absorbed power [W] with the particle at r, and the
-        scattered power split per multipole [W] (``P_sca_multipoles``, #80)."""
+        scattered power split per multipole [W] (``P_sca_multipoles``, #80), and the
+        direction moments of the scattered photons in the lab frame: ``mean``
+        <n> and ``second`` <n n^T> of the Mie far field weighted by dP_sca/dOmega
+        (:func:`levtrap.pattern.direction_moments`), for the recoil heating (#78).
+        A direction n' in the beam's frame is R n' in the lab."""
+        from ..pattern import direction_moments
         r = self._own(r)[0]
         # the whole beam: the fractions below are of the translated beam's power, high orders included
         b = self.beam.translate_xyz(r) if np.any(r != 0) else self.beam
@@ -164,8 +169,13 @@ class OpticalField:
         if abs(pb["abs"]) < 1e-12:  # round-off for (nearly) lossless particles
             pb["abs"] = max(pb["abs"], 0.0)
         P = self.beam.power
-        return dict(P_sca=pb["sca"] * P, P_abs=pb["abs"] * P,
-                    P_sca_multipoles={k: v * P for k, v in pb["sca_multipoles"].items()})
+        out = dict(P_sca=pb["sca"] * P, P_abs=pb["abs"] * P,
+                   P_sca_multipoles={k: v * P for k, v in pb["sca_multipoles"].items()})
+        if pb["sca"] > 0:
+            mom = direction_moments(sbeam if sbeam.type == "scattered" else sbeam.scattered_field(b))
+            out["mean"] = self.R @ np.real(mom["mean"])
+            out["second"] = self.R @ np.real(mom["second"]) @ self.R.T
+        return out
 
     def model(self) -> ModelInfo:
         return ModelInfo("mie")

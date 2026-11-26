@@ -262,8 +262,11 @@ Each frequency carries a short line in its axis colour; the text itself
 stays in the text colour. The depth is in k_BT, with the same in kelvin
 beside it ("386 k_BT 116 kK"). **More** opens the numbers behind the
 headline ones: position, stiffness, mass, scattered and absorbed power, gas
-damping, reheating and the pressure below which recoil wins, and for a Paul
-trap q, a and the micromotion amplitude. Each of them explains itself too.
+damping, reheating, the photon recoil per oscillation Γ/Ω (the number papers
+quote; its explanation splits it into scattered photons, beam photons and
+their cross term, from the scattered light's Mie pattern, #78) and the
+pressure below which recoil wins, and for a Paul trap q, a and the
+micromotion amplitude. Each of them explains itself too.
 "Scattered by multipole" gives the largest shares of the scattered power
 ("MQ 61.5 % · MD 20.6 % · EQ 15.2 %" for the WS₂ dark trap): the beams' own
 split at the equilibrium, and in its explanation each multipole's power
