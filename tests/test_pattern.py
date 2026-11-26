@@ -485,9 +485,17 @@ def test_trapping_lens_ignores_beams_going_the_other_way():
     assert lens["NA"] == pytest.approx(0.9) and lens["fields"] == [0, 3] and lens["field"] == 3
 
 
-def test_trapping_lens_NA_is_at_most_the_medium_index():
-    """#97: a convergence angle given in degrees can be up to 90; the NA
-    n sin(angle) never exceeds n_medium."""
+def test_beam_NA_from_a_convergence_angle():
+    """#97: the NA of a beam given by its half-angle is n sin(angle). The
+    setup allows angles up to 90 degrees, so it is at most n_medium by
+    construction (there is no clamp to test)."""
     from levtrap.solve import beam_NA
     assert beam_NA(_beam(focus={"kind": "lens", "angle_deg": 90}), 1.33) == pytest.approx(1.33)
     assert beam_NA(_beam(focus={"kind": "lens", "angle_deg": 30}), 1.0) == pytest.approx(0.5)
+    # what keeps it at most n_medium: the setup refuses wider angles, the
+    # angle mapping an NA at or above the medium index
+    from levtrap.setup import SetupError
+    with pytest.raises(SetupError):
+        _pattern_at(_with_beams(_beam(id="a", focus={"kind": "lens", "angle_deg": 91})))
+    with pytest.raises(ValueError):
+        beam_NA(_beam(focus={"kind": "lens", "NA": 1.0}), 1.0)

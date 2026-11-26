@@ -714,13 +714,16 @@ def pattern_result(s: dict, r, optical=None) -> dict:
 
 def beam_NA(b: dict, n_medium: float) -> float:
     """Numerical aperture of a beam's focusing optic: ``n_medium sin(convergence
-    angle)``, from its focus block (NA, angle or waist), at most ``n_medium``."""
+    angle)``, from its focus block (NA, angle or waist). It is at most
+    ``n_medium`` by construction: an NA at or above ``n_medium`` is refused,
+    the setup allows angles up to 90 degrees, and a waist gives an angle
+    below 90."""
     from .api import _beam_angle
 
     m = [int(v) for v in b["mode"]["indices"]]
     order = (2 * m[0] + abs(m[1])) if b["mode"]["type"] == "lg" else (m[0] + m[1])
     angle = _beam_angle(b["focus"], float(b["wavelength"]), n_medium, order)
-    return min(n_medium, n_medium * math.sin(min(angle, math.pi / 2)))
+    return n_medium * math.sin(angle)
 
 
 def trap_lens(s: dict) -> dict:

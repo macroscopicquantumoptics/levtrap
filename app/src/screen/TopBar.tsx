@@ -280,7 +280,7 @@ function Conventions() {
         <dt>Trapping lens</dt>
         <dd>
           The lens the first beam goes through. Beams going the same way as the first (the same direction, not merely the same axis) go through
-          it too, so its NA is the largest of theirs, at most n. The Radiation tab reads its NA from there.
+          it too, so its NA is the largest of theirs, at most n. The Radiation tab and the information sweep use this NA.
         </dd>
         <dt>Depth</dt>
         <dd>

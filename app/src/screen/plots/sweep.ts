@@ -320,7 +320,8 @@ export function naLadder(nMedium: number): number[] {
  * The fraction of the position information a lens collects (Tebbenjohanns et
  * al., PRA 100, 043821), at each swept value (#79): read from the pattern
  * block as the Radiation tab does, at the trapping lens's NA (`at_trap_NA`,
- * which follows a swept lens NA) or at one NA of the engine's ladder; both
+ * which follows an NA sweep of the widest beam going the first beam's way)
+ * or at one NA of the engine's ladder; both
  * are the engine's own numbers, not interpolated. "Forward + backward" adds
  * the two lenses (their cones do not overlap, #75). The side lenses (#97)
  * read the ladder only: at the trapping lens's NA they have no value.
