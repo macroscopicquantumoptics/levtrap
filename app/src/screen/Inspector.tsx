@@ -4,6 +4,7 @@ import { Fragment, useState, type ReactNode } from "react";
 import type { Engine } from "../engine/client.ts";
 import { alignedSetup, compare, misaligned } from "./aligned.ts";
 import { darkened, darkFocus, type DarkFocus } from "./darken.ts";
+import { coherentGroups, groupPower, withGroupPower } from "./plots/sweep.ts";
 import { useAnswer } from "./hooks.ts";
 import type { Aberration, AsphereFocus, BeamField, MirrorFocus, Field, Gas, GravityField, PaulField, Polarisation, Result, Setup, Vec3 } from "../engine/types.ts";
 import { ABERRATION_MAX } from "../engine/validate.ts";
@@ -309,6 +310,10 @@ function BeamEditor({ setup, beam, index, prefix, onEdit, result }: EditorProps 
   };
   // the split of a coherent pair that darkens the focus (#79): the engine's, from the latest result
   const dark = partner ? darkFocus(setup, result, index) : null;
+  // the whole coherent group's power (#97): editing it scales every beam of the group, keeping their split
+  const group = coherentGroups(setup).find((g) => g.includes(index)) ?? [index];
+  const groupNames = group.map(nameOf);
+  const together = `${groupNames.slice(0, -1).join(", ")} and ${groupNames[groupNames.length - 1]}`;
 
   const mode = beam.mode ?? {};
   const family = modeLabel(beam) === "Gaussian" ? "gaussian" : (mode.type ?? "lg");
@@ -378,6 +383,18 @@ function BeamEditor({ setup, beam, index, prefix, onEdit, result }: EditorProps 
                 Multiplies this beam&apos;s field by e<sup>iφ</sup> at its own focus, in its own frame.
               </>
             }
+          />
+        )}
+        {group.length > 1 && (
+          <NumberField
+            id={`${prefix}-group-power`}
+            label="Coherent power"
+            value={groupPower(setup, group)}
+            quantity="power"
+            unit="mW"
+            check={notNegative}
+            onCommit={(v) => onEdit(withGroupPower(setup, group, v))}
+            note={`${together} together. A new total scales each beam's power, keeping their split.`}
           />
         )}
       </Fields>

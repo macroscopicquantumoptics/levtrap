@@ -59,6 +59,23 @@ export function withSplit(setup: Setup, [first, second]: readonly [number, numbe
   return withField<BeamField>(s, second, { power: fraction * total });
 }
 
+/** The total power of a group of beams (indices into trap.fields), e.g. a coherent group [W] (#97). */
+export function groupPower(setup: Setup, group: readonly number[]): number {
+  return group.reduce((sum, i) => sum + (setup.trap.fields[i] as BeamField).power, 0);
+}
+
+/**
+ * A group's beams scaled to a new total power, keeping their split (#97).
+ * A group with no power yet gets the total split evenly.
+ */
+export function withGroupPower(setup: Setup, group: readonly number[], total: number): Setup {
+  const now = groupPower(setup, group);
+  return group.reduce(
+    (s, i) => withField<BeamField>(s, i, { power: now > 0 ? (total * (setup.trap.fields[i] as BeamField).power) / now : total / group.length }),
+    setup,
+  );
+}
+
 /** The fraction of a coherent pair's power in its second beam; NaN when the pair has none. */
 export function splitOf(setup: Setup, [first, second]: readonly [number, number]): number {
   const [a, b] = [first, second].map((i) => (setup.trap.fields[i] as BeamField).power);

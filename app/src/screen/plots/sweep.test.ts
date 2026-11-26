@@ -8,6 +8,7 @@ import {
   coherentGroups,
   defaultRange,
   followFrom,
+  groupPower,
   idealNA,
   INFO_DIRECTIONS,
   infoCollector,
@@ -19,6 +20,7 @@ import {
   sweepParams,
   sweepValues,
   unstableRuns,
+  withGroupPower,
   withLens,
   type InfoChoice,
 } from "./sweep.ts";
@@ -213,6 +215,20 @@ test("the coherent groups follow coherent_with through other beams, in setup ord
   const ids = sweepParams(three).map((p) => p.id);
   // a group of three has phases but no single split
   assert.ok(ids.includes("beam2-phase") && ids.includes("beam3-phase") && !ids.some((id) => id.endsWith("-split")));
+});
+
+test("a coherent group's total power scales its beams, keeping their split (#97)", () => {
+  const s = preset("ws2-bottle");
+  assert.ok(Math.abs(groupPower(s, [0, 1]) - 0.8) < 1e-12);
+  const t = withGroupPower(s, [0, 1], 1.2);
+  const [a, b] = (t.trap.fields as BeamField[]).map((f) => f.power);
+  assert.ok(Math.abs(a + b - 1.2) < 1e-12);
+  assert.ok(Math.abs(b / (a + b) - 0.5034 / 0.8) < 1e-12);
+  // nothing else changes
+  assert.deepEqual({ ...(t.trap.fields[1] as BeamField), power: 0.5034 }, s.trap.fields[1]);
+  // a group with no power yet: split evenly
+  const dark = withGroupPower(s, [0, 1], 0);
+  assert.deepEqual((withGroupPower(dark, [0, 1], 0.6).trap.fields as BeamField[]).map((f) => f.power), [0.3, 0.3]);
 });
 
 test("the split moves power between the pair at a fixed total, and the phase reads and writes the beam (#79)", () => {
