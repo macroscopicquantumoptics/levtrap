@@ -1,5 +1,6 @@
 "use client";
 
+import { engineMismatch } from "../engine/build.ts";
 import type { Engine, EngineStatus } from "../engine/client.ts";
 import type { Pattern, Result, Setup } from "../engine/types.ts";
 import { formatSI } from "../lib/format.ts";
@@ -75,6 +76,7 @@ export function Dock({ setup, answer, pending, status, tab, onTab, expanded, onT
             );
           })}
         </div>
+        <StaleEngine status={status} />
         <EngineLine status={status} answer={answer} />
       </div>
       {tab && (
@@ -88,6 +90,27 @@ export function Dock({ setup, answer, pending, status, tab, onTab, expanded, onT
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * The page and the engine it loaded come from different builds: a page from
+ * before a deploy (its HTML still cached) with the engine from after it (#96).
+ * A reload brings the page up to date.
+ */
+/** The engine build this page was built with ("" when no wheel was staged at build time). */
+const APP_ENGINE_BUILD: string = process.env.NEXT_PUBLIC_ENGINE_BUILD ?? "";
+
+function StaleEngine({ status }: { status: EngineStatus | null }) {
+  const build = status?.state === "ready" ? status.versions.build : undefined;
+  if (!engineMismatch(APP_ENGINE_BUILD, build)) return null;
+  return (
+    <p className={styles.stale} role="status" data-testid="engine-stale" title={`page built with engine ${APP_ENGINE_BUILD}, engine loaded ${build}`}>
+      levtrap was updated.
+      <button type="button" className={`${ui.button} ${styles.reload}`} data-testid="engine-reload" onClick={() => window.location.reload()}>
+        Reload
+      </button>
+    </p>
   );
 }
 

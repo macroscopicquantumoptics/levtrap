@@ -45,7 +45,7 @@ test("theme toggle switches and remembers the theme", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
 
-// The real thing: Pyodide from the CDN and the wheel from public/wheels/
+// The real thing: Pyodide from the CDN and the wheel from public/wheels/<build>/
 // (stage it with `npm run wheel` before building). Slow and needs the
 // network, so only when asked: E2E_PYODIDE=1.
 test("the default setup solves in the Pyodide worker", async ({ page }) => {
@@ -55,6 +55,32 @@ test("the default setup solves in the Pyodide worker", async ({ page }) => {
   await expect(page.getByTestId("engine-status")).toContainText("Computed in", { timeout: 240_000 });
   expect(await frequencies(page)).toEqual(["227 kHz", "285 kHz", "96.8 kHz"]);
   await expect(page.getByTestId("verdict")).toContainText("Stable trap");
+  // the page and the engine come from the same build
+  await expect(page.getByTestId("engine-stale")).toHaveCount(0);
+});
+
+// #96: the wheel sits in a folder named after its content hash, and a page
+// whose engine comes from another build offers a reload.
+test("a page from another build than its engine offers a reload", async ({ page }) => {
+  test.skip(!process.env.E2E_PYODIDE, "set E2E_PYODIDE=1 (needs the CDN and a staged wheel)");
+  test.setTimeout(300_000);
+  // the worker's fetches go through the context's routes
+  const wheels: string[] = [];
+  await page.context().route("**/*.whl", (route) => {
+    wheels.push(route.request().url());
+    return route.continue();
+  });
+  await page.context().route("**/wheels/manifest.json", async (route) => {
+    const res = await route.fetch();
+    const manifest = (await res.json()) as { wheel: string; build: string };
+    await route.fulfill({ response: res, json: { ...manifest, build: "000000000000" } });
+  });
+  await page.goto("./?preset=tweezer&recorded=0");
+  await expect(page.getByTestId("engine-status")).toContainText("Computed in", { timeout: 240_000 });
+  await expect(page.getByTestId("engine-stale")).toContainText("levtrap was updated.");
+  await expect(page.getByTestId("engine-reload")).toBeVisible();
+  expect(wheels.length).toBeGreaterThan(0);
+  expect(wheels.every((u) => /\/wheels\/[0-9a-f]{12}\/levtrap-[^/]+\.whl$/.test(u)), wheels.join(" ")).toBe(true);
 });
 
 test("assets load from the sub-path", async ({ page }) => {
