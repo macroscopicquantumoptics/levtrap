@@ -188,7 +188,7 @@ def solve(setup: dict | str, want: Iterable[str] = (), start=None) -> dict:
     from .api import _single_beam, _tmatrix
     from .derived import KB, mie_efficiencies, sphere_mass
     from .fields import GravityField
-    from .optics import is_simple, optical_fields
+    from .optics import optical_fields
     from .solver import find_trap
 
     t0 = time.perf_counter()
@@ -319,10 +319,7 @@ def solve(setup: dict | str, want: Iterable[str] = (), start=None) -> dict:
         if lensed or mirrored:
             raise UnsupportedSetup("the radiation pattern is not computed yet for a beam focused by an asphere "
                                    "or a parabolic mirror")
-        if len(optical) > 1 or not is_simple(beams):
-            raise UnsupportedSetup("the radiation pattern is computed only for beams along +z "
-                                   "through one focus that interfere")
-        result["pattern"] = pattern_result(s, r_eq if r_eq is not None else np.zeros(3))
+        result["pattern"] = pattern_result(s, r_eq if r_eq is not None else np.zeros(3), optical)
         result["models"].append(dict(quantity="pattern", model="mie", validity="ok", notes=[]))
         if r_eq is None:
             result["warnings"].append("Radiation pattern taken with the particle at the focus "
@@ -632,29 +629,42 @@ def breakdown(s: dict, fields, optical, paul, r_eq, modes, trap) -> list[dict]:
     return out
 
 
-def pattern_result(s: dict, r) -> dict:
+def pattern_result(s: dict, r, optical=None) -> dict:
     """``pattern`` block (see :func:`levtrap.pattern.pattern_block`) for the
     particle at r = [x, y, z] [m] in the beams of a parsed, resolved setup.
 
+    One pattern per optical field (#76): a coherent group, with beams in any
+    direction and through any focus, scatters its summed incident beam (the
+    one the force uses, :func:`levtrap.optics.optical_fields`); fields that
+    do not interfere add their patterns, collected powers and information.
+    Each field's incident beam is taken about the particle in the lab
+    orientation (:meth:`levtrap.fields.OpticalField.incident_at`), so the
+    pattern is in the lab frame. ``optical`` are the setup's optical fields
+    (built here from the beams if not given).
+
     ``trap_NA`` is the numerical aperture of the first beam's focusing optic
-    (``n_medium sin(convergence angle)``): the cone a backward detector
-    through the trapping lens collects.
+    (``n_medium sin(convergence angle)``), and ``trap_axis`` that beam's
+    direction: the first beam's lens is "the trapping lens" also when other
+    beams have lenses of their own, and ``at_trap_NA`` is what a cone of its
+    NA collects looking back through it (``backward``, about minus the first
+    beam's direction) and opposite it (``forward``). For one beam along +z
+    these are the lab's -z and +z, as before.
     """
-    from .api import _beam_angle, build_beam, build_tmatrix
+    from .api import _beam_angle, _single_beam, _tmatrix
+    from .optics import optical_fields
     from .pattern import pattern_block
 
-    beams = [f for f in s["trap"]["fields"] if f["kind"] == "beam"]
-    optical_setup = dict(s, trap=dict(fields=beams))
-    beam, _ = build_beam(optical_setup)
-    T, _ = build_tmatrix(optical_setup)
     nm = float(s["environment"]["medium_index"])
+    beams = [f for f in s["trap"]["fields"] if f["kind"] == "beam"]
+    if optical is None:
+        optical = optical_fields(s, _single_beam, lambda wl: _tmatrix(_particle_at(s["particle"], wl), wl, nm)[0])
+    r = np.asarray(r, dtype=float)
+    parts = [(f.incident_at(r), f.T) for f in optical]
     b0 = beams[0]
     m = [int(v) for v in b0["mode"]["indices"]]
     order = (2 * m[0] + abs(m[1])) if b0["mode"]["type"] == "lg" else (m[0] + m[1])
     angle = _beam_angle(b0["focus"], float(b0["wavelength"]), nm, order)
-    r = np.asarray(r, dtype=float)
-    ref = beam.translate_xyz(r) if np.any(r != 0) else beam
-    return pattern_block(ref, T, n_medium=nm, trap_NA=nm * math.sin(angle))
+    return pattern_block(parts, n_medium=nm, trap_NA=nm * math.sin(angle), trap_axis=b0["direction"])
 
 
 def solve_json(setup_json: str, want_json: str = "[]", start_json: str = "null") -> str:

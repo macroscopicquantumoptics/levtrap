@@ -43,9 +43,22 @@ coefficients), so the derivative is taken in the engine's own position frame.
 Frame
 -----
 Directions (theta, phi) are those of :meth:`levtrap.bsc.Bsc.em_field_xyz`:
-theta from +z (the beam axis), phi from +x.  Positions (``Bsc.translate_xyz``,
+theta from +z, phi from +x.  Positions (``Bsc.translate_xyz``,
 ``forcetorque(position=...)``) use the same frame: levtrap corrects OTT's
-mismatch between the two (see ``tests/test_frames.py``).
+mismatch between the two (see ``tests/test_frames.py``).  In a Result the
+frame is the lab's (#76): each field's incident beam is handed over about the
+particle in the lab orientation
+(:meth:`levtrap.fields.OpticalField.incident_at`), so for one beam along +z
+the beam axis is z, and for beams in other directions their light is where
+they send it.
+
+Several fields
+--------------
+A coherent group of beams (any directions, any foci) is one incident beam,
+summed as the force sums it (:mod:`levtrap.optics`); the scattered field is
+linear in it, so its pattern and information come from that sum.  Fields that
+do not interfere scatter independently: their intensities, collected powers
+and Fisher information add (:func:`pattern_block` with a list of fields).
 """
 
 from __future__ import annotations
@@ -311,13 +324,12 @@ def _na_ladder(n_medium: float) -> np.ndarray:
     return np.append(na, n_medium)
 
 
-def pattern_block(ibeam: Bsc, T, *, n_medium: float, trap_NA: float | None = None,
-                  ntheta: int = 36, nphi: int = 72, NA=None) -> dict:
-    """The ``pattern`` block of a Result for a particle at the origin of ``ibeam``.
+def _columns(ibeam: Bsc, T) -> tuple[np.ndarray, np.ndarray]:
+    """Outgoing coefficients of one field's five far fields, about the particle.
 
-    ``ibeam`` is the incident beam (scaled to watts) expanded about the
-    particle; ``T`` the particle's T-matrix.  All grids are flat lists over
-    ``grid.theta``/``grid.phi`` with quadrature weights ``grid.weight`` [sr].
+    Columns: scattered (``2p, 2q``), total (incident ``a`` + scattered) and
+    the information coefficients dE_sca/dx, dy, dz
+    (:func:`information_coefficients`), padded to a common Nmax.
     """
     T = T.to_type("scattered") if T.type == "total" else T
     sbeam, ib = ibeam.scatter(T)
@@ -325,38 +337,79 @@ def pattern_block(ibeam: Bsc, T, *, n_medium: float, trap_NA: float | None = Non
     ib, sbeam = ib.set_Nmax(n), sbeam.set_Nmax(n)
     ia, ibb = information_coefficients(ib, T)
     ninfo = math.isqrt(ia.shape[0] + 1) - 1
-
-    def pad(x, N):
-        tot = N * N + 2 * N
-        return np.vstack([x, np.zeros((tot - x.shape[0], x.shape[1]), dtype=complex)]) if x.shape[0] < tot else x
-
     N = max(n, ninfo)
-    sa, sb_ = pad(2 * sbeam.a, N), pad(2 * sbeam.b, N)
-    ta, tb = pad(ib.a, N) + sa, pad(ib.b, N) + sb_
-    ia, ibb = pad(ia, N), pad(ibb, N)
-    A = np.hstack([sa, ta, ia])  # columns: scattered, total, info x, y, z
-    B = np.hstack([sb_, tb, ibb])
+    sa, sb_ = _pad(2 * sbeam.a, N), _pad(2 * sbeam.b, N)
+    ta, tb = _pad(ib.a, N) + sa, _pad(ib.b, N) + sb_
+    return np.hstack([sa, ta, _pad(ia, N)]), np.hstack([sb_, tb, _pad(ibb, N)])
+
+
+def _pad(x, N):
+    tot = N * N + 2 * N
+    return np.vstack([x, np.zeros((tot - x.shape[0], x.shape[1]), dtype=complex)]) if x.shape[0] < tot else x
+
+
+def pattern_block(ibeam, T=None, *, n_medium: float, trap_NA: float | None = None,
+                  trap_axis=(0.0, 0.0, 1.0), ntheta: int = 36, nphi: int = 72, NA=None) -> dict:
+    """The ``pattern`` block of a Result for a particle at the origin of ``ibeam``.
+
+    ``ibeam`` is the incident beam (scaled to watts) expanded about the
+    particle; ``T`` the particle's T-matrix.  All grids are flat lists over
+    ``grid.theta``/``grid.phi`` with quadrature weights ``grid.weight`` [sr].
+
+    Several fields that do not interfere (#76): pass ``ibeam`` as a list of
+    ``(beam, T)`` pairs, each beam expanded about the particle in the lab
+    orientation (a coherent group is one pair: its summed incident beam).
+    Their light does not interfere, so the patterns (scattered, total and
+    information) add, and so do the collected powers and the Fisher
+    information each field's photons carry: the fractions are those of the
+    sums.  Coefficients of different wavelengths are only ever squared and
+    added, never summed as amplitudes.
+
+    ``trap_NA`` is the numerical aperture of the trapping lens and
+    ``trap_axis`` the direction its beam travels (lab frame): ``at_trap_NA``
+    gives what a cone of that NA collects looking back through the trapping
+    lens (``backward``, about ``-trap_axis``) and opposite it (``forward``,
+    about ``+trap_axis``).  For one beam along +z these are the lab's -z
+    and +z.
+    """
+    parts = list(ibeam) if T is None else [(ibeam, T)]
+    cols = [_columns(b, t) for b, t in parts]
+    N = max(math.isqrt(a.shape[0] + 1) - 1 for a, _ in cols)
+    # columns: per field, scattered, total, info x, y, z
+    A = np.hstack([_pad(a, N) for a, _ in cols])
+    B = np.hstack([_pad(b, N) for _, b in cols])
+    nf = len(cols)
+
+    def fold(x):
+        """Sum the fields' intensities (last axis: nf blocks of 5 -> 5)."""
+        return x.reshape(*x.shape[:-1], nf, 5).sum(axis=-2)
 
     nt, nph = _min_nodes(N)
     th, ph, w = sphere_grid(max(ntheta, nt), max(nphi, nph))
     Ft, Fp = far_field(A, B, th, ph)
-    I = _intensity(Ft, Fp)
+    I = fold(_intensity(Ft, Fp))
     tot = integrate(I, w)
     P_sca, info_tot = tot[0], tot[2:]
 
     NA = _na_ladder(n_medium) if NA is None else np.atleast_1d(np.asarray(NA, dtype=float))
     ang = _na_angles(NA, n_medium)
     keep = [0, 2, 3, 4]
+    keep_all = [5 * f + k for f in range(nf) for k in keep]
+
+    def cones(d, angles):
+        c = _cone_fractions(A[:, keep_all], B[:, keep_all], d, angles, N)
+        return c.reshape(c.shape[0], nf, len(keep)).sum(axis=1)
+
     coll, info_eff = {}, {}
     for name, d in DIRECTIONS.items():
-        c = _cone_fractions(A[:, keep], B[:, keep], d, ang, N)
+        c = cones(d, ang)
         coll[name] = (c[:, 0] / P_sca).tolist()
         info_eff[name] = {ax: (c[:, 1 + i] / info_tot[i]).tolist() for i, ax in enumerate("xyz")}
 
     mom_n = np.stack([np.sin(th) * np.cos(ph), np.sin(th) * np.sin(ph), np.cos(th)], axis=1)
     Iw = I[:, 0] * w
     out = dict(
-        frame="theta from +z (beam axis), phi from +x; directions of Bsc.em_field_xyz",
+        frame="lab frame: theta from +z, phi from +x; directions of Bsc.em_field_xyz",
         grid=dict(theta=th.tolist(), phi=ph.tolist(), weight=w.tolist()),
         scattered=I[:, 0].tolist(),
         total=I[:, 1].tolist(),
@@ -376,11 +429,14 @@ def pattern_block(ibeam: Bsc, T, *, n_medium: float, trap_NA: float | None = Non
     )
     if trap_NA is not None and 0 < trap_NA <= n_medium:
         tang = _na_angles(trap_NA, n_medium)
+        axis = np.asarray(trap_axis, dtype=float)
+        axis = axis / np.linalg.norm(axis)
         at = {}
-        for name in ("forward", "backward"):
-            c = _cone_fractions(A[:, keep], B[:, keep], DIRECTIONS[name], tang, N)[0]
+        for name, d in (("forward", axis), ("backward", -axis)):
+            c = cones(d, tang)[0]
             at[name] = dict(collection=float(c[0] / P_sca),
                             information={ax: float(c[1 + i] / info_tot[i]) for i, ax in enumerate("xyz")})
         out["trap_NA"] = float(trap_NA)
+        out["trap_axis"] = [float(v) for v in axis]
         out["at_trap_NA"] = at
     return out

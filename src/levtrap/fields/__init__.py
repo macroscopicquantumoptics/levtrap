@@ -177,5 +177,21 @@ class OpticalField:
             out["second"] = self.R @ np.real(mom["second"]) @ self.R.T
         return out
 
+    def incident_at(self, r):
+        """The incident beam expanded about the particle at lab position r [m],
+        in the lab orientation, scaled to watts (#76).
+
+        The beam is translated to the particle in its own frame, as for the
+        force, and then turned by R about that point (``Bsc.rotate(R^T)``
+        turns a beam by R; see :func:`levtrap.optics._group_beam`), so its
+        scattered far field, and the derivatives of it along x, y, z, are in
+        the lab frame. A sphere's T-matrix is the same in every orientation.
+        """
+        own = self._own(r)[0]
+        b = self.beam.translate_xyz(own) if np.any(own != 0) else self.beam
+        if not np.allclose(self.R, np.eye(3)):
+            b, _ = b.rotate(self.R.T)
+        return b
+
     def model(self) -> ModelInfo:
         return ModelInfo("mie")
