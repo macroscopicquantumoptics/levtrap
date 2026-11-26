@@ -19,6 +19,7 @@ import {
   type Point,
 } from "./scene/geometry.ts";
 import { lightColor } from "./scene/light.ts";
+import { labelHalfWidth, staggerLabels } from "./scene/labels.ts";
 import type { Overlays, PatternData, RayData, SliceData } from "./scene3d/Scene3D.tsx";
 import styles from "./Scene.module.css";
 
@@ -432,6 +433,14 @@ function Drawing({ setup, result, selected, onSelect, labels, grid, thumbnail, b
 
   const dot = Math.max(18, bar.px / 2);
 
+  // beams on one axis put their labels on one spot: stagger them so none covers another (#81)
+  const laid = spots.map((s) => {
+    const half = labelHalfWidth(`${s.part.name} ${s.part.summary}`);
+    return { s, half, x: Math.min(Math.max(s.x, left + half), right - half), y: s.y };
+  });
+  const staggered = staggerLabels(laid, top + 14, bottom - 14);
+  const placedLabels = laid.map((l, i) => ({ ...l, ...staggered[i] }));
+
   return (
     <>
       <svg className={styles.svg} width={box.width} height={box.height} aria-hidden="true" onClick={() => onSelect(null)}>
@@ -491,16 +500,13 @@ function Drawing({ setup, result, selected, onSelect, labels, grid, thumbnail, b
       </svg>
       {labels && (
         <div className={styles.labels}>
-          {spots.map((s) => {
-            const text = `${s.part.name} ${s.part.summary}`;
-            const half = Math.min(150, 12 + 3.4 * text.length);
-            const x = Math.min(Math.max(s.x, left + half), right - half);
+          {placedLabels.map(({ s, x, y }) => {
             return (
               <button
                 key={s.part.id}
                 type="button"
                 className={styles.label}
-                style={{ left: x, top: s.y }}
+                style={{ left: x, top: y }}
                 data-part={s.part.id}
                 data-kind={s.part.kind}
                 data-selected={selected === s.part.id || undefined}

@@ -24,6 +24,7 @@ import { facingPlane, planeName } from "../scene/slice.ts";
 import { AsphereLens, Beam, IntensitySlice, Moving, ParabolicMirror, ForceArrows, RadiationLobe, TracedRays, PaulTrap, Particle, TrapAxes, type Picking } from "./parts.tsx";
 import { magnification, motionPlan } from "../scene/motion.ts";
 import { lobe } from "../scene/lobe.ts";
+import { labelHalfWidth, staggerLabels } from "../scene/labels.ts";
 import base from "../Scene.module.css";
 import styles from "./Scene3D.module.css";
 
@@ -296,6 +297,28 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
     spots.push({ part: part(id), x: from[0], y: from[1] - 30, anchor: from });
   }
 
+  // ---- where each label goes ------------------------------------------------------------
+  // a part out of the room (zoomed or turned away) has no label; but a lens keeps
+  // its label at the room's edge, towards it (a real lens stands millimetres away)
+  const laid = spots.flatMap((s) => {
+    const away = s.anchor[0] < left - 8 || s.anchor[0] > right + 8 || s.anchor[1] < top - 8 || s.anchor[1] > bottom + 8;
+    if (away && s.part.kind !== "lens") return [];
+    let [sx, sy] = [s.x, s.y];
+    if (away) {
+      const [dx, dy] = [s.anchor[0] - centre.x, s.anchor[1] - centre.y];
+      const t = Math.min(dx ? Math.abs((dx > 0 ? right - 70 : left + 70) - centre.x) / Math.abs(dx) : Infinity, dy ? Math.abs((dy > 0 ? bottom - 24 : top + 24) - centre.y) / Math.abs(dy) : Infinity, 1);
+      [sx, sy] = [centre.x + dx * t, centre.y + dy * t];
+    }
+    const text = `${s.part.name} ${s.part.summary}`;
+    const half = labelHalfWidth(text);
+    const x = Math.min(Math.max(sx, left + half), right - half);
+    const y = Math.min(Math.max(sy, top + 14), bottom - 14);
+    return [{ s, away, text, half, x, y }];
+  });
+  // beams on one axis put their labels on one spot: stagger them so none covers another (#81)
+  const staggered = staggerLabels(laid, top + 14, bottom - 14);
+  const shownLabels = laid.map((l, i) => ({ ...l, ...staggered[i] }));
+
   // ---- the notes over the corner, bottom up ---------------------------------------------------
   const notes: { id: string; text: string; data?: Record<string, string | undefined> }[] = [];
   if (field) {
@@ -499,21 +522,7 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
 
       {labels && (
         <div className={base.labels}>
-          {spots.map((s) => {
-            // a part out of the room (zoomed or turned away) has no label; but a lens keeps
-            // its label at the room's edge, towards it (a real lens stands millimetres away)
-            const away = s.anchor[0] < left - 8 || s.anchor[0] > right + 8 || s.anchor[1] < top - 8 || s.anchor[1] > bottom + 8;
-            if (away && s.part.kind !== "lens") return null;
-            let [sx, sy] = [s.x, s.y];
-            if (away) {
-              const [dx, dy] = [s.anchor[0] - centre.x, s.anchor[1] - centre.y];
-              const t = Math.min(dx ? Math.abs((dx > 0 ? right - 70 : left + 70) - centre.x) / Math.abs(dx) : Infinity, dy ? Math.abs((dy > 0 ? bottom - 24 : top + 24) - centre.y) / Math.abs(dy) : Infinity, 1);
-              [sx, sy] = [centre.x + dx * t, centre.y + dy * t];
-            }
-            const text = `${s.part.name} ${s.part.summary}`;
-            const half = Math.min(150, 12 + 3.4 * text.length);
-            const x = Math.min(Math.max(sx, left + half), right - half);
-            const y = Math.min(Math.max(sy, top + 14), bottom - 14);
+          {shownLabels.map(({ s, away, text, x, y }) => {
             return (
               <button
                 key={s.part.id}

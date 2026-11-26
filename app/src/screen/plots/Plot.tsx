@@ -15,6 +15,7 @@ import { Icon } from "../ui/Icon.tsx";
 import { Menu, MenuItem } from "../ui/Menu.tsx";
 import ui from "../ui/ui.module.css";
 import { csvText, download, pngBlob, svgText } from "./export.ts";
+import { markerRows, placeLineLabels } from "./labels.ts";
 import styles from "./Plot.module.css";
 
 /** Series colours: the three axes, or two series that are not axes; each set validated for colour-vision deficiency in both themes. */
@@ -273,18 +274,27 @@ function Chart({ id, x, y, series, bands = [], markers = [], dots = [], fitTo, a
     return d;
   };
 
-  // a direct label on each line, at its last point in view; labels that would overlap are merged
-  const labels: { text: string; x: number; y: number }[] = [];
-  if (series.length > 1 && series.length <= 4) {
-    for (const s of series.filter((s) => !s.dashed)) {
-      const last = [...s.points].reverse().find(([qx, qy]) => ok(x, qx) && ok(y, qy) && sx.t(qx) <= u1 && sx.t(qx) >= u0 && sy.t(qy) >= v0 && sy.t(qy) <= v1);
-      if (!last) continue;
-      const [lx, ly] = [px(sx.t(last[0])) - 4, py(sy.t(last[1])) - 7];
-      const near = labels.find((l) => Math.abs(l.x - lx) < 40 && Math.abs(l.y - ly) < 13);
-      if (near) near.text += `, ${s.label}`;
-      else labels.push({ text: s.label, x: lx, y: ly });
-    }
-  }
+  // a direct label on each line, placed off every line (#81); lines drawn on top of each other share one
+  const labels =
+    series.length > 1 && series.length <= 4
+      ? placeLineLabels(
+          series
+            .filter((s) => !s.dashed)
+            .map((s) => ({
+              text: s.label,
+              points: s.points
+                .filter(([qx, qy]) => ok(x, qx) && ok(y, qy) && sx.t(qx) <= u1 && sx.t(qx) >= u0 && sy.t(qy) >= v0 && sy.t(qy) <= v1)
+                .map(([qx, qy]) => [px(sx.t(qx)), py(sy.t(qy))] as [number, number]),
+            })),
+          { left: MARGIN.left, top: MARGIN.top, right: width - MARGIN.right, bottom: MARGIN.top + plotH },
+        )
+      : [];
+  // the markers' labels in rows, so close markers (two peaks) do not write over each other (#81)
+  const markerAt = markerRows(
+    markers.map((m) => ({ x: px(sx.t(m.x)), text: m.label })),
+    MARGIN.left,
+    width - MARGIN.right,
+  );
 
   const readout = cursor === null ? null : series.map((s) => ({ s, v: at(s.points, cursor, sx, sy) }));
   const tipLeft = cursor === null ? 0 : Math.min(Math.max(px(cursor) + 12, MARGIN.left), width - 196);
@@ -369,10 +379,10 @@ function Chart({ id, x, y, series, bands = [], markers = [], dots = [], fitTo, a
               </g>
             );
           })}
-          {markers.map((m) => (
+          {markers.map((m, i) => (
             <g key={`${m.label}-${m.x}`} data-testid={`plot-${id}-marker`}>
               <line className={styles.markerLine} x1={px(sx.t(m.x))} x2={px(sx.t(m.x))} y1={MARGIN.top} y2={MARGIN.top + plotH} />
-              <text className={styles.markerLabel} x={px(sx.t(m.x)) + 4} y={MARGIN.top + 11}>
+              <text className={styles.markerLabel} x={markerAt[i].x} y={MARGIN.top + 11 + 14 * markerAt[i].row} textAnchor={markerAt[i].anchor} data-row={markerAt[i].row}>
                 {m.label}
               </text>
             </g>
@@ -392,7 +402,7 @@ function Chart({ id, x, y, series, bands = [], markers = [], dots = [], fitTo, a
           )}
         </g>
         {labels.map((l) => (
-          <text key={l.text} className={styles.direct} x={l.x} y={l.y} textAnchor="end">
+          <text key={l.text} className={styles.direct} x={l.x} y={l.y} textAnchor="middle" data-testid={`plot-${id}-label`}>
             {l.text}
           </text>
         ))}

@@ -274,9 +274,10 @@ function ScreenBody({ engine }: ScreenProps) {
         />
       </div>
 
-      {narrow && !part && (
-        <div className={styles.sheet}>
-          <AddField setup={setup} onEdit={edit} />
+      {/* on a narrow screen the parts row stays while a part is selected, above its settings, so the next part is one tap away (#81) */}
+      {narrow && (
+        <div className={styles.sheet} data-selected={inspectorOpen || undefined}>
+          {!part && <AddField setup={setup} onEdit={edit} />}
           <PartsRow parts={parts} selected={selected} onSelect={select} />
         </div>
       )}

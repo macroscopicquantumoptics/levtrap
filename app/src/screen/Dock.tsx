@@ -7,6 +7,7 @@ import type { Answer } from "./answer.ts";
 import type { PartId } from "./model.ts";
 import { ForcesTab, HeatingTab, PotentialTab, RadiationTab, SpectrumTab, SweepTab, WavefrontTab } from "./plots/tabs.tsx";
 import { DesignTab } from "./plots/DesignTab.tsx";
+import { unavailableTabs } from "./plots/availability.ts";
 import { ResultsStrip } from "./ResultsStrip.tsx";
 import { Icon } from "./ui/Icon.tsx";
 import ui from "./ui/ui.module.css";
@@ -46,26 +47,33 @@ export interface DockProps {
 
 /** The bottom of the screen: the results strip, always visible, and the plots drawer under it. */
 export function Dock({ setup, answer, pending, status, tab, onTab, expanded, onToggle, onSelect, engine, recorded, onEdit, onPattern }: DockProps) {
+  // tabs that cannot compute for this setup are greyed, with the reason as the tooltip (#81)
+  const unavailable = unavailableTabs(setup);
   return (
     <section className={`${ui.island} ${styles.dock}`} aria-label="Results">
       <ResultsStrip setup={setup} answer={answer} pending={pending} status={status} expanded={expanded} onToggle={onToggle} onSelect={onSelect} />
       <div className={styles.bar}>
         <div className={styles.tabs} role="tablist" aria-label="Plots">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              id={`tab-${t.id}`}
-              className={styles.tab}
-              aria-selected={tab === t.id}
-              aria-controls="drawer"
-              data-testid={`tab-${t.id}`}
-              onClick={() => onTab(tab === t.id ? null : t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
+          {TABS.map((t) => {
+            const why = unavailable[t.id];
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                id={`tab-${t.id}`}
+                className={styles.tab}
+                aria-selected={tab === t.id}
+                aria-controls="drawer"
+                title={why}
+                data-unavailable={why ? "" : undefined}
+                data-testid={`tab-${t.id}`}
+                onClick={() => onTab(tab === t.id ? null : t.id)}
+              >
+                {t.label}
+              </button>
+            );
+          })}
         </div>
         <EngineLine status={status} answer={answer} />
       </div>

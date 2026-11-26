@@ -57,7 +57,7 @@ These are the rules of `docs/ARCHITECTURE.md` §7. Each has a test in
 | **Warnings are sentences in the strip.** | "No stable trap along x and y: outside the first Mathieu stability region." followed by the usual cause and what to change. Each engine warning has a code and its copy in `src/screen/warnings.ts`; a test checks the engine still writes each one. No banners, no pop-ups. |
 | **Plots are inline SVG in the theme's colours.** | The Forces tab. No Plotly. |
 | **Undo and redo, light and dark.** | One step per edit; Ctrl Z and Ctrl Shift Z. Every edit is autosaved in the browser; a reload opens where you left off (a saved setup that no longer validates is not opened, and the screen says why). |
-| **A setup travels as a file or a link.** | File menu: open and save a setup `.json` (the engine's own format, so `levtrap.solve` reads it), copy a share link (the setup lz-compressed in the fragment: no server, nothing sent), copy the Python that computes the same numbers, export the results (CSV: every number in SI with its model; JSON: the setup and the whole result; both carry the radiation pattern once the Radiation tab or the scene's pattern has computed it for this setup, #75) and the scene as PNG. Opening a file is an edit, so Ctrl Z takes it back. A link opens in place of the autosave and then leaves the address. Where the clipboard is refused (an embedded pane, an iframe), the link is shown under the scene in a read-only field, selected on focus, with a Copy button: a neutral notice that waits to be dismissed and never widens the screen (#74). |
+| **A setup travels as a file or a link.** | File menu: open and save a setup `.json` (the engine's own format, so `levtrap.solve` reads it), copy a share link (the setup lz-compressed in the fragment: no server, nothing sent), copy the Python that computes the same numbers, export the results (CSV: every number in SI with its model; JSON: the setup and the whole result; both carry the radiation pattern once the Radiation tab or the scene's pattern has computed it for this setup, #75) and the scene as PNG. Opening a file is an edit, so Ctrl Z takes it back. A link opens in place of the autosave and then leaves the address. Where the clipboard is refused (an embedded pane, an iframe), the link is shown under the scene in a read-only field, selected on focus, with a Copy button: a neutral notice that waits to be dismissed and never widens the screen (#74). The file and the link carry no float noise: a number is rounded to 12 significant digits when that moves it by no more than a few units in the last place, so 129.8 mW is written 0.1298, not 0.12980000000000003 (#81). |
 
 Three more rules came out of building it:
 
@@ -158,6 +158,8 @@ for it).
   "Particle SiO₂ · 100 nm". So the setup can be read off the drawing.
   A label and the drawn thing both select the part. A part turned or zoomed
   out of the view has no label. With labels hidden, hovering a thing names it.
+  Labels that would cover each other (beams on one axis, their lenses) are
+  staggered by a label's height (#81, `src/screen/scene/labels.ts`).
 * **Selecting.** The selected part glows in the selection blue (the light:
   its edges) and its label turns blue. A ray through the scene meets several
   things: the particle wins over the lens and electrodes, which win over the
@@ -183,7 +185,9 @@ for it).
   focus by its spherical aberration. Asked of the engine
   (`want=["lens"]`) only while shown.
 * **Narrow screens.** There is no room for labels, so the parts become a row
-  of buttons under the results.
+  of buttons under the results. The row stays while a part is selected,
+  between the results and its settings, so the next part is one tap away
+  (#81).
 
 ## 5. The inspector: what each thing shows
 
@@ -282,6 +286,11 @@ Opened on demand, one tab at a time. A tab asks the engine for its own data
 while it is open (the strip never waits for a plot): Forces and Potential for
 the force cuts, Radiation for the pattern. Heating and Spectrum draw from the
 result the strip already has, and Sweep runs one solve per value when asked.
+A tab that cannot compute for the setup is greyed, with the reason as its
+tooltip (#81): Radiation without light, with an asphere or a mirror, or for
+beams that are not one coherent group along +z (counter-propagating beams,
+#76); Heating and Spectrum without light; Wavefront without an asphere
+(`src/screen/plots/availability.ts`). It still opens, to say the same.
 
 | Tab | What it draws |
 |---|---|
@@ -299,6 +308,10 @@ in the theme's colours): SI-prefixed ticks, log axes where a quantity spans
 decades, a crosshair readout by pointer or arrow keys, drag to zoom and Fit
 to go back, a direct label on each line and a legend, a Table of the same
 data, and Export as PNG, SVG (the colours written in) or CSV (SI units).
+A direct label goes where it is clearest of every line, above or below its
+own; lines drawn on top of each other share one. Markers' labels (the
+spectrum's peaks) take rows, so close markers do not write over each other
+(#81, `src/screen/plots/labels.ts`).
 Series take the axis colours, or `--series-a` and `--series-b` for two
 series that are not axes; both sets pass the colour-vision checks in each
 theme. A dashed line is always a second version of the same quantity (a
@@ -482,6 +495,7 @@ shows them in order. Names end in the view and the theme.
 | `unstable-tweezer-*` | A tweezer at NA 0.3: no stable trap. |
 | `invalid-*` | A Paul trap added to a neutral particle: the setup is invalid and the strip names the part to fix. |
 | `drawer-phone-*` | The drawer at 375 px. |
+| `ui-polish-*` | #81: the dark trap's labels staggered, a greyed tab with its reason, the Forces and Spectrum labels clear of the data, the parts row kept above a selected part at 375 px. |
 
 ## 14. What this was built without
 

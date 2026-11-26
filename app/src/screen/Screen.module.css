@@ -98,13 +98,14 @@
   cursor: pointer;
 }
 
-/* ---- narrow screens: one column; the inspector is a sheet under the dock ------ */
+/* ---- narrow screens: one column; the parts row and the inspector sit under the dock ------ */
 
 @media (max-width: 720px) {
+  /* stage, dock, parts row, inspector: the parts row stays while a part is selected (#81) */
   .screen {
     /* the dock may shrink (and scroll inside itself) so the parts row stays on screen when a
        notice and the drawer are both open: the screen cannot be scrolled (overflow: clip, #74) */
-    grid-template-rows: minmax(170px, 1fr) minmax(0, auto) auto;
+    grid-template-rows: minmax(170px, 1fr) minmax(0, auto) auto auto;
   }
 
   .dock {
@@ -114,9 +115,9 @@
   }
 
   .inspector {
-    grid-row: 3;
+    grid-row: 4;
     justify-self: stretch;
-    max-height: 46dvh;
+    max-height: 42dvh;
     margin: 0 8px 8px;
   }
 
