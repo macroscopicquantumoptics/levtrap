@@ -143,14 +143,18 @@ def test_result_rates_block(default):
     x, y, z = r["modes"]
     fx, fy = default["modes"][0]["frequency"], default["modes"][1]["frequency"]
     assert x["recoil_scattered"] * fx == pytest.approx(y["recoil_scattered"] * fy / 2, rel=0.01)
-    assert z["recoil_incident"] > 0 and x["recoil_incident"] == pytest.approx(0, abs=1e-9 * z["recoil_incident"])
-    # slightly forward scattering (<n_z> > 0): the cross term lowers the heating along the beam only
-    assert z["recoil_cross"] < 0 and abs(x["recoil_cross"]) < 1e-9 * abs(z["recoil_cross"])
+    # beam photons (#95): along the beam they weigh less than a plane wave's 1 against the scattered
+    # photons' 2/5 (the Gouy phase slows the axial phase); across it the focus's longitudinal field,
+    # which grows along x, adds a little
+    assert 1.0 < z["recoil_incident"] / z["recoil_scattered"] < 2.5
+    assert 0 < x["recoil_incident"] < 0.05 * z["recoil_incident"]
+    # slightly forward scattering (<n_z> > 0): the cross term lowers the heating, mostly along the beam
+    assert z["recoil_cross"] < 0 and abs(x["recoil_cross"]) < 0.1 * abs(z["recoil_cross"])
     assert r["P_sca"] == default["optical"]["P_sca"] and r["P_abs"] == default["optical"]["P_abs"]
     np.testing.assert_allclose(r["scattered_moments"]["second"], rates.dipole_second_moment("x"), atol=0.004)
     models = {m["quantity"]: m for m in default["models"]}
     assert models["gas_damping"]["model"] == "knudsen-interpolation"
-    assert models["recoil_heating"]["model"] == "mie-pattern"
+    assert models["recoil_heating"]["model"] == "information"
     assert models["recoil_heating"]["validity"] == "ok"
 
 
@@ -161,31 +165,46 @@ def test_result_rates_vacuum_and_large_sphere():
     assert r["gas_damping"] == 0.0
     assert all(m["Q"] is None and m["gas_heating"] == 0.0 for m in r["modes"])
     assert all(m["reheating"] == m["recoil_heating"] > 0 for m in r["modes"])
-    # a large sphere is not a dipole, but its own Mie pattern is used (#78): no longer approximate
+    # a large sphere is not a dipole, but its own scattered field is used (#78, #95): not approximate
     s["particle"]["radius"] = 600e-9
     big = solve(s)
     models = {m["quantity"]: m for m in big["models"]}
-    assert models["recoil_heating"]["model"] == "mie-pattern"
+    assert models["recoil_heating"]["model"] == "information"
     assert models["recoil_heating"]["validity"] == "ok"
     assert big["rates"]["scattered_moments"]["mean"][2] > 0.3  # strongly forward
 
 
 
-def test_a_coherent_standing_wave_flags_its_recoil():
-    """Two coherent opposing beams average their beam photons to about zero, so
-    the model drops their correlation with the scattered direction: approximate (#78).
-    Two incoherent opposing beams are each their own field: ok."""
+def test_a_coherent_standing_wave_is_exact_from_the_information():
+    """Two coherent opposing beams: the photon picture could only average their beam photons, so
+    it was approximate (#78). The information follows the field itself, so the solve is ok (#95).
+    Without the information (a caller that passes only the Mie moments) the photon picture is
+    the fallback, still flagged."""
     s = json.loads(json.dumps(DEFAULT_SETUP))
     s["particle"]["radius"] = 50e-9
     b1 = s["trap"]["fields"][0]
     b2 = dict(b1, id="beam2", direction=[0, 0, -1])
     s["trap"]["fields"] = [b1, b2]
     incoherent = {m["quantity"]: m for m in solve(s)["models"]}["recoil_heating"]
-    assert incoherent["validity"] == "ok"
+    assert incoherent["model"] == "information" and incoherent["validity"] == "ok"
     b2["coherent_with"] = b1["id"]
-    coherent = {m["quantity"]: m for m in solve(s)["models"]}["recoil_heating"]
-    assert coherent["model"] == "mie-pattern" and coherent["validity"] == "approximate"
-    assert any("standing wave" in n for n in coherent["notes"])
+    r = solve(s)
+    coherent = {m["quantity"]: m for m in r["models"]}["recoil_heating"]
+    assert coherent["model"] == "information" and coherent["validity"] == "ok"
+    assert not any("standing wave" in n for n in coherent["notes"])
+    for m in r["rates"]["modes"]:
+        assert m["recoil_heating"] == pytest.approx(m["recoil_scattered"] + m["recoil_incident"] + m["recoil_cross"])
+    # the fallback: the same kind of field without its information
+    from levtrap.setup import parse
+    ps = parse(s)
+    ps["particle"].update(density=RHO)
+    parts = [dict(P_sca=1e-9, mean=(0, 0, 0), second=rates.dipole_second_moment("x"),
+                  beams=[((0, 0, 1), 0.5), ((0, 0, -1), 0.5)])]
+    modes = [dict(name="z", axis=[0, 0, 1], frequency=1e5)]
+    _, models = rates.rates_block(ps, modes=modes, mass=M, P_sca=1e-9, P_abs=0.0, scattering=parts)
+    assert models[1]["model"] == "mie-pattern" and models[1]["validity"] == "approximate"
+    assert any("standing wave" in n for n in models[1]["notes"])
+
 
 def test_rates_block_without_pattern_falls_back_to_the_dipole():
     """Without a Mie pattern (a caller that passes none) the dipole pattern is used, and a
