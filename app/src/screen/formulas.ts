@@ -53,6 +53,11 @@ export const FORMULAS = {
     tex: tex`P_\mathrm{sca} = \oint \mathbf{S}_\mathrm{sca} \cdot d\mathbf{A}`,
     text: "P_sca = ∮ S_sca · dA (the scattered field's Poynting flux)",
   },
+  "multipole-power": {
+    tex: tex`P_\mathrm{sca} = \sum_{n} \left( P^{\mathrm{E}}_{n} + P^{\mathrm{M}}_{n} \right), \qquad P^{\mathrm{E}}_{n} = 4 \sum_{m} |q_{nm}|^2, \quad P^{\mathrm{M}}_{n} = 4 \sum_{m} |p_{nm}|^2`,
+    text: "P_sca = Σ (P_E,n + P_M,n): each multipole's outgoing wave carries its own power, with no cross terms",
+    source: "the scattered beam's coefficients, q on the electric (N) waves and p on the magnetic (M) waves, in OTT's convention (levtrap.derived.multipole_power)",
+  },
   "absorbed-power": {
     tex: tex`P_\mathrm{abs} = -\oint \mathbf{S} \cdot d\mathbf{A}`,
     text: "P_abs = −∮ S · dA (the total field's net inflow)",

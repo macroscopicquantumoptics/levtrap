@@ -154,7 +154,8 @@ class OpticalField:
         return (np.asarray(q).reshape(3, -1).T @ self.R.T) * beam.power * (self.n_medium / C)
 
     def scattering(self, r) -> dict:
-        """Scattered and absorbed power [W] with the particle at r."""
+        """Scattered and absorbed power [W] with the particle at r, and the
+        scattered power split per multipole [W] (``P_sca_multipoles``, #80)."""
         r = self._own(r)[0]
         # the whole beam: the fractions below are of the translated beam's power, high orders included
         b = self.beam.translate_xyz(r) if np.any(r != 0) else self.beam
@@ -163,7 +164,8 @@ class OpticalField:
         if abs(pb["abs"]) < 1e-12:  # round-off for (nearly) lossless particles
             pb["abs"] = max(pb["abs"], 0.0)
         P = self.beam.power
-        return dict(P_sca=pb["sca"] * P, P_abs=pb["abs"] * P)
+        return dict(P_sca=pb["sca"] * P, P_abs=pb["abs"] * P,
+                    P_sca_multipoles={k: v * P for k, v in pb["sca_multipoles"].items()})
 
     def model(self) -> ModelInfo:
         return ModelInfo("mie")

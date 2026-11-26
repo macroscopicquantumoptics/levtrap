@@ -85,6 +85,13 @@ test("results as CSV: one quantity per row, SI units, the model", () => {
   assert.equal(csv[0], "quantity,axis,value,unit,model");
   assert.equal(csv[2], `trap frequency,x,${r.modes[0].frequency},Hz,mie (ok)`);
   assert.ok(rows.some((x) => x.quantity === "reheating"));
+  // the scattered power per multipole (#80), one row each
+  const split = rows.filter((x) => x.quantity === "scattered power by multipole");
+  assert.deepEqual(
+    split.map((x) => x.axis),
+    ["ED", "MD", "EQ", "MQ", "EO", "MO", "higher"],
+  );
+  assert.equal(split[0].value, r.optical!.P_sca_multipoles!.ED);
   const paul = resultRows(RECORDED["paul-linear"]!);
   assert.ok(paul.some((x) => x.quantity === "Mathieu q" && x.axis === "x"));
   assert.ok(!paul.some((x) => x.quantity === "scattered power"));

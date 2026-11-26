@@ -118,6 +118,9 @@ function environment(e: Json, path: string): Json {
 
 /** Real lenses a beam can be focused by (setup.LENSES). */
 export const LENSES = ["354330-C"] as const;
+/** Zernike terms focus.aberration may name (#83; levtrap.setup.ABERRATIONS), and their limit in waves rms. */
+export const ABERRATIONS = ["spherical", "astigmatism_0", "astigmatism_45", "coma_x", "coma_y"] as const;
+export const ABERRATION_MAX = 1;
 
 function vec2(v: unknown, path: string, maxAbs: number): [number, number] {
   if (!Array.isArray(v) || v.length !== 2) throw new SetupError(path, "must be a list of two numbers");
@@ -165,6 +168,16 @@ function focus(f: Json, path: string): Json {
     // an objective's back aperture filled by the beam (#61): it needs the aperture, i.e. the NA
     if (key !== "NA") throw new SetupError(`${path}.filling`, "needs the objective's NA (the aperture it fills); remove it or give NA");
     out.filling = num(f.filling, `${path}.filling`, { exclusiveMin: 0, max: 10 });
+  }
+  if (f.aberration !== null && f.aberration !== undefined) {
+    // a real objective's wavefront error (#83): Zernike terms, rms waves, over its pupil (rho = sin θ / NA)
+    if (out.filling === undefined) throw new SetupError(`${path}.aberration`, "needs a filled objective (NA and filling): the pupil it is measured over");
+    const ab = obj(f.aberration, `${path}.aberration`);
+    const unknown = Object.keys(ab).filter((k) => !(ABERRATIONS as readonly string[]).includes(k));
+    if (unknown.length) throw new SetupError(`${path}.aberration.${unknown[0]}`, `unknown term; known: ${ABERRATIONS.join(", ")}`);
+    out.aberration = Object.fromEntries(
+      Object.entries(ab).map(([k, v]) => [k, num(v, `${path}.aberration.${k}`, { min: -ABERRATION_MAX, max: ABERRATION_MAX })]),
+    );
   }
   if (f.mapping !== null && f.mapping !== undefined) {
     // how the paraxial beam meets the far field (#64): OTT's tan θ (default) or the textbook sine

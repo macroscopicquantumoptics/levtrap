@@ -12,12 +12,15 @@ python examples/paper_2607_09896.py      # ~6 min, writes docs/paper/*.png + pap
 
 The script computes every trap with `levtrap.solve.solve` (equilibrium,
 frequencies, depths, scattered and absorbed power). The force map over the
-intensity (Fig. 1a/S1) and the scattered power per multipole (Figs. 1b, 2c)
-are not part of a Result; the script computes them from the same beam and
-T-matrix (`levtrap.api.build_beam`, `build_tmatrix`), and the MQ-only case
-with the engine's multipole mask, which the app does not offer. The power
-split that darkens the focus is computed in the script (`dark_split`); the
-app has no such helper.
+intensity (Fig. 1a/S1) is not part of a Result; the script computes it from
+the same beam and T-matrix (`levtrap.api.build_beam`, `build_tmatrix`), and
+the MQ-only case with the engine's multipole mask, which the app does not
+offer. The scattered power per multipole (Figs. 1b, 2c) is in a Result at the
+equilibrium (`optical.P_sca_multipoles`, #80) and under More in the app;
+the script computes it itself so that a wavelength with no equilibrium is
+taken at the focus, and `tests/test_multipoles.py` checks that the two agree
+for the 300 nm sphere. The power split that darkens the focus is computed
+in the script (`dark_split`); the app has no such helper.
 
 The trap itself can be built in the app (two coherent LG beams, circular
 polarisation, phase π), and it is the preset "WS₂ bottle beam (dark trap)"
@@ -39,6 +42,14 @@ number is checked against the paper in docs/validation.
 | S4, S5 spectra / temperatures | — | no (needs dispersive k(λ) data and thermal model) |
 
 ## How close is it?
+
+**levtrap and OTT give the same trap.** Run in OTT itself (MATLAB, OTT v1 @
+e6736643) with the same inputs, the beam coefficients and the axial and radial
+forces agree with levtrap to about 1e-14, and the solver's z_eq sits on OTT's
+force zero (`tests/test_ott_dark_trap.py`). The differences from the paper listed
+below are therefore not in levtrap's code: they come from the inputs or conventions
+the paper doesn't state, or from the paper. The result-by-result audit is in
+[`CHECKLIST.md`](CHECKLIST.md).
 
 The values below are approximate readings from the published figures, not
 numbers stated in the text.

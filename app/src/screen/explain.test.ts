@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { explainDepth, explainFrequency, secondaryNumbers } from "./explain.ts";
+import { explainDepth, explainFrequency, multipoleShares, secondaryNumbers } from "./explain.ts";
 import { PRESETS } from "./presets.ts";
 import { RECORDED } from "./recorded.ts";
 
@@ -81,11 +81,11 @@ test("the depth is explained in joules, kelvin and per axis", () => {
 
 test("the second row: every number of a tweezer and of a Paul trap, explained", () => {
   const ids = (id: "tweezer" | "paul-linear") => secondaryNumbers(RECORDED[id]!, PRESETS.find((p) => p.id === id)!.setup).map((s) => s.id);
-  assert.deepEqual(ids("tweezer"), ["position", "stiffness", "mass", "scattered", "absorbed", "damping", "reheating", "crossover"]);
+  assert.deepEqual(ids("tweezer"), ["position", "stiffness", "mass", "scattered", "multipoles", "absorbed", "damping", "reheating", "crossover"]);
   assert.deepEqual(ids("paul-linear"), ["position", "stiffness", "mass", "mathieu-q", "mathieu-a", "micromotion"]);
   const rows = secondaryNumbers(RECORDED.tweezer!, tweezer.setup);
   const row = (id: string) => rows.find((r) => r.id === id)!;
-  assert.equal(row("absorbed").value, "14.0 aW");
+  assert.equal(row("absorbed").value, "14.2 aW");
   assert.equal(row("scattered").explain().formula, "scattered-power");
   assert.equal(row("damping").explain().formula, "gas-damping");
   // the mass formula holds for the numbers shown
@@ -95,6 +95,32 @@ test("the second row: every number of a tweezer and of a Paul trap, explained", 
   const r = RECORDED["paul-linear"]!;
   const A = Math.abs(r.paul!.q.y * r.equilibrium![1]) / 2;
   assert.ok(Math.abs(A - r.paul!.micromotion![1]) < 1e-6 * A);
+});
+
+test("the scattered light by multipole: a small sphere is a dipole, the WS2 dark trap a magnetic quadrupole (#80)", () => {
+  const ws2 = PRESETS.find((p) => p.id === "ws2-bottle")!;
+  const small = secondaryNumbers(RECORDED.tweezer!, tweezer.setup).find((r) => r.id === "multipoles")!;
+  assert.equal(small.label, "Scattered by multipole");
+  assert.match(small.value, /^ED 99.8 %/);
+  const row = secondaryNumbers(RECORDED["ws2-bottle"]!, ws2.setup).find((r) => r.id === "multipoles")!;
+  assert.equal(row.value, "MQ 61.5 % · MD 20.6 % · EQ 15.2 %");
+  const e = row.explain();
+  assert.equal(e.formula, "multipole-power");
+  assert.equal(e.inputs[0].symbol, String.raw`P_\mathrm{MQ}`);
+  assert.match(e.inputs[0].note, /^magnetic quadrupole; 32.7 % for a plane wave/);
+  // the shares are of the scattered power: they add up to P_sca
+  const shares = multipoleShares(RECORDED["ws2-bottle"]!);
+  const o = RECORDED["ws2-bottle"]!.optical!;
+  const total = shares.reduce((sum, s) => sum + s.power, 0);
+  assert.ok(Math.abs(total - o.P_sca) < 1e-5 * o.P_sca);
+  assert.ok(Math.abs(shares.reduce((sum, s) => sum + s.share, 0) - 1) < 1e-12);
+});
+
+test("no multipole row without the split (a Result from before #80)", () => {
+  const r = structuredClone(RECORDED.tweezer!);
+  delete r.optical!.P_sca_multipoles;
+  assert.equal(multipoleShares(r).length, 0);
+  assert.ok(!secondaryNumbers(r, tweezer.setup).some((row) => row.id === "multipoles"));
 });
 
 test("a real lens adds what it does to the focus: moved, clipped, the trap axis tilted", async () => {
