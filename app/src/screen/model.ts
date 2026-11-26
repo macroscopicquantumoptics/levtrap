@@ -4,7 +4,7 @@
  * the engine as it is.
  */
 import { DEFAULT_SETUP } from "../engine/setup.ts";
-import type { BeamField, Environment, Field, Focus, GravityField, Particle, PaulField, Setup, Vec3 } from "../engine/types.ts";
+import type { BeamField, Environment, Field, Focus, GravityField, Particle, PaulField, Polarisation, Setup, Vec3 } from "../engine/types.ts";
 import { formatNumber, formatSI } from "../lib/format.ts";
 import { toFieldText } from "../lib/units.ts";
 
@@ -185,8 +185,23 @@ function freeId(setup: Setup, base: string): string {
 const negate = (v: Vec3): Vec3 => [v[0] === 0 ? 0 : -v[0], v[1] === 0 ? 0 : -v[1], v[2] === 0 ? 0 : -v[2]];
 
 /**
+ * The polarisation for a beam against one polarised `first` that turns the
+ * same way in the lab (#71). Polarisation is given in each beam's own frame
+ * and circular light keeps its helicity, so "circular+" on an opposing beam
+ * turns the other way in the lab: σ⁺σ⁻ light, which has no intensity standing
+ * wave and gives f_x ≠ f_y once the two beams interfere. The other sign keeps
+ * the lab rotation, and the two interfere into a standing wave. Linear and
+ * Jones-vector polarisations are returned as they are.
+ */
+export function counterPolarisation(first: Polarisation | undefined): Polarisation | undefined {
+  return first === "circular+" ? "circular-" : first === "circular-" ? "circular+" : first;
+}
+
+/**
  * A second beam like the first one: same wavelength, power, focus and
- * polarisation, travelling against it ("counter") or with it ("co").
+ * polarisation, travelling against it ("counter") or with it ("co"). A
+ * counter beam of a circularly polarised first beam takes the other circular
+ * sign, so that it turns the same way in the lab (`counterPolarisation`, #71).
  * It does not interfere with the first until `coherent_with` is set.
  */
 export function newBeam(setup: Setup, relation: "counter" | "co"): BeamField {
@@ -200,7 +215,7 @@ export function newBeam(setup: Setup, relation: "counter" | "co"): BeamField {
     power: first.power,
     focus: { ...first.focus },
     mode: first.mode ? { ...first.mode } : undefined,
-    polarisation: first.polarisation,
+    polarisation: relation === "counter" ? counterPolarisation(first.polarisation) : first.polarisation,
     direction,
     position: positionOf(first),
     phase: 0,
