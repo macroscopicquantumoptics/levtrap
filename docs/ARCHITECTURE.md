@@ -76,6 +76,9 @@ Rules:
                                                       //  objective's aperture (1/e^2 radius / aperture, #61);
                                                       //  + optional "mapping": "ott" (default, tan theta, as
                                                       //  OTT-based papers) or "sine" (textbook Gaussian, #64);
+                                                      //  + optional "aberration" with "filling": Zernike terms
+                                                      //  in waves rms over the pupil, {"spherical", "coma_x",
+                                                      //  "coma_y", "astigmatism_0", "astigmatism_45"} (#83);
                                                       // or {"kind": "asphere", "lens": "354330-C",
                                                       //  "beam_diameter": 2.5e-3, "tilt_deg": [0, 0],
                                                       //  "decentre": [0, 0]} (E1); or {"kind": "parabolic_mirror",
@@ -100,6 +103,13 @@ Rules:
 * Unknown keys are kept and reported, not dropped.
 * Lab frame: z is the optical axis of the first beam, y is up. A Paul trap
   is centred at the origin; a linear trap's axis is z.
+* A beam's `polarisation` and `phase` are in its own frame (#71,
+  `src/levtrap/optics.py`): the beam is built along +z and turned the
+  shortest way to its `direction`; one along −z is turned by π about x, so
+  its y is the lab's −y and `"circular+"` on it turns the other way in the
+  lab. `phase` multiplies the beam's coefficients by e^{iφ} about its own
+  focus. Beams linked by `coherent_with` are rescaled together to the sum of
+  their `power`s; the others keep their own.
 * Paul trap a and q follow Leibfried et al., RMP 75, 281 (2003) (see
   `src/levtrap/fields/paul.py` for the per-geometry formulas).
 
@@ -142,7 +152,9 @@ Models per field:
   "equilibrium": [0, 0, 4.0e-7],
   "modes": [{"axis": [1,0,0], "frequency": 1.5e5, "stiffness": 1e-6, "depth": 3e-19}, …],
   "depth": {"J": 3e-19, "K": 2.2e4, "kT": 72},
-  "optical": {"P_sca": …, "P_abs": …, "Qsca": …, "Qabs": …},
+  "optical": {"P_sca": …, "P_abs": …, "Qsca": …, "Qabs": …,
+              "Qsca_multipoles": {"ED": …, "MD": …, "EQ": …, "MQ": …, "EO": …, "MO": …, "higher": …},  // plane wave (#80)
+              "P_sca_multipoles": {"ED": …, …}},   // W: the beams' own split of P_sca at the equilibrium (#80)
   "paul": {"q": {...}, "a": {...}, "stable": true, "secular": {...}, "micromotion": [...]},
   "rates": {"gas_damping": …, "recoil_heating": [...], "reheating_phonons_per_s": [...]},
   "lenses": [{"field": 0, "focus_shift": [...], "clipping_loss": …, …,      // per beam through an asphere (E1)

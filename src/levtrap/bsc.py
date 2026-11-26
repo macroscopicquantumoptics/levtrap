@@ -566,6 +566,64 @@ def _gen_lg2hg(order: int) -> np.ndarray:
     return out
 
 
+#: Zernike terms a pupil aberration may name (#83): (radial polynomial in rho,
+#: azimuthal order m with cos(m phi) for m > 0 and sin(|m| phi) for m < 0), each
+#: normalised to unit rms over the unit disc (Noll), so amplitudes are waves rms.
+ZERNIKE = {
+    "spherical": (lambda r: np.sqrt(5) * (6 * r**4 - 6 * r**2 + 1), 0),
+    "astigmatism_0": (lambda r: np.sqrt(6) * r**2, 2),
+    "astigmatism_45": (lambda r: np.sqrt(6) * r**2, -2),
+    "coma_x": (lambda r: np.sqrt(8) * (3 * r**3 - 2 * r), 1),
+    "coma_y": (lambda r: np.sqrt(8) * (3 * r**3 - 2 * r), -1),
+}
+
+
+def wavefront(aberration: dict, rho, phi):
+    """Wavefront error W [waves] of Zernike terms ``{name: rms waves}`` at pupil (rho, phi)."""
+    W = np.zeros(np.broadcast(rho, phi).shape)
+    for name, amp in aberration.items():
+        radial, m = ZERNIKE[name]
+        ang = 1.0 if m == 0 else (np.cos(m * phi) if m > 0 else np.sin(-m * phi))
+        W = W + amp * radial(rho) * ang
+    return W
+
+
+def _aberrated(beam_type, initial_mode, scale, w0, wscaling, apodisation, truncation_angle,
+               aberration, pol, offset, k, nmax, omega) -> "Bsc":
+    """The far field of BscPmGauss's 'sintheta' pupil times exp(2 pi i W), projected onto
+    vector spherical waves by Gauss-Legendre x FFT quadrature over the aperture (#83)."""
+    from .lens import project_farfield
+    nt, npf = 4 * nmax + 40, 2 * nmax + 4
+    x, wx = np.polynomial.legendre.leggauss(nt)
+    c_lo, c_hi = -1.0, math.cos(np.pi - truncation_angle)  # theta from pi (the axis) to pi - aperture
+    cos_t = 0.5 * (c_hi - c_lo) * x + 0.5 * (c_hi + c_lo)
+    wg = 0.5 * abs(c_hi - c_lo) * wx
+    th = np.arccos(cos_t)
+    ph = np.arange(npf) * 2 * np.pi / npf
+    TH, PH = np.meshgrid(th, ph, indexing="ij")
+    rw = 2 * (wscaling * w0) ** 2 * np.sin(TH) ** 2
+    env = np.zeros(TH.shape, dtype=complex)
+    for ii, s in enumerate(scale):
+        p_, l_ = int(initial_mode[ii, 0]), int(initial_mode[ii, 1])
+        norm_paraxial = np.sqrt(2 * math.factorial(p_) / (np.pi * math.factorial(p_ + abs(l_))))
+        e = (norm_paraxial * rw ** abs(l_ / 2) * laguerre(p_, abs(l_), rw)
+             * np.exp(-rw / 2 + 1j * l_ * PH + 1j * np.pi / 2 * (2 * p_ + abs(l_) + 1)))
+        if apodisation == "aplanatic":
+            e = e * np.sqrt(np.abs(np.cos(TH)))
+        env = env + s * e
+    # rho = sin(theta) / sin(aperture), phi the position on the pupil (the ray arrives from -r)
+    env = env * np.exp(2j * np.pi * wavefront(aberration, np.sin(TH) / np.sin(truncation_angle), PH))
+    if offset is not None:
+        off = np.asarray(offset, dtype=float).ravel()
+        env = env * np.exp(1j * k * (np.sin(TH) * np.cos(PH) * off[0] + np.sin(TH) * np.sin(PH) * off[1]
+                                     + np.cos(TH) * off[2]))
+    Ex, Ey = pol[0] * env, pol[1] * env
+    Et = -Ex * np.cos(PH) - Ey * np.sin(PH)
+    Ep = -Ex * np.sin(PH) + Ey * np.cos(PH)
+    a, b = project_farfield(th, ph, Et, Ep, wg, nmax)
+    return Bsc(a, b, basis="regular", type="incident", k_medium=k, omega=omega)
+
+
 def BscPmGauss(beam_type: str = "lg", mode=(0, 0), *, polarisation=(1, 1j),
                NA: float | None = None, angle: float | None = None,
                angle_deg: float | None = None, index_medium: float | None = None,
@@ -574,7 +632,7 @@ def BscPmGauss(beam_type: str = "lg", mode=(0, 0), *, polarisation=(1, 1j),
                truncation_angle: float | None = None, offset=None,
                angular_scaling: str = "tantheta", zero_rejection_level: float = 1e-8,
                omega: float = 2 * np.pi, apodisation: str | None = None,
-               width_sin: float | None = None) -> Bsc:
+               width_sin: float | None = None, aberration: dict | None = None) -> Bsc:
     """Focused Gaussian / Laguerre-Gaussian / Hermite-Gaussian beam.
 
     Port of ``ott.BscPmGauss`` (far-field point matching of a paraxial
@@ -609,6 +667,12 @@ def BscPmGauss(beam_type: str = "lg", mode=(0, 0), *, polarisation=(1, 1j),
         Not in OTT. With ``angular_scaling='sintheta'``: sin of the angle at
         which the paraxial beam's 1/e^2 radius maps, given directly so it may
         exceed 1 (an overfilled aperture). Replaces NA / angle for the width.
+    aberration : dict, optional
+        Not in OTT (#83). Zernike terms of the pupil's wavefront error, rms
+        amplitudes in waves (:data:`ZERNIKE`), over the pupil coordinate
+        rho = sin(theta) / sin(truncation_angle), phi from the x axis. The far
+        field is multiplied by exp(2 pi i W(rho, phi)). Needs a truncation
+        angle (an aperture) so that rho <= 1.
     """
     k = k_medium_from(k_medium, wavelength_medium, index_medium, wavelength0)
     if truncation_angle is None:
@@ -664,6 +728,12 @@ def BscPmGauss(beam_type: str = "lg", mode=(0, 0), *, polarisation=(1, 1j),
     axisymmetry = True
     if offset is not None and np.any(np.abs(np.asarray(offset)[:2]) > 0):
         axisymmetry = False
+    aberration = {k: float(v) for k, v in (aberration or {}).items() if float(v) != 0.0}
+    for name in aberration:
+        if name not in ZERNIKE:
+            raise ValueError(f"unknown aberration {name!r}; known: {', '.join(ZERNIKE)}")
+    if aberration and truncation_angle >= np.pi / 2:
+        raise ValueError("an aberration needs an aperture (truncation_angle below pi/2)")
 
     w0 = paraxial_beam_waist(order)
     wscaling = 1 / np.tan(abs(np.radians(beam_angle_deg)))
@@ -694,6 +764,7 @@ def BscPmGauss(beam_type: str = "lg", mode=(0, 0), *, polarisation=(1, 1j),
     total_modes = nmax**2 + 2 * nmax
     nn, mm = combined_index(np.arange(1, total_modes + 1))
     mode_index_vector = []
+    norms = []
     envelope = np.zeros((theta.size, c.size), dtype=complex)
     for ii in range(c.size):
         radial_mode = int(initial_mode[ii, 0])
@@ -711,10 +782,26 @@ def BscPmGauss(beam_type: str = "lg", mode=(0, 0), *, polarisation=(1, 1j),
         mode_input_power = np.sqrt(np.sum(2 * np.pi * np.abs(env) ** 2 * np.sqrt(rw / 2) * np.abs(dr)))
         aperture_norm = np.sqrt(np.sum(2 * np.pi * np.abs(env) ** 2 * np.sin(theta)))
         envelope[:, ii] = c[ii] * env / aperture_norm * mode_input_power
+        norms.append((aperture_norm, mode_input_power))
         mode_index_vector.append(np.nonzero((mm == azimuthal_mode + 1) | (mm == azimuthal_mode - 1))[0])
     mode_index_vector = np.unique(np.concatenate(mode_index_vector))
     envelope = envelope.sum(axis=1)
     envelope[theta < np.pi - truncation_angle] = 0
+    if aberration:
+        # an aberrated pupil (#83): the far field is no longer one LG mode's, and point matching
+        # on the reduced mode set misses its new azimuthal orders; project it by quadrature
+        # instead (lens.project_farfield, as the asphere and the mirror do), on the aperture only
+        scale = [c[ii] / norms[ii][0] * norms[ii][1] for ii in range(c.size)]
+        beam = _aberrated(beam_type, initial_mode, scale, w0, wscaling, apodisation, truncation_angle,
+                          aberration, (xcomp, ycomp), offset, k, nmax, omega)
+        if Nmax is None:
+            beam = beam.shrink_Nmax()
+        if power is not None:
+            beam = beam.with_power(power)
+        beam.info = dict(beam_type=beam_type, mode=mode, polarisation=(xcomp, ycomp),
+                         angle=np.radians(beam_angle_deg), truncation_angle=truncation_angle,
+                         aberration=dict(aberration))
+        return beam
     if offset is not None:
         off = np.asarray(offset, dtype=float).ravel()
         rhat = np.stack([np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)], axis=1)

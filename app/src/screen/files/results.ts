@@ -39,6 +39,9 @@ export function resultRows(result: Result): Row[] {
   if (result.optical) {
     const optical = modelOf(result, "optical");
     add("scattered power", "", result.optical.P_sca, "W", optical);
+    // the beams' own split of the scattered power at the equilibrium (#80)
+    const split = result.optical.P_sca_multipoles;
+    if (split) for (const [key, value] of Object.entries(split)) add("scattered power by multipole", key, value, "W", optical);
     add("absorbed power", "", result.optical.P_abs, "W", optical);
   }
   if (result.paul) {

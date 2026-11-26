@@ -4,7 +4,8 @@ import { Fragment, useState, type ReactNode } from "react";
 import type { Engine } from "../engine/client.ts";
 import { alignedSetup, compare, misaligned } from "./aligned.ts";
 import { useAnswer } from "./hooks.ts";
-import type { AsphereFocus, BeamField, MirrorFocus, Field, Gas, GravityField, PaulField, Polarisation, Result, Setup, Vec3 } from "../engine/types.ts";
+import type { Aberration, AsphereFocus, BeamField, MirrorFocus, Field, Gas, GravityField, PaulField, Polarisation, Result, Setup, Vec3 } from "../engine/types.ts";
+import { ABERRATION_MAX } from "../engine/validate.ts";
 import { asphereHalfAngle, LENSES } from "../engine/lenses.ts";
 import { mirrorAngles, mirrorHalfAngle, mirrorReflected } from "../engine/mirrors.ts";
 import { formatNumber, formatSI } from "../lib/format.ts";
@@ -328,6 +329,14 @@ function BeamEditor({ setup, beam, index, prefix, onEdit }: EditorProps & { beam
           value={pol}
           options={pol === "custom" ? [...POLARISATIONS, { value: "custom", label: "Custom (Jones vector)" }] : POLARISATIONS}
           onChange={(v) => v !== "custom" && edit({ polarisation: v as Polarisation })}
+          note={
+            // polarisation is in each beam's own frame and carried by its rotation (#71)
+            relation === "against"
+              ? `In this beam's own frame: its x is the lab's x, its y the lab's −y. So Circular + here turns the other way in the lab from Circular + on ${nameOf(first.i).toLowerCase()}.`
+              : relation === "custom"
+                ? "In this beam's own frame, turned the shortest way from the lab's z to this beam's direction."
+                : null
+          }
         />
         {relation !== "first" && (
           <SelectField
@@ -352,7 +361,22 @@ function BeamEditor({ setup, beam, index, prefix, onEdit }: EditorProps & { beam
             note={partner ? null : "Beams that do not interfere add their forces."}
           />
         )}
-        {partner && <NumberField id={`${prefix}-phase`} label="Phase" value={beam.phase ?? 0} quantity="phase" unit="π rad" onCommit={(v) => edit({ phase: v })} />}
+        {partner && (
+          <NumberField
+            id={`${prefix}-phase`}
+            label="Phase"
+            value={beam.phase ?? 0}
+            quantity="phase"
+            unit="π rad"
+            onCommit={(v) => edit({ phase: v })}
+            // the phase reference (#71): a factor on the beam's own coefficients (optics._group_beam)
+            note={
+              <>
+                Multiplies this beam&apos;s field by e<sup>iφ</sup> at its own focus, in its own frame.
+              </>
+            }
+          />
+        )}
       </Fields>
       <Advanced changed={changed}>
         <SelectField
@@ -413,6 +437,15 @@ function switchFocus(kind: string, theta: number): BeamField["focus"] | null {
   return null;
 }
 
+/** A filled objective's Zernike terms (#83), spherical first: the one a tweezer objective has most. */
+const ABERRATION_TERMS: { key: keyof Aberration; label: string; short: string }[] = [
+  { key: "spherical", label: "Spherical aberration", short: "spherical" },
+  { key: "astigmatism_0", label: "Astigmatism 0°", short: "astigmatism 0°" },
+  { key: "astigmatism_45", label: "Astigmatism 45°", short: "astigmatism 45°" },
+  { key: "coma_x", label: "Coma x", short: "coma x" },
+  { key: "coma_y", label: "Coma y", short: "coma y" },
+];
+
 type EngineProps = { engine: (() => Engine) | null; recorded: boolean };
 
 function LensEditor({ setup, beam, index, prefix, onEdit, result, engine, recorded }: EditorProps & EngineProps & { beam: BeamField; index: number; result: Result | null }) {
@@ -438,6 +471,12 @@ function LensEditor({ setup, beam, index, prefix, onEdit, result, engine, record
   const given = focus.NA != null ? "NA" : focus.waist != null ? "waist" : "half-angle";
   // an objective with its back aperture filled (#61): NA is then the aperture, and the filling sets the focus
   const filling = focus.NA != null ? (focus.filling ?? null) : null;
+  // its wavefront error, if any (#83): kept through edits of the NA and the filling
+  const aberration = filling != null ? (focus.aberration ?? {}) : {};
+  const aberrated = Object.keys(aberration).length ? { aberration } : {};
+  const aberrationSummary = ABERRATION_TERMS.filter((t) => aberration[t.key]).map(
+    (t) => `${t.short} ${formatNumber(aberration[t.key]!, 3, true)} λ`,
+  );
   return (
     <>
       <Fields>
@@ -457,7 +496,7 @@ function LensEditor({ setup, beam, index, prefix, onEdit, result, engine, record
           value={na}
           quantity="number"
           check={(v) => (v > 0 && v < n ? null : `Must be between 0 and the medium index (${formatNumber(n, 4, true)}).`)}
-          onCommit={(v) => edit(filling != null ? { kind: "lens", NA: v, filling } : { kind: "lens", NA: v, ...mapped })}
+          onCommit={(v) => edit(filling != null ? { kind: "lens", NA: v, filling, ...aberrated } : { kind: "lens", NA: v, ...mapped })}
         />
         {filling != null ? (
           <NumberField
@@ -466,7 +505,7 @@ function LensEditor({ setup, beam, index, prefix, onEdit, result, engine, record
             value={filling}
             quantity="number"
             check={(v) => (v > 0 && v <= 10 ? null : "Must be between 0 and 10.")}
-            onCommit={(v) => edit({ kind: "lens", NA: na, filling: v })}
+            onCommit={(v) => edit({ kind: "lens", NA: na, filling: v, ...aberrated })}
             note="The beam's 1/e² radius on the back aperture, over the aperture's radius: below 1 underfilled, above 1 overfilled."
           />
         ) : (
@@ -487,6 +526,7 @@ function LensEditor({ setup, beam, index, prefix, onEdit, result, engine, record
           ...(given === "half-angle" ? [`half-angle ${formatNumber((angle * 180) / Math.PI, 3, true)}°`] : []),
           ...(filling != null ? [`objective, filling ${formatNumber(filling, 3, true)}`] : []),
           ...(filling == null && mapping === "sine" ? ["sine mapping"] : []),
+          ...aberrationSummary,
         ]}
       >
         <SelectField
@@ -509,6 +549,27 @@ function LensEditor({ setup, beam, index, prefix, onEdit, result, engine, record
                 : "OTT's Gaussian of this NA (far field mapped by tan θ), as OTT-based papers use it: a little wider than the textbook waist λ / (π NA)."
           }
         />
+        {filling != null &&
+          ABERRATION_TERMS.map((term, i) => (
+            <NumberField
+              key={term.key}
+              id={`${prefix}-aberration-${term.key}`}
+              label={term.label}
+              value={aberration[term.key] ?? 0}
+              quantity="number"
+              check={(v) => (Math.abs(v) <= ABERRATION_MAX ? null : `Must be between −${ABERRATION_MAX} and ${ABERRATION_MAX} waves.`)}
+              onCommit={(v) => {
+                const next = { ...aberration, [term.key]: v };
+                if (!v) delete next[term.key];
+                edit({ kind: "lens", NA: na, filling, ...(Object.keys(next).length ? { aberration: next } : {}) });
+              }}
+              note={
+                i === 0
+                  ? "The objective's wavefront error over its pupil, each term in waves rms (Zernike). 0.07 is the Maréchal limit of a diffraction-limited objective; spherical aberration softens the trap most along the beam (docs/validation/focus.md)."
+                  : undefined
+              }
+            />
+          ))}
         <NumberField
           id={`${prefix}-angle`}
           label="Half-angle"

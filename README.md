@@ -30,7 +30,9 @@ through [Pyodide](https://pyodide.org) and locally for research scripts.
   354330-C asphere (prescription from the Thorlabs Zemax file), tilted and
   decentred: the focus shift, clipping loss and trap-axis tilt follow.
 * **Paper reproduction:** figures of arXiv:2607.09896 (dark trapping of
-  WS₂): see [`docs/paper/`](docs/paper/README.md).
+  WS₂): see [`docs/paper/`](docs/paper/README.md). Its two-beam dark trap was
+  also run in OTT itself (MATLAB): levtrap's beam and forces agree with OTT's
+  to about 1e-14 (`tests/test_ott_dark_trap.py`).
 
 > **levtrap 2.** The screen is `app/` (design in
 > [`app/DESIGN.md`](app/DESIGN.md)), served at the site's root; the engine's

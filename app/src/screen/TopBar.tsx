@@ -239,6 +239,59 @@ export function TopBar({ name, canUndo, canRedo, onUndo, onRedo, show, onShow, o
   );
 }
 
+/**
+ * The conventions a result depends on but no input shows (#71): beam frames,
+ * the phase reference, the power of a coherent group, the NA ↔ waist mapping
+ * (#64), and what the depth and the reheating rate include. Folded, so the
+ * help stays three lines until asked. The physics is in src/levtrap/optics.py
+ * (frames, phase, power), api._beam_angle (mapping), solver.py (depth) and
+ * rates.py (reheating).
+ */
+function Conventions() {
+  return (
+    <details className={styles.conventions} data-testid="help-conventions">
+      <summary className={styles.helpTitle}>Conventions</summary>
+      <dl className={styles.conventionList}>
+        <dt>Frames</dt>
+        <dd>
+          In the lab, z is the first beam&apos;s axis and y is up. Each beam is set in its own frame: it travels along its own z and its
+          polarisation lies in its own x–y plane. A beam against the first is turned by 180° about x, so its y is the lab&apos;s −y and Circular
+          + on it turns the other way in the lab. Circular − on it turns the same way as Circular + on the first beam: Add field → Counter-propagating
+          beam picks that sign.
+        </dd>
+        <dt>Phase</dt>
+        <dd>
+          A beam&apos;s phase φ multiplies its field by e<sup>iφ</sup> at its own focus, in its own frame. It matters only between beams that
+          interfere. Two opposing beams focused at one point, polarised alike in the lab and in phase, have an antinode there.
+        </dd>
+        <dt>Power</dt>
+        <dd>
+          Beams that do not interfere each keep their power, and their forces add. Beams that interfere form one field whose power is the sum of
+          their powers: interference changes the power of the sum, so the field is rescaled to it. Opposing beams whose cones do not overlap (NA
+          below n/√2) keep their own powers.
+        </dd>
+        <dt>NA and waist</dt>
+        <dd>
+          Two descriptions of one focus, through its half-angle θ (NA = n sin θ). Gaussian (OTT), the default, takes tan θ = λ w<sub>p</sub> / (π n
+          w₀), as OTT and the papers built on it do. Gaussian (sine) takes sin θ = λ w<sub>p</sub> / (π n w₀): at a small NA the textbook waist λ /
+          (π NA), and a tighter focus. w<sub>p</sub> is 1 for a Gaussian and grows with a mode&apos;s order.
+        </dd>
+        <dt>Depth</dt>
+        <dd>
+          The lowest energy barrier from the trap along the three axes of its modes, of the summed force of every field: the beams, the Paul
+          trap&apos;s pseudopotential and gravity. Escape routes off those three lines are not searched.
+        </dd>
+        <dt>Reheating</dt>
+        <dd>
+          Per mode, in phonons per second: gas heating, γ k<sub>B</sub>T / (ħΩ), plus photon recoil from the light the sphere scatters (an
+          electric-dipole pattern) and from the photons it takes out of the beam. Laser noise and the heating of the sphere by the light it
+          absorbs are not included.
+        </dd>
+      </dl>
+    </details>
+  );
+}
+
 /** How the screen works in three lines, and what levtrap is. No separate help page. */
 function Help({ status }: { status: EngineStatus | null }) {
   const [open, setOpen] = useState(false);
@@ -262,6 +315,7 @@ function Help({ status }: { status: EngineStatus | null }) {
           <p className={styles.keys}>
             <kbd>Ctrl</kbd> <kbd>Z</kbd> undoes · <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Z</kbd> redoes · <kbd>Esc</kbd> deselects
           </p>
+          <Conventions />
           <p className={styles.helpTitle}>About</p>
           <p className={styles.about}>
             levtrap computes the forces on a levitated sphere in optical and Paul traps. The optical part is a port of the{" "}

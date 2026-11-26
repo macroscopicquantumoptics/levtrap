@@ -163,6 +163,26 @@ def test_two_coherent_opposing_beams_make_a_standing_wave():
     assert kz > 5 * next(m for m in incoherent["modes"] if m["name"] == "z")["stiffness"]
 
 
+def test_an_opposing_circular_beam_keeps_its_helicity():
+    """Polarisation is given in each beam's own frame (#71): "circular+" on a beam
+    against a "circular+" beam turns the other way in the lab (sigma+ sigma-), so
+    the two coherent beams make no intensity standing wave and f_x != f_y. The
+    other sign turns the same way in the lab: a standing wave, f_x = f_y and a
+    much stiffer z. The app's Add field -> Counter-propagating beam picks it."""
+    def freqs(pol):
+        s = setup({"id": "beam1", "polarisation": "circular+"},
+                  {"id": "beam2", "direction": [0, 0, -1], "coherent_with": "beam1", "polarisation": pol})
+        r = solve(s)
+        assert r["stable"] and np.max(np.abs(r["equilibrium"])) < 1e-12
+        return {m["name"]: m["frequency"] for m in r["modes"]}
+
+    same_lab = freqs("circular-")
+    opposite_lab = freqs("circular+")
+    assert same_lab["x"] == pytest.approx(same_lab["y"], rel=1e-3)
+    assert abs(opposite_lab["x"] / opposite_lab["y"] - 1) > 0.01
+    assert same_lab["z"] > 5 * opposite_lab["z"]
+
+
 def test_separated_foci_trap_at_the_midpoint():
     z0, d = 0.25e-6, 0.4e-6
     s = setup({"position": [0, 0, z0 - d]}, {"id": "beam2", "direction": [0, 0, -1], "position": [0, 0, z0 + d]})

@@ -9,7 +9,8 @@
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
   background: var(--scene);
-  overflow: hidden;
+  /* clip, not hidden: a hidden box can still be scrolled by scrollIntoView or focus, and nothing scrolls it back (#74) */
+  overflow: clip;
 }
 
 .stage {
@@ -74,8 +75,16 @@
   border-color: var(--ok);
 }
 
+/* neither a confirmation nor a problem (#74) */
+.notice[data-tone="info"] {
+  border-color: var(--border);
+}
+
+/* a long word (a file name, a link) breaks rather than widening the screen (#74) */
 .notice p {
+  min-width: 0;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .notice button {
@@ -93,11 +102,15 @@
 
 @media (max-width: 720px) {
   .screen {
-    grid-template-rows: minmax(170px, 1fr) auto auto;
+    /* the dock may shrink (and scroll inside itself) so the parts row stays on screen when a
+       notice and the drawer are both open: the screen cannot be scrolled (overflow: clip, #74) */
+    grid-template-rows: minmax(170px, 1fr) minmax(0, auto) auto;
   }
 
   .dock {
     padding: 0 8px 8px;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   .inspector {
