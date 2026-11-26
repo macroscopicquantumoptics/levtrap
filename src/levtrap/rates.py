@@ -12,17 +12,41 @@ Everything is SI.  Rates are angular rates [1/s] unless they are phonon rates
   ``coherent_oscillations = Omega / reheating``, ``Q = Omega / gamma``.
 * ``crossover_pressure`` [Pa]: where gas heating equals recoil heating.
 
-Direction-resolved recoil
--------------------------
-The recoil rate needs the second moment ``<n n>`` (3x3) of the direction
-``n`` of the scattered photons, weighted by the scattered power, and their
-mean ``<n>`` for the forward/backward cross term.  A solve takes both from
-the Mie scattered field at the equilibrium (``scattering`` in
-:func:`rates_block`, from ``OpticalField.scattering``; #78), so a resonant
-particle whose scattering is dominated by a magnetic or quadrupole multipole
-gets its own pattern.  Without it (a caller that passes no ``scattering``)
-the electric-dipole pattern of the beams' polarisation,
-:func:`dipole_second_moment`, is the fallback, and its model says so.
+Recoil from the position information (#95)
+------------------------------------------
+The measurement backaction on a scatterer equals the position information
+its scattered light carries (Tebbenjohanns, Frimmer & Novotny, PRA 100,
+043821 (2019)).  With ``M_uu = integral |dF/du|^2 dOmega`` [W/m^2], the
+information of the scattered far field F about the position along u
+(:func:`levtrap.pattern.recoil_information`; the diagonal of it is the
+``pattern`` block's ``information_total``), the recoil heating is
+
+    Gamma_u = M_uu / (2 m omega Omega_u)            [phonons/s]
+
+summed over fields that do not interfere (each at its own omega).  This
+follows the actual field at the particle: a plane wave gives the photon
+picture below exactly (A = 1/5, 2/5, 7/5 for a dipole); at a focus the beam
+photons weigh less than 1 along the axis (the Gouy phase makes the axial
+phase gradient smaller than k); a standing wave heats at its nodes, where
+nothing is scattered but the field gradient is largest.  A solve uses it
+(model ``information``) whenever the scattered field at the equilibrium is
+known.  The photon split stays as the explanation, now exact:
+dF/du = G_u - i k n_u F, where G_u is what the particle scatters from the
+incident field's derivative; the scattered photons are k^2 P_sca <n n>
+(the Mie pattern), the beam photons |G_u|^2 and the cross term the rest.
+
+Direction-resolved recoil (fallbacks)
+-------------------------------------
+Without the information (a caller that passes only the Mie moments), the
+plane-wave photon picture of :func:`recoil_heating` is used: the second
+moment ``<n n>`` (3x3) of the direction ``n`` of the scattered photons,
+weighted by the scattered power, their mean ``<n>`` for the cross term, and
+the beam photons along each beam (model ``mie-pattern``, #78).  Without even
+that, the electric-dipole pattern of the beams' polarisation,
+:func:`dipole_second_moment`, is used (``dipole-pattern``).  Their models
+say so.  None of the models includes the recoil of absorbed photons: above
+1 % of the scattered power a note says so, and above 10 % the recoil is
+marked approximate.
 """
 
 from __future__ import annotations
@@ -37,7 +61,8 @@ from .derived import C, KB
 __all__ = [
     "HBAR", "AMU", "GASES", "gas_properties", "mean_speed", "mean_free_path", "knudsen",
     "gas_damping", "epstein_damping", "stokes_damping", "gas_heating", "jones_vector",
-    "dipole_second_moment", "recoil_heating", "recoil_tensors", "crossover_pressure", "mode_rates", "rates_block",
+    "dipole_second_moment", "recoil_heating", "recoil_tensors", "information_heating", "information_tensors",
+    "crossover_pressure", "mode_rates", "rates_block",
 ]
 
 HBAR = 1.054_571_817e-34  # reduced Planck constant [J s] (CODATA 2018, exact h / 2 pi)
@@ -194,8 +219,10 @@ def recoil_heating(P_sca: float, wavelength0: float, mass: float, Omega: float, 
                    scattered_moment: np.ndarray, beam_direction: Sequence[float] = (0, 0, 1),
                    n_medium: float = 1.0, scattered_mean: Sequence[float] | None = None, *,
                    beam_moment: np.ndarray | None = None, cross_moment: np.ndarray | None = None) -> dict:
-    """Photon-recoil heating of one mode [phonons/s].
+    """Photon-recoil heating of one mode [phonons/s], plane-wave photon picture.
 
+    A solve uses :func:`information_heating` (#95), which is exact for any
+    field and equals this for a single plane wave; this is its fallback.
     Scattering N = P_sca / (hbar omega) photons per second, each of momentum
     hbar k (k = n_medium omega / c), kicks the particle by hbar k (e_in - n)
     per photon: a photon taken out of the beam along e_in and sent out along
@@ -280,6 +307,50 @@ def recoil_tensors(parts: Sequence[dict]) -> dict:
     return dict(second=S, mean=m, beam=B, cross=X)
 
 
+def information_tensors(parts: Sequence[dict], n_medium: float = 1.0) -> dict:
+    """Sum the fields' information tensors for :func:`information_heating` (#95).
+
+    ``parts``: one dict per optical field that does not interfere with the
+    others, with ``k`` [1/m] (in the medium) and 3x3 ``info_scattered``,
+    ``info_incident``, ``info_cross`` [W/m^2] (from
+    ``OpticalField.scattering``).  Each field's photons carry energy
+    hbar omega_f, omega_f = k_f c / n_medium, so its information enters as
+    M_f / omega_f.  Returns ``scattered``, ``incident`` and ``cross``, each
+    sum_f M_f / omega_f [J/m^2].
+    """
+    out = dict(scattered=np.zeros((3, 3)), incident=np.zeros((3, 3)), cross=np.zeros((3, 3)))
+    for p in parts:
+        omega = float(p["k"]) * C / n_medium
+        for key in out:
+            out[key] = out[key] + np.real(np.asarray(p["info_" + key], float)) / omega
+    return out
+
+
+def information_heating(mass: float, Omega: float, axis: Sequence[float], tensors: dict) -> dict:
+    """Photon-recoil heating of one mode [phonons/s] from the position information (#95).
+
+    The backaction equals the information (Tebbenjohanns, Frimmer & Novotny,
+    PRA 100, 043821 (2019)): a field scattering P_sca/(hbar omega) photons
+    per second whose far field F carries the information
+    M_uu = integral |dF/du|^2 dOmega [W/m^2] kicks the particle with
+    d<p_u^2>/dt = hbar M_uu / omega, so
+
+        Gamma_u = M_uu / (2 m omega Omega_u).
+
+    In the units of :func:`recoil_heating`, A_u = M_uu / (k^2 P_sca).
+    ``tensors`` from :func:`information_tensors` (sum_f M_f / omega_f, split
+    into the scattered photons, the beam photons and their cross term; see
+    :func:`levtrap.pattern.recoil_information`).  The three parts add up to
+    the total exactly.  Returns ``scattered``, ``incident``, ``cross`` and
+    ``total`` [phonons/s].
+    """
+    u = np.asarray(axis, float)
+    u = u / np.linalg.norm(u)
+    part = {k: float(u @ np.asarray(tensors[k], float) @ u) / (2 * mass * Omega)
+            for k in ("scattered", "incident", "cross")}
+    return dict(**part, total=part["scattered"] + part["incident"] + part["cross"])
+
+
 def crossover_pressure(recoil: float, Omega: float, radius: float, mass: float, gas: str,
                        temperature: float, p_min: float = 1e-12, p_max: float = 1e7) -> float | None:
     """Pressure [Pa] at which gas heating equals ``recoil`` [phonons/s].
@@ -313,18 +384,24 @@ def crossover_pressure(recoil: float, Omega: float, radius: float, mass: float, 
 def mode_rates(*, Omega: float | None, axis: Sequence[float], gamma: float, temperature: float,
                P_sca: float, wavelength0: float, mass: float, radius: float, gas: str,
                scattered_moment: np.ndarray, beam_direction=(0, 0, 1), n_medium: float = 1.0,
-               scattered_mean=None, beam_moment=None, cross_moment=None) -> dict:
+               scattered_mean=None, beam_moment=None, cross_moment=None, information=None) -> dict:
     """All rates of one mode; values are ``None`` when the mode is not trapped.
 
     ``recoil_scattered``, ``recoil_incident`` (the beam photons) and
-    ``recoil_cross`` add up to ``recoil_heating`` (:func:`recoil_heating`).
+    ``recoil_cross`` add up to ``recoil_heating``: from the position
+    information (:func:`information_heating`) when ``information`` (from
+    :func:`information_tensors`) is given, else from the plane-wave photon
+    picture (:func:`recoil_heating`).
     """
     keys = ("gas_heating", "recoil_heating", "recoil_scattered", "recoil_incident", "recoil_cross",
             "reheating", "Q", "coherence_time", "coherent_oscillations", "crossover_pressure")
     if Omega is None or not np.isfinite(Omega) or Omega <= 0:
         return dict.fromkeys(keys)
-    rec = recoil_heating(P_sca, wavelength0, mass, Omega, axis, scattered_moment, beam_direction, n_medium,
-                         scattered_mean, beam_moment=beam_moment, cross_moment=cross_moment)
+    if information is not None:
+        rec = information_heating(mass, Omega, axis, information)
+    else:
+        rec = recoil_heating(P_sca, wavelength0, mass, Omega, axis, scattered_moment, beam_direction, n_medium,
+                             scattered_mean, beam_moment=beam_moment, cross_moment=cross_moment)
     gh = gas_heating(gamma, temperature, Omega)
     tot = gh + rec["total"]
     return dict(
@@ -355,6 +432,12 @@ def _usable(parts) -> bool:
         and np.isfinite(p["P_sca"]) for p in parts) and sum(max(p["P_sca"], 0.0) for p in parts) > 0
 
 
+def _informed(parts) -> bool:
+    keys = ("k", "info_scattered", "info_incident", "info_cross")
+    return all(all(k in p for k in keys) and all(np.all(np.isfinite(np.asarray(p[k], float))) for k in keys)
+               for p in parts)
+
+
 def _parallel(directions) -> bool:
     """All directions along one axis (either way)."""
     d = [np.asarray(v, float) / np.linalg.norm(v) for v in directions]
@@ -378,10 +461,15 @@ def rates_block(s: dict, *, modes: list[dict], mass: float, P_sca: float, P_abs:
     ``scattering``: per optical field, the Mie scattered pattern at the
     equilibrium (``P_sca``, ``mean``, ``second`` in the lab frame, and
     ``beams``: ``(direction, power weight)`` of the beams it scatters; see
-    :func:`recoil_tensors`).  With it the recoil uses the Mie pattern
-    (model ``mie-pattern``, #78); without it the electric-dipole pattern of
-    the beams' polarisation (``dipole-pattern``), whose validity
-    ``ed_fraction``, the electric-dipole share of the scattered power, sets.
+    :func:`recoil_tensors`), and its position information split into
+    photon terms (``k``, ``info_scattered``, ``info_incident``,
+    ``info_cross``; see :func:`information_tensors`).  With the information
+    the recoil is the backaction of it (model ``information``, #95), exact
+    for any field (absorption aside); with only the moments it uses the Mie
+    pattern and plane-wave beam photons (``mie-pattern``, #78); without
+    either the electric-dipole pattern of the beams' polarisation
+    (``dipole-pattern``), whose validity ``ed_fraction``, the
+    electric-dipole share of the scattered power, sets.
     Returns ``(block, models)``.
     """
     env = s["environment"]
@@ -396,12 +484,23 @@ def rates_block(s: dict, *, modes: list[dict], mass: float, P_sca: float, P_abs:
     kn = knudsen(p, radius, g["viscosity"], g["mass"], T)
     gamma = gas_damping(p, radius, mass, g["viscosity"], g["mass"], T)
     mie = _usable(scattering)
+    info = mie and _informed(scattering)
     validity = "ok"
     if mie:
         tens = recoil_tensors(scattering)
+    if info:
+        model = "information"
+        pattern = dict(scattered_moment=tens["second"], information=information_tensors(scattering, n_medium))
+        recoil_notes = ["backaction = position information of the scattered light (Tebbenjohanns, Frimmer & "
+                        "Novotny 2019), from the field at the equilibrium",
+                        "split: scattered photons (Mie pattern), beam photons (the incident field's gradient "
+                        "at the particle) and their interference"]
+    elif mie:
+        model = "mie-pattern"
         pattern = dict(scattered_moment=tens["second"], scattered_mean=tens["mean"],
                        beam_moment=tens["beam"], cross_moment=tens["cross"])
-        recoil_notes = ["scattered photons: Mie pattern at the equilibrium; "
+        recoil_notes = ["position information not available: plane-wave photon picture",
+                        "scattered photons: Mie pattern at the equilibrium; "
                         "beam photons: plane-wave shot noise along each beam"]
         mixed = [p_ for p_ in scattering if len(p_["beams"]) > 1 and not _same_way([d for d, _ in p_["beams"]])]
         if mixed:
@@ -410,6 +509,7 @@ def rates_block(s: dict, *, modes: list[dict], mass: float, P_sca: float, P_abs:
                                 "are averaged over the beams by power, as if uncorrelated with the scattered "
                                 "direction")
     else:
+        model = "dipole-pattern"
         moment, same_pol = _beam_moment(beams)
         pattern = dict(scattered_moment=moment, beam_direction=beams[0]["direction"])
         recoil_notes = ["scattered photons: electric-dipole pattern; beam photons: plane-wave shot noise"]
@@ -436,6 +536,12 @@ def rates_block(s: dict, *, modes: list[dict], mass: float, P_sca: float, P_abs:
     if n_medium != 1:
         validity = "approximate"
         recoil_notes.append("photon momentum taken as n hbar omega / c in the medium")
+    if P_abs > 0 and P_abs > 0.01 * P_sca:
+        share = f" (P_abs = {P_abs / P_sca:.2g} P_sca)" if P_sca > 0 else ""
+        recoil_notes.append(f"absorbed photons{share} are not included: their recoil and the thermal "
+                            "emission would add to it")
+        if P_abs > 0.1 * P_sca:
+            validity = "approximate"
     damping_notes = [f"Kn = {kn:.3g}"]
     damping_validity = "ok"
     if not 200 <= T <= 1000:
@@ -465,6 +571,6 @@ def rates_block(s: dict, *, modes: list[dict], mass: float, P_sca: float, P_abs:
     models = [
         dict(quantity="gas_damping", model="knudsen-interpolation", validity=damping_validity,
              notes=damping_notes),
-        dict(quantity="recoil_heating", model="mie-pattern" if mie else "dipole-pattern", validity=validity, notes=recoil_notes),
+        dict(quantity="recoil_heating", model=model, validity=validity, notes=recoil_notes),
     ]
     return block, models

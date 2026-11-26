@@ -158,9 +158,14 @@ class OpticalField:
         scattered power split per multipole [W] (``P_sca_multipoles``, #80), and the
         direction moments of the scattered photons in the lab frame: ``mean``
         <n> and ``second`` <n n^T> of the Mie far field weighted by dP_sca/dOmega
-        (:func:`levtrap.pattern.direction_moments`), for the recoil heating (#78).
-        A direction n' in the beam's frame is R n' in the lab."""
-        from ..pattern import direction_moments
+        (#78), and the position information the scattered light carries, split
+        into the recoil's photon terms: ``information`` = ``info_scattered`` +
+        ``info_incident`` + ``info_cross``, each 3x3 [W/m^2] in the lab frame
+        (:func:`levtrap.pattern.recoil_information`, #95), with ``k`` the
+        wavenumber in the medium [1/m].  These are what the recoil heating
+        uses.  A direction n' in the beam's frame is R n' in the lab, and a
+        tensor M' is R M' R^T."""
+        from ..pattern import recoil_information
         r = self._own(r)[0]
         # the whole beam: the fractions below are of the translated beam's power, high orders included
         b = self.beam.translate_xyz(r) if np.any(r != 0) else self.beam
@@ -172,9 +177,15 @@ class OpticalField:
         out = dict(P_sca=pb["sca"] * P, P_abs=pb["abs"] * P,
                    P_sca_multipoles={k: v * P for k, v in pb["sca_multipoles"].items()})
         if pb["sca"] > 0:
-            mom = direction_moments(sbeam if sbeam.type == "scattered" else sbeam.scattered_field(b))
-            out["mean"] = self.R @ np.real(mom["mean"])
-            out["second"] = self.R @ np.real(mom["second"]) @ self.R.T
+            info = recoil_information(b, self.T)
+            R = self.R
+            out["mean"] = R @ np.real(info["mean"])
+            out["second"] = R @ np.real(info["second"]) @ R.T
+            out["k"] = info["k"]
+            # absolute: W/m^2 for a beam in watts, as P_sca
+            for key in ("information", "scattered", "incident", "cross"):
+                name = key if key == "information" else "info_" + key
+                out[name] = R @ info[key] @ R.T
         return out
 
     def incident_at(self, r):

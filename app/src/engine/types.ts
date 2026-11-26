@@ -245,9 +245,11 @@ export interface ModeRates {
   recoil_heating: number | null;
   /** the scattered photons' part of recoil_heating */
   recoil_scattered: number | null;
-  /** the beam photons' part (plane-wave shot noise along the beam) */
+  /** the beam photons' part: what the sphere scatters from the incident field's gradient at
+   * its position (#95); in a plane wave, shot noise along the beam */
   recoil_incident: number | null;
-  /** their cross term, -2 (u·e_in)(u·<n>): negative for forward scattering (#78) */
+  /** their cross term (the interference of the two): negative for forward scattering (#78);
+   * -2 (u·e_in)(u·<n>) in a plane wave */
   recoil_cross: number | null;
   /** gas + recoil */
   reheating: number | null;

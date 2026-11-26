@@ -29,7 +29,8 @@ const MODELS: Record<string, string> = {
   pseudopotential: "Pseudopotential approximation of the RF field",
   "knudsen-interpolation": "Knudsen-number interpolation from the free-molecular to the continuum limit",
   "dipole-pattern": "Photon recoil with the scattered light's dipole pattern",
-  "mie-pattern": "Photon recoil with the scattered light's Mie pattern",
+  "mie-pattern": "Photon recoil with the scattered light's Mie pattern and plane-wave beam photons",
+  information: "Photon recoil from the position information in the scattered light (backaction = information)",
 };
 
 const VALIDITY: Record<string, string> = { ok: "Valid here", approximate: "Approximate here" };
@@ -512,7 +513,7 @@ export function secondaryNumbers(result: Result, setup: Setup): Secondary[] {
         model: model(result, "recoil_heating"),
       }),
     });
-    // Γ_recoil/Ω, the number papers quote, split into scattered photons and beam photons (#78)
+    // Γ_recoil/Ω, the number papers quote, split into scattered photons and beam photons (#78, #95)
     const omegaOf = (name: string) => {
       const f = result.modes.find((m) => m.name === name)?.frequency;
       return f ? 2 * Math.PI * f : null;
@@ -525,6 +526,16 @@ export function secondaryNumbers(result: Result, setup: Setup): Secondary[] {
     if (recoilRatio.some((v) => v != null)) {
       const value = triple(recoilRatio, (v) => formatSci(v, 3));
       const mean = r.scattered_moments?.mean;
+      // the photon picture (#78) ties the cross term to <n>: forward scattering gives back part of the
+      // beam photon's kick. The information (#95) does not: there it is the interference of the light
+      // scattered from the field's gradient and from the moved sphere, along any axis.
+      const photonPicture = result.models.find((m) => m.quantity === "recoil_heating")?.model !== "information";
+      const crossNote = (cross: number, axis: string) =>
+        !photonPicture
+          ? `interference of the scattered and beam photons' kicks, along ${axis}`
+          : cross < 0
+            ? `forward scattering gives back part of the beam photon's kick, along ${axis}`
+            : `backward scattering adds to the beam photon's kick, along ${axis}`;
       out.push({
         id: "recoil",
         label: `Photon recoil Γ/Ω (${modeNames})`,
@@ -538,14 +549,14 @@ export function secondaryNumbers(result: Result, setup: Setup): Secondary[] {
             ...r.modes.flatMap((m) => {
               const rows = [
                 { symbol: String.raw`\Gamma_{\mathrm{sca},${m.name}}/\Omega_{${m.name}}`, value: formatSci(perOmega(m.recoil_scattered, m.name), 3), note: `scattered photons, along ${m.name}` },
-                { symbol: String.raw`\Gamma_{\mathrm{beam},${m.name}}/\Omega_{${m.name}}`, value: formatSci(perOmega(m.recoil_incident, m.name), 3), note: `photons taken from the beam, along ${m.name}` },
+                { symbol: String.raw`\Gamma_{\mathrm{beam},${m.name}}/\Omega_{${m.name}}`, value: formatSci(perOmega(m.recoil_incident, m.name), 3), note: `photons taken from the beam (the field's gradient at the sphere), along ${m.name}` },
               ];
               const cross = m.recoil_cross ?? 0;
               if (m.recoil_heating != null && Math.abs(cross) > 1e-6 * Math.abs(m.recoil_heating)) {
                 rows.push({
                   symbol: String.raw`\Gamma_{\times,${m.name}}/\Omega_{${m.name}}`,
                   value: formatSci(perOmega(cross, m.name), 3),
-                  note: cross < 0 ? `forward scattering gives back part of the beam photon's kick, along ${m.name}` : `backward scattering adds to the beam photon's kick, along ${m.name}`,
+                  note: crossNote(cross, m.name),
                 });
               }
               return rows;

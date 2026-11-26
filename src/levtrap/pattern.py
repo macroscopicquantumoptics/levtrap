@@ -73,7 +73,7 @@ from .special import spharm
 __all__ = [
     "far_field", "scattered_far_field", "total_far_field", "angular_distribution",
     "sphere_grid", "cone_grid", "integrate", "collection_efficiency", "direction_moments",
-    "information_coefficients", "pattern_block", "DIRECTIONS",
+    "information_coefficients", "recoil_information", "pattern_block", "DIRECTIONS",
 ]
 
 DIRECTIONS = {"forward": (0.0, 0.0, 1.0), "backward": (0.0, 0.0, -1.0),
@@ -277,6 +277,76 @@ def direction_moments(sbeam: Bsc, nmax_grid: int | None = None) -> dict:
     n = np.stack([np.sin(th) * np.cos(ph), np.sin(th) * np.sin(ph), np.cos(th)], axis=1)
     P = I.sum()
     return dict(mean=(n.T @ I) / P, second=(n.T * I) @ n / P, P_sca=float(P))
+
+
+def recoil_information(ibeam: Bsc, T, step: float | None = None) -> dict:
+    """Position information of the scattered light, split into the recoil's photon terms (#95).
+
+    ``ibeam``: the incident beam (scaled to watts) expanded about the
+    particle; ``T`` its T-matrix.  Moving the particle by ``delta`` changes
+    the scattered far field ``F`` (sqrt(W/sr)) by ``delta . dF/dr``, and
+
+        dF/dr_j = G_j - i k n_j F,
+
+    where ``-i k n_j F`` is the shift of the outgoing wave's origin (the
+    scattered photon leaving along n) and ``G_j`` is the far field the
+    particle scatters from the incident field's derivative ``dE_inc/dr_j``
+    at its own position (the photons taken from the beam).  The information
+    matrix ``M_jk = integral Re(dF_j^* dF_k) dOmega`` [W/m^2] is the
+    measurement backaction: the recoil's momentum diffusion is
+    ``hbar^2 M / (hbar omega)`` (Tebbenjohanns, Frimmer & Novotny, PRA 100,
+    043821 (2019)).  Its diagonal equals ``pattern_block``'s
+    ``information_total``.  It splits exactly into
+
+    * ``scattered``: ``k^2 integral n n^T |F|^2`` = k^2 P_sca <n n>;
+    * ``incident``: ``integral Re(G_j^* G_k)``, the beam photons;
+    * ``cross``: the rest, ``2 k Re integral (-i) G_j^* n_k F`` symmetrised,
+      their interference.
+
+    For a plane wave G_j = i k e_j F, giving k^2 P_sca times <n n>, e e^T and
+    -(e <n>^T + <n> e^T): the plane-wave photon picture of
+    :func:`levtrap.rates.recoil_heating`.  ``G`` is a central difference of
+    the scattered coefficients for the particle at ``+-step`` along each
+    axis (coefficients about the moved particle, so only the incident field
+    changes); the incident beam is cut to the particle's order + 2 first
+    (the derivative couples order n to n +- 1 only).  All integrals use the
+    exact quadrature of :func:`direction_moments`.  Frame: that of
+    ``ibeam``.
+
+    Returns ``P_sca`` [W], ``mean``, ``second`` (as :func:`direction_moments`),
+    ``k`` [1/m] and the 3x3 ``information``, ``scattered``, ``incident``,
+    ``cross`` [W/m^2].
+    """
+    T = T.to_type("scattered") if T.type == "total" else T
+    k = abs(ibeam.k_medium)
+    h = (2 * np.pi / k) * 1e-4 if step is None else float(step)
+    b = ibeam.set_Nmax(min(ibeam.Nmax, int(np.max(T.Nmax)) + 2))
+    s0, _ = b.scatter(T)
+    N = s0.Nmax
+    A, B = [2 * s0.a[:, 0]], [2 * s0.b[:, 0]]
+    for j in range(3):
+        e = np.zeros(3)
+        e[j] = h
+        sp = b.scatter(T, position=e)[0].set_Nmax(N)
+        sm = b.scatter(T, position=-e)[0].set_Nmax(N)
+        A.append((sp.a[:, 0] - sm.a[:, 0]) / h)  # 2 (s+ - s-) / (2 h)
+        B.append((sp.b[:, 0] - sm.b[:, 0]) / h)
+    nt, nph = _min_nodes(N)
+    th, ph, w = sphere_grid(nt + 1, nph + 2)
+    Ft, Fp = far_field(np.stack(A, axis=1), np.stack(B, axis=1), th, ph)
+    n = np.stack([np.sin(th) * np.cos(ph), np.sin(th) * np.sin(ph), np.cos(th)], axis=1)
+    F = np.stack([Ft[:, 0], Fp[:, 0]], axis=1)       # (npts, 2)
+    G = np.stack([Ft[:, 1:], Fp[:, 1:]], axis=1)     # (npts, 2, 3)
+    I = w * np.sum(np.abs(F) ** 2, axis=1)
+    P = float(I.sum())
+    sca = k**2 * (n.T * I) @ n
+    inc = np.real(np.einsum("p,pcj,pck->jk", w, G.conj(), G))
+    c = np.real(-1j * k * np.einsum("p,pcj,pc,pk->jk", w, G.conj(), F, n))
+    cross = c + c.T
+    mean = (n.T @ I) / P if P > 0 else np.zeros(3)
+    second = (n.T * I) @ n / P if P > 0 else np.zeros((3, 3))
+    return dict(P_sca=P, mean=mean, second=second, k=float(k), scattered=sca, incident=inc, cross=cross,
+                information=sca + inc + cross)
 
 
 # ---------------------------------------------------------------------------
