@@ -145,7 +145,9 @@ Models per field:
   "equilibrium": [0, 0, 4.0e-7],
   "modes": [{"axis": [1,0,0], "frequency": 1.5e5, "stiffness": 1e-6, "depth": 3e-19}, …],
   "depth": {"J": 3e-19, "K": 2.2e4, "kT": 72},
-  "optical": {"P_sca": …, "P_abs": …, "Qsca": …, "Qabs": …},
+  "optical": {"P_sca": …, "P_abs": …, "Qsca": …, "Qabs": …,
+              "Qsca_multipoles": {"ED": …, "MD": …, "EQ": …, "MQ": …, "EO": …, "MO": …, "higher": …},  // plane wave (#80)
+              "P_sca_multipoles": {"ED": …, …}},   // W: the beams' own split of P_sca at the equilibrium (#80)
   "paul": {"q": {...}, "a": {...}, "stable": true, "secular": {...}, "micromotion": [...]},
   "rates": {"gas_damping": …, "recoil_heating": [...], "reheating_phonons_per_s": [...]},
   "lenses": [{"field": 0, "focus_shift": [...], "clipping_loss": …, …,      // per beam through an asphere (E1)

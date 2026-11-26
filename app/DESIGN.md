@@ -264,6 +264,11 @@ beside it ("386 k_BT 116 kK"). **More** opens the numbers behind the
 headline ones: position, stiffness, mass, scattered and absorbed power, gas
 damping, reheating and the pressure below which recoil wins, and for a Paul
 trap q, a and the micromotion amplitude. Each of them explains itself too.
+"Scattered by multipole" gives the largest shares of the scattered power
+("MQ 61.5 % · MD 20.6 % · EQ 15.2 %" for the WS₂ dark trap): the beams' own
+split at the equilibrium, and in its explanation each multipole's power
+beside its share for a plane wave on the same sphere (#80). The two differ:
+a focused or structured beam excites each order with its own weight.
 
 The line at the right of the tabs says where the numbers came from:
 "Recorded from the engine for this preset" or "Computed in 240 ms".
@@ -394,8 +399,9 @@ Old outputs: z_eq is in the verdict and under More; f_x, f_y, f_z and the
 depth are the strip; scattered power and mass are under More; the recoil
 ratio became the Heating tab; Q_sca, Q_abs, absorbed power and N_max move
 into the explanations (D4). The force curves are the Forces tab; the force
-map becomes an overlay of the scene (D3); the multipole bars wait for
-decision 6.
+map becomes an overlay of the scene (D3); the multipole bars became the
+"Scattered by multipole" row under More (#80); the per-order switches wait
+for decision 6.
 
 New inputs with no old counterpart: charge, pressure, gas, the Paul trap,
 gravity, a beam's direction and focus position.

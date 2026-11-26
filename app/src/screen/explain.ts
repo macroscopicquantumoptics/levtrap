@@ -3,7 +3,7 @@
  * values that went in, and the model behind it with its validity. Entries
  * are data, so a test can check each one and typeset every formula.
  */
-import type { ModelInfo, PaulField, Result, Setup } from "../engine/types.ts";
+import type { ModelInfo, Multipoles, PaulField, Result, Setup } from "../engine/types.ts";
 import { formatMass, formatNumber, formatSci, formatSI } from "../lib/format.ts";
 import { toFieldText } from "../lib/units.ts";
 import { shownFrequency } from "./answer.ts";
@@ -44,6 +44,48 @@ type Axis = (typeof AXES)[number];
 const triple = (values: (number | null | undefined)[], format: (v: number | null | undefined) => string) => values.map(format).join(" · ");
 const copyTriple = (values: (number | null | undefined)[], unit: string) => values.map((v) => (v == null ? "" : `${v} ${unit}`)).join(", ");
 const KB = 1.380649e-23;
+
+/** The multipoles of the scattered light, in the order Mie theory counts them (#80). */
+export const MULTIPOLES: { key: keyof Multipoles; name: string }[] = [
+  { key: "ED", name: "electric dipole" },
+  { key: "MD", name: "magnetic dipole" },
+  { key: "EQ", name: "electric quadrupole" },
+  { key: "MQ", name: "magnetic quadrupole" },
+  { key: "EO", name: "electric octupole" },
+  { key: "MO", name: "magnetic octupole" },
+  { key: "higher", name: "all orders from n = 4 up" },
+];
+
+export interface MultipoleShare {
+  key: keyof Multipoles;
+  name: string;
+  /** W, scattered by the beams at the equilibrium */
+  power: number;
+  /** of the scattered power */
+  share: number;
+  /** the same share for a plane wave (Q_sca per multipole over Q_sca) */
+  planeWave: number;
+}
+
+/** Each multipole's share of the scattered power, largest first (#80): the
+ * beams' own split at the equilibrium, beside a plane wave's. A focused or
+ * structured beam excites each order with its own weight: the dark trap of
+ * arXiv:2607.09896 puts most of the light into the magnetic quadrupole,
+ * where a plane wave on the same sphere scatters mostly into the magnetic
+ * dipole. Empty without the split (a Result from before #80, or no light). */
+export function multipoleShares(result: Result): MultipoleShare[] {
+  const o = result.optical;
+  const P = o?.P_sca_multipoles;
+  const Q = o?.Qsca_multipoles;
+  if (!o || !P || !Q) return [];
+  const total = MULTIPOLES.reduce((sum, m) => sum + P[m.key], 0);
+  const qTotal = MULTIPOLES.reduce((sum, m) => sum + Q[m.key], 0);
+  if (!(total > 0) || !(qTotal > 0)) return [];
+  return MULTIPOLES.map((m) => ({ ...m, power: P[m.key], share: P[m.key] / total, planeWave: Q[m.key] / qTotal })).sort((a, b) => b.share - a.share);
+}
+
+/** A share as a percentage with three figures; below 0.1 % it reads "< 0.1". */
+const percent = (share: number) => (share < 1e-3 ? "< 0.1" : formatNumber(100 * share, 3, true));
 
 // --- headline numbers ---------------------------------------------------------------
 
@@ -280,6 +322,32 @@ export function secondaryNumbers(result: Result, setup: Setup): Secondary[] {
         model: model(result, "optical"),
       }),
     });
+    const shares = multipoleShares(result);
+    if (shares.length) {
+      const value = shares
+        .filter((s, i) => i === 0 || (i < 3 && s.share >= 0.01))
+        .map((s) => `${s.key} ${percent(s.share)} %`)
+        .join(" · ");
+      out.push({
+        id: "multipoles",
+        label: "Scattered by multipole",
+        value,
+        explain: () => ({
+          title: "Scattered power by multipole",
+          value,
+          copy: shares.map((s) => `${s.key} ${s.power} W`).join(", "),
+          formula: "multipole-power",
+          inputs: shares
+            .filter((s, i) => i === 0 || s.share >= 1e-3 || s.planeWave >= 1e-3)
+            .map((s) => ({
+              symbol: s.key === "higher" ? String.raw`P_{n \geq 4}` : String.raw`P_\mathrm{${s.key}}`,
+              value: `${formatSI(s.power, "W")} (${percent(s.share)} %)`,
+              note: `${s.name}; ${percent(s.planeWave)} % for a plane wave on the same sphere`,
+            })),
+          model: model(result, "optical"),
+        }),
+      });
+    }
     const abs = formatSI(o.P_abs, "W");
     out.push({
       id: "absorbed",
