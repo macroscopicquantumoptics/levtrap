@@ -269,7 +269,8 @@ beside it ("386 k_BT 116 kK"). **More** opens the numbers behind the
 headline ones: position, stiffness, mass, scattered and absorbed power, gas
 damping, reheating, the photon recoil per oscillation Γ/Ω (the number papers
 quote; its explanation splits it into scattered photons, beam photons and
-their cross term, from the scattered light's Mie pattern, #78) and the
+their cross term, #78; the recoil is the backaction of the position
+information in the scattered light, from the field at the trap, #95) and the
 pressure below which recoil wins, and for a Paul trap q, a and the
 micromotion amplitude. Each of them explains itself too.
 "Scattered by multipole" gives the largest shares of the scattered power

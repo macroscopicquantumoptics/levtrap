@@ -98,12 +98,12 @@ test("the second row: every number of a tweezer and of a Paul trap, explained", 
   assert.ok(Math.abs(A - r.paul!.micromotion![1]) < 1e-6 * A);
 });
 
-test("photon recoil per oscillation: Γ/Ω per mode, split into scattered photons, beam photons and their cross term (#78)", () => {
+test("photon recoil per oscillation: Γ/Ω per mode, split into scattered photons, beam photons and their cross term (#78, #95)", () => {
   const result = RECORDED.tweezer!;
   const recoil = secondaryNumbers(result, tweezer.setup).find((s) => s.id === "recoil")!;
   const e = recoil.explain();
   assert.equal(e.formula, "recoil");
-  assert.match(e.model!.name, /Mie pattern/);
+  assert.match(e.model!.name, /position information/);
   const z = result.rates!.modes.find((m) => m.name === "z")!;
   const Om = 2 * Math.PI * result.modes.find((m) => m.name === "z")!.frequency!;
   // the shown Γ/Ω along z is the engine's recoil over Ω, and its parts add up to it (recorded to 7 figures)
@@ -111,13 +111,16 @@ test("photon recoil per oscillation: Γ/Ω per mode, split into scattered photon
   assert.equal(recoil.value.split(" · ")[2], formatSci(z.recoil_heating! / Om, 3));
   const symbols = e.inputs.map((i) => i.symbol);
   for (const part of ["sca", "beam"]) assert.ok(symbols.includes(String.raw`\Gamma_{\mathrm{${part}},z}/\Omega_{z}`), part);
-  // along the beam the beam photons weigh 1 against the scattered photons' 2/5: about 2.5 times
+  // along the beam the beam photons weigh less than a plane wave's 1 against the scattered photons'
+  // 2/5 (the Gouy phase of the NA 0.8 focus): about 1.6 times, not 2.5 (#95)
   const ratio = z.recoil_incident! / z.recoil_scattered!;
-  assert.ok(ratio > 2.4 && ratio < 2.6, `${ratio}`);
-  // a slightly forward pattern: the cross term is shown along z, and lowers the heating
+  assert.ok(ratio > 1.3 && ratio < 2, `${ratio}`);
+  // a slightly forward pattern: the cross term is shown along z, and lowers the heating; across the
+  // beam the focus adds a small one (its longitudinal field grows along x, #95)
   assert.ok(symbols.includes(String.raw`\Gamma_{\times,z}/\Omega_{z}`));
-  assert.ok(!symbols.includes(String.raw`\Gamma_{\times,x}/\Omega_{x}`));
   assert.ok(z.recoil_cross! < 0);
+  const x = result.rates!.modes.find((m) => m.name === "x")!;
+  assert.ok(Math.abs(x.recoil_cross!) < 0.1 * Math.abs(z.recoil_cross!));
 });
 
 test("the scattered light by multipole: a small sphere is a dipole, the WS2 dark trap a magnetic quadrupole (#80)", () => {

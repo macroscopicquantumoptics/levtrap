@@ -87,9 +87,9 @@ export const FORMULAS = {
     text: "Γ = γ k_B T / (ħ Ω) + Γ_recoil",
   },
   recoil: {
-    tex: tex`\frac{\Gamma_{\mathrm{recoil},i}}{\Omega_i} = \frac{\omega P_\mathrm{sca}\, n^2}{2 m c^2 \Omega_i^2} \Big( \langle (\hat{u}_i \cdot \hat{n})^2 \rangle + (\hat{u}_i \cdot \hat{e}_\mathrm{in})^2 - 2\, (\hat{u}_i \cdot \hat{e}_\mathrm{in})(\hat{u}_i \cdot \langle \hat{n} \rangle) \Big)`,
-    text: "Γ/Ω = ω P_sca n² / (2 m c² Ω²) · (⟨(u·n)²⟩ + (u·e_in)² − 2 (u·e_in)(u·⟨n⟩)): scattered photons, beam photons and their cross term",
-    source: "Jain et al., PRL 116, 243601 (2016); Seberson & Robicheaux, PRA 102, 033505 (2020); ⟨n⟩ and ⟨n n⟩ from the Mie pattern (levtrap.rates)",
+    tex: tex`\frac{\Gamma_{\mathrm{recoil},i}}{\Omega_i} = \frac{1}{2 m \omega \Omega_i^2} \oint \Big| \frac{\partial \mathbf{F}}{\partial u_i} \Big|^2 d\Omega, \qquad \frac{\partial \mathbf{F}}{\partial u_i} = \mathbf{G}_i - i k\, (\hat{u}_i \cdot \hat{n})\, \mathbf{F}`,
+    text: "Γ/Ω = ∮ |∂F/∂u|² dΩ / (2 m ω Ω²), ∂F/∂u = G_u − i k (u·n) F: the position information in the scattered far field F. |k (u·n) F|² gives the scattered photons, |G_u|² the beam photons (what the sphere scatters from the field's gradient), the rest their cross term. A plane wave gives ω P_sca n² / (2 m c² Ω²) · (⟨(u·n)²⟩ + (u·e_in)² − 2 (u·e_in)(u·⟨n⟩))",
+    source: "Tebbenjohanns, Frimmer & Novotny, PRA 100, 043821 (2019) (backaction = information); plane-wave limit: Jain et al., PRL 116, 243601 (2016), Seberson & Robicheaux, PRA 102, 033505 (2020) (levtrap.rates)",
   },
   crossover: {
     tex: tex`\frac{\gamma(p)\, k_\mathrm{B} T}{\hbar \Omega_i} = \Gamma_{\mathrm{recoil},i}`,

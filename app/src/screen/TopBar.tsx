@@ -283,8 +283,11 @@ function Conventions() {
         </dd>
         <dt>Reheating</dt>
         <dd>
-          Per mode, in phonons per second: gas heating, γ k<sub>B</sub>T / (ħΩ), plus photon recoil from the light the sphere scatters (an
-          electric-dipole pattern) and from the photons it takes out of the beam. Laser noise and the heating of the sphere by the light it
+          Per mode, in phonons per second: gas heating, γ k<sub>B</sub>T / (ħΩ), plus photon recoil. The recoil is the backaction of the
+          position information the scattered light carries: how much its far field changes when the sphere moves, from the field at the
+          trap (Mie theory). It splits into the scattered photons (their Mie pattern), the photons taken out of the beam (the field&apos;s
+          gradient at the sphere: less than a plane wave&apos;s along a focused beam) and their cross term. It holds for any beams,
+          standing waves and dark foci included. Laser noise, the recoil of absorbed photons and the heating of the sphere by the light it
           absorbs are not included.
         </dd>
       </dl>
