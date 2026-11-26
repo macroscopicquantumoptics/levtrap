@@ -42,6 +42,21 @@ test("a numerical aperture is searched on a scale that keeps it below the medium
   assert.ok(Math.abs(p.back(p.forward(0.2)) - 0.2) < 1e-15);
 });
 
+test("a coherent pair's split and phase are design knobs, searched where they can be (#79)", () => {
+  const s = preset("ws2-bottle");
+  const knobs = designKnobs(s);
+  const split = knobs.find((k) => k.id === "pair0-1-split")!;
+  const phase = knobs.find((k) => k.id === "beam1-phase")!;
+  // the split stays a fraction strictly between 0 and 1 wherever the search goes
+  const f = scaleFor(split, s);
+  assert.ok(Math.abs(f.back(f.forward(0.63)) - 0.63) < 1e-12);
+  assert.ok(f.back(50) <= 1 && f.back(-50) >= 0 && Number.isFinite(f.forward(0)) && Number.isFinite(f.forward(1)));
+  // a phase may be any number, so it is searched as it is (not on a log scale, which would refuse 0)
+  const p = scaleFor(phase, s);
+  assert.equal(p.forward(0), 0);
+  assert.equal(p.back(-1), -1);
+});
+
 test("Nelder–Mead finds the minimum of a tweezer-like model: f ∝ √P, and the ratio set by the NA", async () => {
   // a toy trap: f_r = a √P · NA, f_z = b √P · NA²; targets reachable at P = 0.5, NA = 0.6
   const model = (P: number, NA: number) => ({ r: Math.sqrt(P) * NA, z: 0.5 * Math.sqrt(P) * NA * NA });

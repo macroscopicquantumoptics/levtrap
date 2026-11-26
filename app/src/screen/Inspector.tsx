@@ -3,6 +3,7 @@
 import { Fragment, useState, type ReactNode } from "react";
 import type { Engine } from "../engine/client.ts";
 import { alignedSetup, compare, misaligned } from "./aligned.ts";
+import { darkened, darkFocus, type DarkFocus } from "./darken.ts";
 import { useAnswer } from "./hooks.ts";
 import type { Aberration, AsphereFocus, BeamField, MirrorFocus, Field, Gas, GravityField, PaulField, Polarisation, Result, Setup, Vec3 } from "../engine/types.ts";
 import { ABERRATION_MAX } from "../engine/validate.ts";
@@ -96,7 +97,7 @@ export function Inspector({ setup, part, result, notice, onEdit, onClose, engine
       {part.kind === "particle" && <ParticleEditor key={part.id} setup={setup} result={result} prefix={prefix} onEdit={onEdit} />}
       {part.kind === "particle" && show && onShow && <ParticleViews show={show} onShow={onShow} movable={movable} onTab={onTab} />}
       {part.kind === "environment" && <EnvironmentEditor key={part.id} setup={setup} prefix={prefix} onEdit={onEdit} />}
-      {part.kind === "beam" && field?.kind === "beam" && <BeamEditor key={part.id} setup={setup} beam={field} index={part.index!} prefix={prefix} onEdit={onEdit} />}
+      {part.kind === "beam" && field?.kind === "beam" && <BeamEditor key={part.id} setup={setup} beam={field} index={part.index!} prefix={prefix} onEdit={onEdit} result={result} />}
       {part.kind === "lens" && field?.kind === "beam" && <LensEditor key={part.id} setup={setup} beam={field} index={part.index!} prefix={prefix} onEdit={onEdit} result={result} engine={engine} recorded={recorded} />}
       {part.kind === "paul" && field?.kind === "paul" && <PaulEditor key={part.id} setup={setup} paul={field} index={part.index!} prefix={prefix} onEdit={onEdit} />}
       {part.kind === "gravity" && field?.kind === "gravity" && <GravityEditor key={part.id} setup={setup} gravity={field} index={part.index!} prefix={prefix} onEdit={onEdit} />}
@@ -287,7 +288,7 @@ const same = (a: Vec3, b: Vec3) => a.every((c, i) => Math.abs(c - b[i]) < 1e-12)
 const opposite = (a: Vec3, b: Vec3) => a.every((c, i) => Math.abs(c + b[i]) < 1e-12);
 const flip = (v: Vec3): Vec3 => [v[0] ? -v[0] : 0, v[1] ? -v[1] : 0, v[2] ? -v[2] : 0];
 
-function BeamEditor({ setup, beam, index, prefix, onEdit }: EditorProps & { beam: BeamField; index: number }) {
+function BeamEditor({ setup, beam, index, prefix, onEdit, result }: EditorProps & { beam: BeamField; index: number; result: Result | null }) {
   const edit = (patch: Partial<BeamField>) => onEdit(withField<BeamField>(setup, index, patch));
   const parts = partsOf(setup);
   const beams = setup.trap.fields.map((f, i) => ({ f, i })).filter((b): b is { f: BeamField; i: number } => b.f.kind === "beam");
@@ -306,6 +307,8 @@ function BeamEditor({ setup, beam, index, prefix, onEdit }: EditorProps & { beam
     const target = others.find((o) => String(o.i) === value);
     onEdit(withField<BeamField>(next, index, { coherent_with: target?.f.id ?? null }));
   };
+  // the split of a coherent pair that darkens the focus (#79): the engine's, from the latest result
+  const dark = partner ? darkFocus(setup, result, index) : null;
 
   const mode = beam.mode ?? {};
   const family = modeLabel(beam) === "Gaussian" ? "gaussian" : (mode.type ?? "lg");
@@ -378,6 +381,7 @@ function BeamEditor({ setup, beam, index, prefix, onEdit }: EditorProps & { beam
           />
         )}
       </Fields>
+      {dark && <DarkenFocus setup={setup} dark={dark} prefix={prefix} onEdit={onEdit} nameOf={nameOf} />}
       <Advanced changed={changed}>
         <SelectField
           id={`${prefix}-mode`}
@@ -415,6 +419,43 @@ function BeamEditor({ setup, beam, index, prefix, onEdit }: EditorProps & { beam
         ))}
       </Advanced>
     </>
+  );
+}
+
+/**
+ * "Darken the focus" (#79): split a coherent pair's power, at the same total,
+ * so the two beams are equally bright at the first beam's focus; where their
+ * fields there are antiparallel (a bottle beam) that leaves no light.
+ */
+function DarkenFocus({ setup, dark, prefix, onEdit, nameOf }: EditorProps & { dark: DarkFocus; nameOf(i: number): string }) {
+  const second = nameOf(dark.pair[1]);
+  const share = `${formatNumber(100 * dark.split, 4)} % of the pair's power in ${second.toLowerCase()}`;
+  const already = Math.abs(dark.now - dark.split) < 5e-4;
+  const cancels = dark.residual < 0.01;
+  return (
+    <div className={styles.darken}>
+      <button
+        type="button"
+        className={ui.button}
+        disabled={already}
+        onClick={() => onEdit(darkened(setup, dark))}
+        data-testid={`${prefix}-darken`}
+        title="Split the pair's power, at the same total, so the two beams are equally bright at the focus"
+      >
+        Darken the focus
+      </button>
+      <p className={styles.aside} data-testid={`${prefix}-darken-note`}>
+        {already
+          ? cancels
+            ? `The focus is dark: ${share}.`
+            : `The two beams are equally bright at the focus: ${share}.`
+          : cancels
+            ? `Sets ${share}, at the same total: the two beams then cancel at the focus.`
+            : `Sets ${share}, at the same total, so the two beams are equally bright at the focus.`}
+        {!cancels &&
+          ` With these phases and polarisations they do not cancel there: the focus keeps ${formatNumber(100 * dark.residual, 3)} % of their two intensities added. Opposite phases and one circular polarisation cancel.`}
+      </p>
+    </div>
   );
 }
 

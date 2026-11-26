@@ -182,6 +182,10 @@ def solve(setup: dict | str, want: Iterable[str] = (), start=None) -> dict:
     * ``rates`` — gas damping [1/s], and per mode the gas, recoil and total
       reheating [phonons/s], Q, coherence time [s], coherent oscillations and
       the pressure [Pa] where recoil equals gas heating (:mod:`levtrap.rates`).
+    * ``coherent`` — for each coherent pair of beams (only when there is
+      one): its ``fields``, the ``dark_split`` (fraction of the pair's power
+      in the second beam that darkens the first beam's focus) and the
+      ``residual`` brightness there (:func:`_coherent_pairs`, #79).
     * ``models``, ``warnings`` — what was used and what to be careful about.
     """
     # late imports: api and the fields pull in the whole engine
@@ -296,6 +300,9 @@ def solve(setup: dict | str, want: Iterable[str] = (), start=None) -> dict:
     )
     if paul_block is not None:
         result["paul"] = paul_block
+    pairs = _coherent_pairs(s, unit_beam)
+    if pairs:
+        result["coherent"] = pairs
     if start is not None:
         result["followed"] = dict(start=[float(v) for v in start], jumped=bool(trap.jumped))
     if r_eq is not None:
@@ -337,6 +344,34 @@ def solve(setup: dict | str, want: Iterable[str] = (), start=None) -> dict:
                                      notes=["Thorlabs 354330-C, Zemax prescription; far field projected on VSWFs"]))
     result["time"] = time.perf_counter() - t0
     return result
+
+
+def _coherent_pairs(s: dict, unit_beam) -> list[dict]:
+    """Per coherent pair of beams, the power split that darkens the focus (#79).
+
+    ``fields`` are the pair's indices into ``trap.fields`` (in setup order);
+    ``dark_split`` the fraction of the pair's total power in the second beam
+    that nulls the field at the first beam's focus when the two are
+    antiparallel there, and ``residual`` the |E|^2 left at that split over
+    the two beams' intensities added (:func:`levtrap.optics.dark_split`).
+    Groups of three or more beams have no single split and are left out.
+    """
+    from .optics import coherent_groups, dark_split
+
+    nm = float(s["environment"]["medium_index"])
+    fields = s["trap"]["fields"]
+    index = [i for i, f in enumerate(fields) if f["kind"] == "beam"]
+    beams = [fields[i] for i in index]
+    out = []
+    for group in coherent_groups(beams):
+        if len(group) != 2:
+            continue
+        specs = [beams[i] for i in group]
+        d = dark_split(specs, [unit_beam(b, nm) for b in specs])
+        out.append(dict(fields=[index[i] for i in group],
+                        dark_split=None if d is None else d["split"],
+                        residual=None if d is None else d["residual"]))
+    return out
 
 
 def _recoil_parts(beams: list[dict], parts: list[dict]) -> list[dict] | None:

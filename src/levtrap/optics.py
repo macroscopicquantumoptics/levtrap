@@ -44,7 +44,7 @@ import numpy as np
 from .bsc import Bsc
 from .fields import OpticalField
 
-__all__ = ["beam_rotation", "coherent_groups", "optical_fields", "translation_nmax", "is_simple"]
+__all__ = ["beam_rotation", "coherent_groups", "dark_split", "optical_fields", "translation_nmax", "is_simple"]
 
 _Z = np.array([0.0, 0.0, 1.0])
 
@@ -156,3 +156,50 @@ def optical_fields(s: dict, unit_beam, tmatrix_at, nmax_factor: float = 1.0) -> 
             beam = _group_beam(specs, units, origin, T.Nmax[0], nmax_factor)
             out.append(OpticalField(beam, T, nm, origin=origin))
     return out
+
+
+def focus_field(spec: dict, unit: Bsc, point) -> np.ndarray:
+    """The lab-frame electric field (OTT units, unit power) of one beam at a lab ``point`` [m].
+
+    The beam's own field is taken at R^T (point - position) and turned by R,
+    and its phase applied: the same placement as :func:`_group_beam`, without
+    re-expanding the beam (exact within the beam's Nmax).
+    """
+    R = beam_rotation(spec["direction"])
+    local = R.T @ (np.asarray(point, dtype=float) - np.asarray(spec["position"], dtype=float))
+    E = unit.em_field_xyz(local[None, :])[0]
+    return np.exp(1j * float(spec["phase"])) * (R @ E)
+
+
+def dark_split(specs: list[dict], units: list[Bsc]) -> dict | None:
+    """The power split of a coherent pair that darkens the focus (#79).
+
+    The pair's field at the first beam's focus is sqrt(P1) a + sqrt(P2) b,
+    with a, b the fields of the unit-power beams there (phases, directions
+    and polarisations included, :func:`focus_field`). Equal intensities,
+    P1 |a|^2 = P2 |b|^2, null it when a and b are antiparallel (the bottle
+    beam: two coaxial beams of one circular polarisation, opposite in
+    phase); this is the split of ``dark_split`` in
+    examples/paper_2607_09896.py, and OTT's (tests/test_ott_dark_trap.py).
+    At fixed total P1 + P2 the fraction in the second beam is then
+
+        split = |a|^2 / (|a|^2 + |b|^2).
+
+    ``residual`` says how dark the focus is at that split: |E|^2 over the
+    two beams' intensities added, 1 + Re(a* . b) / (|a| |b|), from 0 (a
+    null: the fields are antiparallel) to 2 (in phase). The common rescaling
+    of a coherent group to its total power (:func:`_group_beam`) multiplies
+    both beams alike and changes neither.
+
+    Returns ``None`` when neither beam has a field at the focus.
+    """
+    if len(specs) != 2:
+        raise ValueError("the dark split is for a pair of coherent beams")
+    origin = specs[0]["position"]
+    a, b = (focus_field(s, u, origin) for s, u in zip(specs, units))
+    ia, ib = float(np.vdot(a, a).real), float(np.vdot(b, b).real)
+    if ia + ib <= 0:
+        return None
+    cross = float(np.vdot(a, b).real)
+    residual = 1 + cross / math.sqrt(ia * ib) if ia > 0 and ib > 0 else 1.0
+    return dict(split=ia / (ia + ib), residual=residual)
