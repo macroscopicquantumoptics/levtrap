@@ -24,17 +24,23 @@ function close(a: number | null, b: number | null, what: string) {
   if (a === null || b === null) return assert.equal(a, b, what);
   assert.ok(Math.abs(a - b) <= REL * Math.max(Math.abs(a), Math.abs(b)), `${what}: recorded ${a}, engine ${b}`);
 }
-/** Compare vectors against their own size, so a component that is zero up to rounding passes. */
-function closeAll(a: number[], b: number[], what: string) {
+/**
+ * Compare vectors against their own size, so a component that is zero up to rounding passes.
+ * `floor` is a size below which the vector counts as zero: a particle at a symmetric trap's
+ * centre (the counter-propagating bottle beams) has an equilibrium of rounding noise only,
+ * ~1e-22 m, that differs from machine to machine; it is compared against the particle's radius.
+ */
+function closeAll(a: number[], b: number[], what: string, floor = 0) {
   assert.equal(a.length, b.length, what);
-  const scale = Math.max(...a.map(Math.abs), ...b.map(Math.abs));
+  const scale = Math.max(floor, ...a.map(Math.abs), ...b.map(Math.abs));
   a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) <= REL * scale, `${what}[${i}]: recorded ${v}, engine ${b[i]}`));
 }
 
-function same(rec: Result, now: Result) {
+/** `radius`: the particle's, the length an equilibrium of rounding noise is compared against. */
+function same(rec: Result, now: Result, radius: number) {
   assert.equal(rec.stable, now.stable);
   assert.equal(rec.engine, now.engine, "recorded with another levtrap version");
-  closeAll(rec.equilibrium ?? [], now.equilibrium ?? [], "equilibrium");
+  closeAll(rec.equilibrium ?? [], now.equilibrium ?? [], "equilibrium", radius);
   assert.equal(rec.modes.length, now.modes.length);
   rec.modes.forEach((m, i) => {
     assert.equal(m.name, now.modes[i].name);
@@ -72,6 +78,6 @@ for (const preset of PRESETS) {
     }
     assert.equal(preset.pending, undefined, "the engine computes this preset now: remove `pending` and run `npm run record`");
     assert.ok(rec, "run `npm run record`");
-    same(rec, response.result);
+    same(rec, response.result, preset.setup.particle.radius);
   });
 }
