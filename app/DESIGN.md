@@ -284,6 +284,11 @@ a focused or structured beam excites each order with its own weight.
 
 The line at the right of the tabs says where the numbers came from:
 "Recorded from the engine for this preset" or "Computed in 240 ms".
+When the page and the engine it loaded come from different builds (a page
+from before a deploy, still cached, with the engine from after it, #96),
+the bar also says "levtrap was updated." with a Reload button. It stays on
+narrow screens, where the engine line is hidden. `src/engine/build.ts`;
+docs/ARCHITECTURE.md §3 says how the build is known.
 
 ## 7. The plots drawer
 

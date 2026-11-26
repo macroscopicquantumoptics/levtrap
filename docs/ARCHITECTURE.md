@@ -61,6 +61,22 @@ Rules:
   `presets` went with `web/` (E2).
 * Static site, no server, ever.
 
+How the browser gets the engine. `npm run wheel` (`app/scripts/stage-wheel.mjs`)
+copies the wheel to `public/wheels/<build>/levtrap-….whl`, where `<build>` is
+the first 12 hex digits of the sha256 of the wheel's bytes, and writes
+`public/wheels/manifest.json`: `{"wheel": "<build>/levtrap-….whl", "build": "<build>"}`.
+The worker (`app/src/engine/worker.ts`) fetches the manifest and the wheel
+with `cache: "no-cache"` and installs the wheel with micropip. GitHub Pages
+caches every file for ten minutes; a new wheel has a new address, so a
+browser never installs an old wheel under a new page (#96).
+`app/next.config.ts` reads the manifest's `build` when the app is built and
+bakes it in as `NEXT_PUBLIC_ENGINE_BUILD`. The worker reports the build it
+installed; when the two differ (an old page, still cached, with the new
+engine), the screen says so and offers a reload (`app/src/engine/build.ts`).
+So stage the wheel before `npm run build`, and restart `npm run dev` after
+staging a new one. With no wheel staged at build time, or with
+`?backend=local`, there is nothing to compare and no notice.
+
 ## 4. Setup file (version 1)
 
 ```jsonc
