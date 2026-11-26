@@ -249,3 +249,188 @@ def test_mie_forward_lobe_narrows():
     assert all(b < a for a, b in zip(widths, widths[1:])), widths
     for x, w in zip(xs[2:], widths[2:]):
         assert x * math.sin(w) == pytest.approx(1.616, rel=0.25), (x, w)
+
+
+# ---------------------------------------------------------------------------
+# several beams: coherent groups in any direction, incoherent fields (#76)
+# ---------------------------------------------------------------------------
+
+#: The mirror-symmetric four-beam dark trap of #71 (its second setup): WS2,
+#: R = 300 nm; LG00 + LG10 (phase pi) along +z, the same pair along -z with
+#: Circular - and phases pi / 0, all four coherent with beam 1.
+FOUR_BEAM = {
+    "version": 1,
+    "particle": {"radius": 3e-7, "material": "WS2"},
+    "environment": {"pressure": 1e-4, "temperature": 300, "gas": "N2", "medium_index": 1},
+    "trap": {"fields": [
+        {"kind": "beam", "id": "b1", "wavelength": 1.55e-6, "power": 0.1483,
+         "focus": {"kind": "lens", "waist": 1.59e-6}, "mode": {"type": "lg", "indices": [0, 0]},
+         "polarisation": "circular+"},
+        {"kind": "beam", "id": "b2", "coherent_with": "b1", "wavelength": 1.55e-6, "power": 0.2517,
+         "focus": {"kind": "lens", "waist": 8.66e-7}, "mode": {"type": "lg", "indices": [1, 0]},
+         "polarisation": "circular+", "phase": math.pi},
+        {"kind": "beam", "id": "b3", "coherent_with": "b1", "wavelength": 1.55e-6, "power": 0.1483,
+         "focus": {"kind": "lens", "waist": 1.59e-6}, "mode": {"type": "lg", "indices": [0, 0]},
+         "polarisation": "circular-", "direction": [0, 0, -1], "position": [0, 0, 0], "phase": math.pi},
+        {"kind": "beam", "id": "b4", "coherent_with": "b1", "wavelength": 1.55e-6, "power": 0.2517,
+         "focus": {"kind": "lens", "waist": 8.66e-7}, "mode": {"type": "lg", "indices": [1, 0]},
+         "polarisation": "circular-", "direction": [0, 0, -1], "position": [0, 0, 0], "phase": 0},
+    ]},
+}
+
+
+def _beam(**kw):
+    b = {"kind": "beam", "wavelength": WL, "power": 0.1, "focus": {"kind": "lens", "NA": 0.8},
+         "mode": {"type": "lg", "indices": [0, 0]}, "polarisation": "x"}
+    b.update(kw)
+    return b
+
+
+def _with_beams(*beams):
+    return dict(DEFAULT_SETUP, trap={"fields": list(beams)})
+
+
+def _pattern_at(setup, r=(0.0, 0.0, 0.0)):
+    """The pattern block with the particle at r (no trap search). The particle is
+    passed as given, so each field's T-matrix uses the material's n at its own
+    wavelength, as solve() does."""
+    from levtrap.setup import parse
+    from levtrap.solve import pattern_result
+    s = parse(setup)
+    return pattern_result(s, np.asarray(r, dtype=float))
+
+
+def test_four_beam_dark_trap_is_mirror_symmetric():
+    """#76: the mirror-symmetric four-beam trap of #71 (its equilibrium is z = 0)
+    scatters as much, and as much position information, forward as backward:
+    a coherent group with beams along +z and -z is scattered from its summed
+    incident beam, and its pattern integrates to the Result's P_sca."""
+    r = solve(FOUR_BEAM, want=["pattern"])
+    p = r["pattern"]
+    assert abs(r["equilibrium"][2]) < 1e-9
+    assert p["P_sca"] == pytest.approx(r["optical"]["P_sca"], rel=1e-3)
+    f, b = p["information_efficiency"]["forward"], p["information_efficiency"]["backward"]
+    for ax in "xyz":
+        assert np.allclose(f[ax], b[ax], rtol=1e-9, atol=1e-12), ax
+    assert np.allclose(p["collection"]["forward"], p["collection"]["backward"], rtol=1e-9, atol=1e-12)
+    assert p["at_trap_NA"]["forward"]["information"]["z"] == pytest.approx(
+        p["at_trap_NA"]["backward"]["information"]["z"], rel=1e-9)
+    # circular light about z: x and y carry the same information; the mean photon direction is 0
+    assert p["information_total"]["x"] == pytest.approx(p["information_total"]["y"], rel=1e-6)
+    assert np.allclose(p["moments"]["mean"], 0, atol=1e-9)
+    assert p["trap_axis"] == [0.0, 0.0, 1.0]
+
+
+def _mirror_index(theta, phi):
+    """Index j of the grid point R n_i for each grid direction n_i, R = diag(1, -1, -1)."""
+    n = _unit(theta, phi)
+    m = n * np.array([1.0, -1.0, -1.0])
+    j = np.argmax(m @ n.T, axis=1)
+    assert np.allclose(n[j], m, atol=1e-9)  # the grid is closed under R
+    return j
+
+
+def test_beam_along_minus_z_is_the_plus_z_pattern_turned():
+    """#76: the pattern is in the lab frame. A beam along -z is the +z beam
+    turned by R = diag(1, -1, -1) (pi about x), so its pattern at n is the +z
+    beam's at R n; so are its information patterns (|dF/dr_j|^2 does not see
+    the sign of r_j); collection forward and backward swap."""
+    up = _pattern_at(_with_beams(_beam(id="a")))
+    down = _pattern_at(_with_beams(_beam(id="a", direction=[0, 0, -1])))
+    th, ph = np.array(up["grid"]["theta"]), np.array(up["grid"]["phi"])
+    assert down["grid"]["theta"] == up["grid"]["theta"]
+    j = _mirror_index(th, ph)
+    for key in ("scattered", "total"):
+        u = np.array(up[key])
+        assert np.allclose(np.array(down[key]), u[j], rtol=1e-6, atol=1e-9 * u.max()), key
+    for ax in "xyz":
+        u = np.array(up["information"][ax])
+        assert np.allclose(np.array(down["information"][ax]), u[j], rtol=1e-6, atol=1e-9 * u.max()), ax
+    assert np.allclose(down["collection"]["forward"], up["collection"]["backward"], rtol=1e-6)
+    assert np.allclose(down["collection"]["backward"], up["collection"]["forward"], rtol=1e-6)
+    # the trapping lens is the -z beam's own: what it collects looking back is the same
+    assert down["trap_axis"] == [0.0, 0.0, -1.0]
+    assert down["at_trap_NA"]["backward"]["collection"] == pytest.approx(
+        up["at_trap_NA"]["backward"]["collection"], rel=1e-6)
+
+
+def test_incoherent_opposing_beams_add_their_patterns():
+    """#76: two opposing beams that do not interfere (no ``coherent_with``)
+    give the sum of the two single-beam patterns (scattered, total and
+    information), with collected powers and information added before the
+    fractions are taken. The beams differ (polarisation, power) so nothing
+    holds by symmetry alone; the particle sits off-axis."""
+    a = _beam(id="a", power=0.15)
+    b = _beam(id="b", power=0.05, polarisation="y", direction=[0, 0, -1])
+    r = (40e-9, -25e-9, 60e-9)
+    pa, pb = _pattern_at(_with_beams(a), r), _pattern_at(_with_beams(b), r)
+    both = _pattern_at(_with_beams(a, b), r)
+    assert both["grid"] == pa["grid"]
+    for key in ("scattered", "total"):
+        assert np.allclose(both[key], np.add(pa[key], pb[key]), rtol=1e-9, atol=0), key
+    for ax in "xyz":
+        assert np.allclose(both["information"][ax], np.add(pa["information"][ax], pb["information"][ax]),
+                           rtol=1e-9, atol=0), ax
+        assert both["information_total"][ax] == pytest.approx(
+            pa["information_total"][ax] + pb["information_total"][ax], rel=1e-9)
+    assert both["P_sca"] == pytest.approx(pa["P_sca"] + pb["P_sca"], rel=1e-9)
+    for d in pt.DIRECTIONS:
+        ref = np.multiply(pa["collection"][d], pa["P_sca"]) + np.multiply(pb["collection"][d], pb["P_sca"])
+        assert np.allclose(both["collection"][d], ref / both["P_sca"], rtol=1e-9), d
+    # the first beam's lens is the trapping lens
+    assert both["trap_axis"] == [0.0, 0.0, 1.0] and both["trap_NA"] == pytest.approx(0.8)
+
+
+
+def test_incoherent_beams_of_two_wavelengths_add_information_not_power():
+    """#76: the shot-noise Fisher information of a field goes as |dF/dr|^2 / (hbar omega).
+    Two incoherent beams of different wavelengths add their scattered powers as they are,
+    but the second beam's information is weighted by omega_ref / omega = lambda_b / lambda_a
+    (the first beam's units): at 532 nm a watt carries half the photons it does at 1064 nm."""
+    a = _beam(id="a", power=0.15)
+    b = _beam(id="b", power=0.05, wavelength=0.532e-6, direction=[0, 0, -1])
+    r = (30e-9, 0.0, 40e-9)
+    pa, pb = _pattern_at(_with_beams(a), r), _pattern_at(_with_beams(b), r)
+    both = _pattern_at(_with_beams(a, b), r)
+    assert both["P_sca"] == pytest.approx(pa["P_sca"] + pb["P_sca"], rel=1e-9)
+    weight = 0.532 / 1.064
+    for ax in "xyz":
+        assert both["information_total"][ax] == pytest.approx(
+            pa["information_total"][ax] + weight * pb["information_total"][ax], rel=1e-9), ax
+        assert np.allclose(both["information"][ax],
+                           np.add(pa["information"][ax], weight * np.asarray(pb["information"][ax])), rtol=1e-9), ax
+
+@pytest.mark.parametrize("beams", [
+    # one coherent group, foci 0.4 um apart along z (a translated beam in the summed field)
+    [_beam(id="a"), _beam(id="b", coherent_with="a", power=0.05, direction=[0, 0, -1], position=[0, 0, 0.4e-6])],
+    # a beam tilted by 45 degrees in x-z, off the origin, that does not interfere with the first
+    [_beam(id="a"), _beam(id="b", power=0.05, direction=[1, 0, 1], position=[0.1e-6, 0, 0])],
+], ids=["multi-focus coherent", "crossed incoherent"])
+def test_multi_beam_pattern_integrates_to_P_sca(beams):
+    """#76: for a multi-focus group and for a tilted incoherent beam, the
+    pattern (each field's incident beam turned into the lab frame about the
+    particle) integrates to the P_sca the Result takes from the force path
+    (each field in its own frame), at the equilibrium."""
+    r = solve(_with_beams(*beams), want=["pattern"])
+    assert r["stable"]
+    p = r["pattern"]
+    assert p["P_sca"] == pytest.approx(r["optical"]["P_sca"], rel=1e-6)
+    assert np.sum(np.array(p["grid"]["weight"]) * np.array(p["scattered"])) == pytest.approx(p["P_sca"], rel=1e-12)
+
+
+def test_single_beam_along_z_is_unchanged():
+    """#76: for one beam along +z the pattern is the one of the beam built
+    directly (``api.build_beam``), translated to the equilibrium: the frame
+    change of the multi-beam path is the identity there."""
+    from levtrap.api import build_beam, build_tmatrix
+    from levtrap.setup import parse
+    from levtrap.solve import resolve_particle
+    r = solve(DEFAULT_SETUP, want=["pattern"])
+    s = parse(DEFAULT_SETUP)
+    resolve_particle(s)
+    beam, _ = build_beam(s)
+    T, _ = build_tmatrix(s)
+    ref = pt.pattern_block(beam.translate_xyz(np.asarray(r["equilibrium"])), T, n_medium=1.0, trap_NA=0.8)
+    p = r["pattern"]
+    for key in ("scattered", "total", "collection", "information_efficiency", "at_trap_NA", "P_sca"):
+        assert p[key] == ref[key], key

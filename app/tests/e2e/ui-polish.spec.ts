@@ -35,10 +35,11 @@ for (const scheme of ["light", "dark"] as Scheme[]) {
 }
 
 test("tabs that cannot compute are greyed, with the reason as the tooltip", async ({ page }) => {
-  await open(page, "preset=counter");
+  // counter-propagating beams have a pattern since #76: a Paul trap without light has none
+  await open(page, "preset=paul-linear");
   const radiation = page.getByTestId("tab-radiation");
   await expect(radiation).toHaveAttribute("data-unavailable", "");
-  await expect(radiation).toHaveAttribute("title", /along \+z through one focus/);
+  await expect(radiation).toHaveAttribute("title", /no light/);
   await expect(page.getByTestId("tab-wavefront")).toHaveAttribute("title", /Asphere 354330-C/);
   await expect(page.getByTestId("tab-forces")).not.toHaveAttribute("data-unavailable");
   // it still opens, to say why

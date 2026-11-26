@@ -200,7 +200,9 @@ export interface Curve {
   dipole?: number[];
 }
 
-/** The radiation pattern (levtrap.pattern.pattern_block). Grids are flat lists. */
+/** The radiation pattern (levtrap.pattern.pattern_block), lab frame. Grids are flat lists. With
+ * several beams (#76) it is the pattern of them all: a coherent group scatters its summed field,
+ * groups that do not interfere add their light, collected powers and information. */
 export interface Pattern {
   frame: string;
   grid: { theta: number[]; phi: number[]; weight: number[] };
@@ -219,9 +221,13 @@ export interface Pattern {
   collection: Record<string, number[]>;
   /** fraction of the position information collected, per direction and axis */
   information_efficiency: Record<string, { x: number[]; y: number[]; z: number[] }>;
-  /** NA of the trapping lens, and what it collects looking back at the particle */
+  /** NA of the trapping lens (the first beam's, also when other beams have lenses of their own, #76),
+   * and what it collects looking back at the particle */
   trap_NA?: number | null;
-  /** at trap_NA: backward is the trapping lens itself, forward a lens of the same NA opposite it (#75) */
+  /** the first beam's direction (lab frame): the trapping lens looks back along −trap_axis (#76) */
+  trap_axis?: Vec3 | null;
+  /** at trap_NA: backward is the trapping lens itself (a cone about −trap_axis), forward a lens of the
+   * same NA opposite it (about +trap_axis) (#75, #76) */
   at_trap_NA?: { forward: ConeFractions; backward: ConeFractions } | null;
 }
 
