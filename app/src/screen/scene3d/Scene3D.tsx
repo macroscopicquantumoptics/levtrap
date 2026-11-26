@@ -93,6 +93,9 @@ interface CameraState {
 const MIN_PARTICLE_PX = 4.5;
 /** px: the radiation pattern's largest radius, at the fitted scale */
 const LOBE_PX = 80;
+/** Half the width of the view buttons (Fit, Along, Side), px, as drawn by Scene.module.css .views. */
+const VIEW_BUTTONS_HALF = 68;
+
 /** to scale, an ideal lens (it has no size or distance) is drawn this many half-views upstream: out of the view */
 const IDEAL_LENS_AWAY = 20;
 const VIEWS: { name: ViewName; label: string; title: string }[] = [
@@ -298,11 +301,12 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
   }
 
   // ---- where each label goes ------------------------------------------------------------
-  // a part out of the room (zoomed or turned away) has no label; but a lens keeps
-  // its label at the room's edge, towards it (a real lens stands millimetres away)
+  // a part out of the room (zoomed or turned away) has no label; but a lens or a beam keeps
+  // its label at the room's edge, towards it (a real lens stands millimetres away, and a beam's
+  // label sits upstream of its lens: four beams on one axis would otherwise have none to select, #97)
   const laid = spots.flatMap((s) => {
     const away = s.anchor[0] < left - 8 || s.anchor[0] > right + 8 || s.anchor[1] < top - 8 || s.anchor[1] > bottom + 8;
-    if (away && s.part.kind !== "lens") return [];
+    if (away && s.part.kind !== "lens" && s.part.kind !== "beam") return [];
     let [sx, sy] = [s.x, s.y];
     if (away) {
       const [dx, dy] = [s.anchor[0] - centre.x, s.anchor[1] - centre.y];
@@ -316,7 +320,9 @@ export default function Scene3D({ setup, result, selected, onSelect, inset, labe
     return [{ s, away, text, half, x, y }];
   });
   // beams on one axis put their labels on one spot: stagger them so none covers another (#81)
-  const staggered = staggerLabels(laid, top + 14, bottom - 14);
+  // the view buttons (Fit, Along, Side) sit in the room's top right corner: a label moves off them as off another label
+  const viewButtons = { x: right - 8 - VIEW_BUTTONS_HALF, y: top + 4 + 13, half: VIEW_BUTTONS_HALF };
+  const staggered = staggerLabels([viewButtons, ...laid], top + 14, bottom - 14).slice(1);
   const shownLabels = laid.map((l, i) => ({ ...l, ...staggered[i] }));
 
   // ---- the notes over the corner, bottom up ---------------------------------------------------
