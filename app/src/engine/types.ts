@@ -221,9 +221,13 @@ export interface Pattern {
   collection: Record<string, number[]>;
   /** fraction of the position information collected, per direction and axis */
   information_efficiency: Record<string, { x: number[]; y: number[]; z: number[] }>;
-  /** NA of the trapping lens (the first beam's, also when other beams have lenses of their own, #76),
-   * and what it collects looking back at the particle */
+  /** NA of the trapping lens: the lens the first beam goes through, as wide as the widest beam going
+   * the same way as the first (same direction, not merely the same axis), at most n_medium (#76, #97) */
   trap_NA?: number | null;
+  /** the beams going the first beam's way, through the trapping lens (indices into trap.fields, #97) */
+  trap_NA_fields?: number[] | null;
+  /** the beam whose NA trap_NA is (index into trap.fields, #97) */
+  trap_NA_field?: number | null;
   /** the first beam's direction (lab frame): the trapping lens looks back along −trap_axis (#76) */
   trap_axis?: Vec3 | null;
   /** at trap_NA: backward is the trapping lens itself (a cone about −trap_axis), forward a lens of the

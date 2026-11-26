@@ -4,7 +4,7 @@
  */
 import type { ConeFractions, Pattern, Result, Setup, Vec3 } from "../../engine/types.ts";
 import { gasDamping, gasHeating, KB, logSpace } from "../../lib/gas.ts";
-import { environmentOf } from "../model.ts";
+import { environmentOf, partsOf } from "../model.ts";
 
 const LAB: Record<string, Vec3> = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -174,4 +174,23 @@ export function atTrapNA(pattern: Pattern, direction: LensDirection): ConeFracti
     collection: f.collection + b.collection,
     information: { x: f.information.x + b.information.x, y: f.information.y + b.information.y, z: f.information.z + b.information.z },
   };
+}
+
+/**
+ * Which NA the trapping lens has, in words (#97): the beam whose NA it is,
+ * and the beams going the first beam's way through that one lens. Null with
+ * one beam in the trap (its own lens, nothing to say) or when the result
+ * does not say which beams (an older recording).
+ */
+export function trapLensNote(pattern: Pattern, setup: Setup): string | null {
+  const fields = pattern.trap_NA_fields;
+  const field = pattern.trap_NA_field;
+  if (!pattern.trap_NA || !fields?.length || field == null) return null;
+  const parts = partsOf(setup);
+  if (parts.filter((p) => p.kind === "beam").length < 2) return null;
+  const name = (i: number) => parts.find((p) => p.id === `field:${i}`)?.name ?? `field ${i + 1}`;
+  if (fields.length === 1) return `${name(field)}'s; no other beam goes its way`;
+  const names = fields.map(name);
+  const list = `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `${name(field)}'s: ${list} go the same way through one lens, which needs the ${fields.length === 2 ? "larger" : "largest"} of their NAs`;
 }

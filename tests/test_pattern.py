@@ -434,3 +434,60 @@ def test_single_beam_along_z_is_unchanged():
     p = r["pattern"]
     for key in ("scattered", "total", "collection", "information_efficiency", "at_trap_NA", "P_sca"):
         assert p[key] == ref[key], key
+
+
+# ---------------------------------------------------------------------------
+# which lens is the trapping lens (#97)
+# ---------------------------------------------------------------------------
+
+
+def _trap_lens(setup):
+    from levtrap.setup import parse
+    from levtrap.solve import trap_lens
+    return trap_lens(parse(setup))
+
+
+def test_trapping_lens_is_as_wide_as_the_widest_beam_going_its_way():
+    """#97: beams that go the same way as the first share its objective, which
+    must then be as wide as the widest of them. In the WS2 dark trap (the first
+    two beams of FOUR_BEAM) beam 1 has NA 0.30 and beam 2 NA 0.71: the trapping
+    lens's NA is beam 2's. From the waists (api._beam_angle, OTT's mapping):
+    tan(angle) = lambda w_p / (pi W), w_p = paraxial_beam_waist(order)."""
+    from levtrap.special import paraxial_beam_waist
+    two = dict(FOUR_BEAM, trap={"fields": FOUR_BEAM["trap"]["fields"][:2]})
+    lens = _trap_lens(two)
+    na = [math.sin(math.atan(1.55e-6 * paraxial_beam_waist(o) / (math.pi * w)))
+          for o, w in ((0, 1.59e-6), (2, 8.66e-7))]
+    assert na[0] == pytest.approx(0.30, abs=0.005) and na[1] == pytest.approx(0.71, abs=0.005)
+    assert lens["NA"] == pytest.approx(na[1], rel=1e-12)
+    assert lens["fields"] == [0, 1] and lens["field"] == 1
+    assert lens["axis"] == [0.0, 0.0, 1.0]
+    # the Result carries it, with the beams it is taken over
+    p = _pattern_at(two)
+    assert p["trap_NA"] == pytest.approx(na[1], rel=1e-12)
+    assert p["trap_NA_fields"] == [0, 1] and p["trap_NA_field"] == 1
+
+
+def test_trapping_lens_ignores_beams_going_the_other_way():
+    """#97: the same direction, not merely the same axis. In the four-beam
+    trap the -z pair has its own lenses; the +z lens is the widest of the +z
+    pair. A wider beam along -z, or one at 45 degrees, does not widen it; one
+    along +z with a direction vector of another length does."""
+    lens = _trap_lens(FOUR_BEAM)
+    assert lens["fields"] == [0, 1] and lens["field"] == 1
+    a = _beam(id="a", focus={"kind": "lens", "NA": 0.5})
+    wide_back = _beam(id="b", focus={"kind": "lens", "NA": 0.9}, direction=[0, 0, -1])
+    tilted = _beam(id="c", focus={"kind": "lens", "NA": 0.9}, direction=[1, 0, 1])
+    lens = _trap_lens(_with_beams(a, wide_back, tilted))
+    assert lens["NA"] == pytest.approx(0.5) and lens["fields"] == [0] and lens["field"] == 0
+    wide_fwd = _beam(id="d", focus={"kind": "lens", "NA": 0.9}, direction=[0, 0, 2])
+    lens = _trap_lens(_with_beams(a, wide_back, tilted, wide_fwd))
+    assert lens["NA"] == pytest.approx(0.9) and lens["fields"] == [0, 3] and lens["field"] == 3
+
+
+def test_trapping_lens_NA_is_at_most_the_medium_index():
+    """#97: a convergence angle given in degrees can be up to 90; the NA
+    n sin(angle) never exceeds n_medium."""
+    from levtrap.solve import beam_NA
+    assert beam_NA(_beam(focus={"kind": "lens", "angle_deg": 90}), 1.33) == pytest.approx(1.33)
+    assert beam_NA(_beam(focus={"kind": "lens", "angle_deg": 30}), 1.0) == pytest.approx(0.5)

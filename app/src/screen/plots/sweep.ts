@@ -8,7 +8,7 @@ import { angleFromWaist, modeOrder, naFromAngle } from "../../lib/linked.ts";
 import { formatNumber } from "../../lib/format.ts";
 import { shownFrequency } from "../answer.ts";
 import { directionOf, environmentOf, partsOf, positionOf, withEnvironment, withField, withParticle } from "../model.ts";
-import { atTrapNA, informationAgainstNA, type LensDirection } from "./data.ts";
+import { atTrapNA, informationAgainstNA, LENS_DIRECTIONS, type LensDirection } from "./data.ts";
 
 export interface SweepParam {
   id: string;
@@ -255,18 +255,38 @@ export interface SweepOutput {
 
 export type InfoAxis = "x" | "y" | "z" | "all";
 
-/** Where an information sweep reads: a lens's direction, the axis, and its NA (null: the trapping lens's own). */
+/**
+ * Where an information sweep reads: a lens's direction, the axis, and its NA
+ * (null: the trapping lens's own). The side lenses (#97) look along the lab's
+ * x and y axes, as on the Radiation tab; the engine gives them on the NA
+ * ladder only, so a side lens always has an NA of the ladder.
+ */
 export interface InfoChoice {
-  direction: Extract<LensDirection, "backward" | "forward" | "both">;
+  direction: LensDirection;
   axis: InfoAxis;
   NA: number | null;
 }
 
-export const INFO_DIRECTIONS: { value: InfoChoice["direction"]; label: string }[] = [
-  { value: "backward", label: "Backward (−z)" },
-  { value: "forward", label: "Forward (+z)" },
-  { value: "both", label: "Forward + backward" },
-];
+/** The lenses of the information output: the Radiation tab's, in its order (#97). */
+export const INFO_DIRECTIONS: { value: LensDirection; label: string }[] = LENS_DIRECTIONS.map(({ value, label }) => ({ value, label }));
+
+/** A side lens: the engine gives no value at the trapping lens's NA for it, only on the ladder. */
+export const isSideLens = (direction: LensDirection) => direction === "side_x" || direction === "side_y";
+
+/** The NA a side lens starts at when the lens is switched from the trapping lens's NA (#97). */
+export const SIDE_LENS_NA = 0.5;
+
+/**
+ * The choice with another lens (#97). A side lens has no value at the
+ * trapping lens's NA, so choosing one while that is chosen moves the NA to
+ * the ladder's value nearest SIDE_LENS_NA; an NA of the ladder stays.
+ */
+export function withLens(choice: InfoChoice, direction: LensDirection, nMedium: number): InfoChoice {
+  if (!isSideLens(direction) || choice.NA !== null) return { ...choice, direction };
+  const ladder = naLadder(nMedium);
+  const NA = ladder.reduce((best, na) => (Math.abs(na - SIDE_LENS_NA) < Math.abs(best - SIDE_LENS_NA) ? na : best), ladder[0]);
+  return { ...choice, direction, NA };
+}
 
 /**
  * The NAs at which the engine gives the collected information
@@ -285,7 +305,8 @@ export function naLadder(nMedium: number): number[] {
  * block as the Radiation tab does, at the trapping lens's NA (`at_trap_NA`,
  * which follows a swept lens NA) or at one NA of the engine's ladder; both
  * are the engine's own numbers, not interpolated. "Forward + backward" adds
- * the two lenses (their cones do not overlap, #75).
+ * the two lenses (their cones do not overlap, #75). The side lenses (#97)
+ * read the ladder only: at the trapping lens's NA they have no value.
  */
 export function informationOutput(choice: InfoChoice): SweepOutput {
   const axes = choice.axis === "all" ? (["x", "y", "z"] as const) : ([choice.axis] as const);
@@ -311,10 +332,22 @@ export function informationOutput(choice: InfoChoice): SweepOutput {
 export function infoCollector({ direction, NA }: InfoChoice): string {
   if (NA === null) {
     // at the trapping lens's NA, backward is the trapping lens itself, looking back at the particle (#75)
-    return { backward: "the trapping lens", forward: "a forward lens of the trapping lens's NA", both: "the trapping lens and a forward lens of its NA" }[direction];
+    return {
+      backward: "the trapping lens",
+      forward: "a forward lens of the trapping lens's NA",
+      both: "the trapping lens and a forward lens of its NA",
+      side_x: "a side lens on the x axis of the trapping lens's NA",
+      side_y: "a side lens on the y axis of the trapping lens's NA",
+    }[direction];
   }
   const na = `NA ${formatNumber(NA, 3, true)}`;
-  return { backward: `a backward lens of ${na}`, forward: `a forward lens of ${na}`, both: `a forward and a backward lens of ${na}` }[direction];
+  return {
+    backward: `a backward lens of ${na}`,
+    forward: `a forward lens of ${na}`,
+    both: `a forward and a backward lens of ${na}`,
+    side_x: `a side lens on the x axis of ${na}`,
+    side_y: `a side lens on the y axis of ${na}`,
+  }[direction];
 }
 
 /** The information output's place in the Plot menu; its lens is chosen beside it. */

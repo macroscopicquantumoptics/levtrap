@@ -677,34 +677,77 @@ def pattern_result(s: dict, r, optical=None) -> dict:
     pattern is in the lab frame. ``optical`` are the setup's optical fields
     (built here from the beams if not given).
 
-    ``trap_NA`` is the numerical aperture of the first beam's focusing optic
-    (``n_medium sin(convergence angle)``), and ``trap_axis`` that beam's
-    direction: the first beam's lens is "the trapping lens" also when other
-    beams have lenses of their own, and ``at_trap_NA`` is what a cone of its
-    NA collects looking back through it (``backward``, about minus the first
-    beam's direction) and opposite it (``forward``). For one beam along +z
-    these are the lab's -z and +z, as before.
+    "The trapping lens" is the one the first beam goes through: ``trap_axis``
+    is the first beam's direction, and ``trap_NA`` the largest numerical
+    aperture (``n_medium sin(convergence angle)``, at most ``n_medium``) among
+    the beams that go the same way as the first (same direction, not merely
+    the same axis; :func:`trap_lens`, #97). Beams that share one objective
+    need it as wide as the widest of them, so the first beam's own NA would
+    understate what the lens collects. ``trap_NA_fields`` are those beams
+    (indices into ``trap.fields``) and ``trap_NA_field`` the one whose NA it
+    is. ``at_trap_NA`` is what a cone of that NA collects looking back
+    through the lens (``backward``, about minus the first beam's direction)
+    and opposite it (``forward``). For one beam along +z these are the lab's
+    -z and +z, as before.
 
     Without ``optical``, the fields are built here from ``s``, whose particle
     must be as given (not yet through :func:`resolve_particle`): a material's
     n and k are then taken at each field's own wavelength, as :func:`solve`
     does; a resolved particle would carry the first beam's n to every field.
     """
-    from .api import _beam_angle, _single_beam, _tmatrix
+    from .api import _single_beam, _tmatrix
     from .optics import optical_fields
     from .pattern import pattern_block
 
     nm = float(s["environment"]["medium_index"])
-    beams = [f for f in s["trap"]["fields"] if f["kind"] == "beam"]
     if optical is None:
         optical = optical_fields(s, _single_beam, lambda wl: _tmatrix(_particle_at(s["particle"], wl), wl, nm)[0])
     r = np.asarray(r, dtype=float)
     parts = [(f.incident_at(r), f.T) for f in optical]
-    b0 = beams[0]
-    m = [int(v) for v in b0["mode"]["indices"]]
-    order = (2 * m[0] + abs(m[1])) if b0["mode"]["type"] == "lg" else (m[0] + m[1])
-    angle = _beam_angle(b0["focus"], float(b0["wavelength"]), nm, order)
-    return pattern_block(parts, n_medium=nm, trap_NA=nm * math.sin(angle), trap_axis=b0["direction"])
+    lens = trap_lens(s)
+    out = pattern_block(parts, n_medium=nm, trap_NA=lens["NA"], trap_axis=lens["axis"])
+    if "trap_NA" in out:
+        out["trap_NA_fields"] = lens["fields"]
+        out["trap_NA_field"] = lens["field"]
+    return out
+
+
+def beam_NA(b: dict, n_medium: float) -> float:
+    """Numerical aperture of a beam's focusing optic: ``n_medium sin(convergence
+    angle)``, from its focus block (NA, angle or waist), at most ``n_medium``."""
+    from .api import _beam_angle
+
+    m = [int(v) for v in b["mode"]["indices"]]
+    order = (2 * m[0] + abs(m[1])) if b["mode"]["type"] == "lg" else (m[0] + m[1])
+    angle = _beam_angle(b["focus"], float(b["wavelength"]), n_medium, order)
+    return min(n_medium, n_medium * math.sin(min(angle, math.pi / 2)))
+
+
+def trap_lens(s: dict) -> dict:
+    """The trapping lens of a parsed setup (#97): the lens the first beam goes
+    through. Beams going the same way as the first (unit directions equal, so
+    not a beam along -z when the first goes +z) share it, and it must be as
+    wide as the widest of them: its NA is the largest of their NAs
+    (:func:`beam_NA`), at most ``n_medium``.
+
+    Returns ``NA``, ``axis`` (the first beam's direction, unit), ``fields``
+    (indices into ``trap.fields`` of the beams going that way, the first beam
+    first) and ``field`` (the index of the beam whose NA it is; the first such
+    beam on a tie)."""
+    nm = float(s["environment"]["medium_index"])
+    fields = s["trap"]["fields"]
+    idx = [i for i, f in enumerate(fields) if f["kind"] == "beam"]
+    axis = np.asarray(fields[idx[0]]["direction"], dtype=float)
+    axis = axis / np.linalg.norm(axis)
+
+    def same_way(f):
+        d = np.asarray(f["direction"], dtype=float)
+        return float(d @ axis) / np.linalg.norm(d) > 1 - 1e-9
+
+    group = [i for i in idx if same_way(fields[i])]
+    nas = [beam_NA(fields[i], nm) for i in group]
+    k = int(np.argmax(nas))
+    return dict(NA=nas[k], axis=[float(v) for v in axis], fields=group, field=group[k])
 
 
 def solve_json(setup_json: str, want_json: str = "[]", start_json: str = "null") -> str:
