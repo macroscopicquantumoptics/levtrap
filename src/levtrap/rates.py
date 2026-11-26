@@ -44,7 +44,9 @@ weighted by the scattered power, their mean ``<n>`` for the cross term, and
 the beam photons along each beam (model ``mie-pattern``, #78).  Without even
 that, the electric-dipole pattern of the beams' polarisation,
 :func:`dipole_second_moment`, is used (``dipole-pattern``).  Their models
-say so.  None of the models includes the recoil of absorbed photons.
+say so.  None of the models includes the recoil of absorbed photons: above
+1 % of the scattered power a note says so, and above 10 % the recoil is
+marked approximate.
 """
 
 from __future__ import annotations
@@ -538,6 +540,8 @@ def rates_block(s: dict, *, modes: list[dict], mass: float, P_sca: float, P_abs:
         share = f" (P_abs = {P_abs / P_sca:.2g} P_sca)" if P_sca > 0 else ""
         recoil_notes.append(f"absorbed photons{share} are not included: their recoil and the thermal "
                             "emission would add to it")
+        if P_abs > 0.1 * P_sca:
+            validity = "approximate"
     damping_notes = [f"Kn = {kn:.3g}"]
     damping_validity = "ok"
     if not 200 <= T <= 1000:

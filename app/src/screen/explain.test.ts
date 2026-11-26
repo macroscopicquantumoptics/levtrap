@@ -121,6 +121,20 @@ test("photon recoil per oscillation: Γ/Ω per mode, split into scattered photon
   assert.ok(z.recoil_cross! < 0);
   const x = result.rates!.modes.find((m) => m.name === "x")!;
   assert.ok(Math.abs(x.recoil_cross!) < 0.1 * Math.abs(z.recoil_cross!));
+  // the cross term is the interference of the two kicks, not forward or backward scattering: the
+  // focus gives one across the beam too, where <n_x> is 0 (#95)
+  const note = (axis: string) => e.inputs.find((i) => i.symbol === String.raw`\Gamma_{\times,${axis}}/\Omega_{${axis}}`)?.note;
+  assert.equal(note("x"), "interference of the scattered and beam photons' kicks, along x");
+  assert.equal(note("z"), "interference of the scattered and beam photons' kicks, along z");
+  assert.ok(!e.inputs.some((i) => /forward|backward/.test(i.note)));
+});
+
+test("the photon picture (a Result without the information) keeps the forward-scattering note (#78)", () => {
+  const result = structuredClone(RECORDED.tweezer!);
+  result.models = result.models.map((m) => (m.quantity === "recoil_heating" ? { ...m, model: "mie-pattern" } : m));
+  const e = secondaryNumbers(result, tweezer.setup).find((s) => s.id === "recoil")!.explain();
+  const z = e.inputs.find((i) => i.symbol === String.raw`\Gamma_{\times,z}/\Omega_{z}`)!;
+  assert.equal(z.note, "forward scattering gives back part of the beam photon's kick, along z");
 });
 
 test("the scattered light by multipole: a small sphere is a dipole, the WS2 dark trap a magnetic quadrupole (#80)", () => {

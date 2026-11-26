@@ -23,8 +23,9 @@ for (const scheme of ["light", "dark"] as Scheme[]) {
     await expect(explain).toContainText("position information");
     await expect(explain).toContainText("scattered photons, along z");
     await expect(explain).toContainText("photons taken from the beam (the field's gradient at the sphere), along z");
-    // the 100 nm silica sphere scatters slightly forwards: a cross term along the beam
-    await expect(explain).toContainText("forward scattering gives back part of the beam photon's kick, along z");
+    // the cross term is the interference of the two kicks, not forward or backward scattering (#95)
+    await expect(explain).toContainText("interference of the scattered and beam photons' kicks, along z");
+    await expect(explain).not.toContainText("forward scattering");
     await expect(explain).toContainText("mean direction of the scattered photons");
     await shot(page, `recoil-explain-desktop-${scheme}`);
   });

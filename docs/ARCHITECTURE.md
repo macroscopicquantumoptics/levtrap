@@ -204,11 +204,14 @@ model `information`), without the pattern's sphere grid: seven scatterings and a
 small exact quadrature. It splits exactly as ∂F/∂u = G_u − i k n_u F into the
 scattered photons (k² P_sca ⟨n n⟩, the Mie pattern), the beam photons (|G_u|²,
 what the sphere scatters from the incident field's gradient) and their cross
-term: `recoil_scattered`, `recoil_incident`, `recoil_cross`. A plane wave gives
+term (2 Re ∮ G_u*·(−i k n_u F) dΩ, the interference of the two kicks; it is
+not tied to ⟨n⟩ and can appear across the beam): `recoil_scattered`,
+`recoil_incident`, `recoil_cross`. A plane wave gives
 the photon picture of `rates.recoil_heating` (the fallback, `mie-pattern`);
 at a focus the beam photons weigh ⟨cos θ⟩² < 1 along the axis (Gouy), and
 standing waves and dark foci follow the actual field. Absorbed photons are
-not included.
+not included: above 1 % of P_sca a note says so, above 10 % the recoil is
+marked approximate.
 
 ## 7. The screen
 

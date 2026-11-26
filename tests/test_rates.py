@@ -146,7 +146,7 @@ def test_result_rates_block(default):
     # beam photons (#95): along the beam they weigh less than a plane wave's 1 against the scattered
     # photons' 2/5 (the Gouy phase slows the axial phase); across it the focus's longitudinal field,
     # which grows along x, adds a little
-    assert 1.0 < z["recoil_incident"] / z["recoil_scattered"] < 2.5
+    assert 1.3 < z["recoil_incident"] / z["recoil_scattered"] < 2.0  # 1.62; a plane wave gives 2.5
     assert 0 < x["recoil_incident"] < 0.05 * z["recoil_incident"]
     # slightly forward scattering (<n_z> > 0): the cross term lowers the heating, mostly along the beam
     assert z["recoil_cross"] < 0 and abs(x["recoil_cross"]) < 0.1 * abs(z["recoil_cross"])
@@ -204,6 +204,27 @@ def test_a_coherent_standing_wave_is_exact_from_the_information():
     _, models = rates.rates_block(ps, modes=modes, mass=M, P_sca=1e-9, P_abs=0.0, scattering=parts)
     assert models[1]["model"] == "mie-pattern" and models[1]["validity"] == "approximate"
     assert any("standing wave" in n for n in models[1]["notes"])
+    assert "position information not available: plane-wave photon picture" in models[1]["notes"]
+
+
+def test_absorbed_photons_are_noted_and_make_the_recoil_approximate():
+    """The information covers the scattered light only. A sphere that absorbs much of the light
+    gets a note with P_abs / P_sca, and above 10 % the recoil is approximate (#95)."""
+    s = json.loads(json.dumps(DEFAULT_SETUP))
+    s["particle"] = dict(radius=100e-9, n=1.45, k=0.01, density=2200)
+    r = solve(s)
+    rec = {m["quantity"]: m for m in r["models"]}["recoil_heating"]
+    ratio = r["rates"]["P_abs"] / r["rates"]["P_sca"]
+    assert ratio > 0.1
+    assert rec["model"] == "information" and rec["validity"] == "approximate"
+    assert any(n.startswith(f"absorbed photons (P_abs = {ratio:.2g} P_sca) are not included") for n in rec["notes"])
+    # a weak absorber: the note, but still ok
+    s["particle"]["k"] = 1e-3
+    r = solve(s)
+    rec = {m["quantity"]: m for m in r["models"]}["recoil_heating"]
+    assert 0.01 < r["rates"]["P_abs"] / r["rates"]["P_sca"] < 0.1
+    assert rec["validity"] == "ok"
+    assert any(n.startswith("absorbed photons") for n in rec["notes"])
 
 
 def test_rates_block_without_pattern_falls_back_to_the_dipole():
