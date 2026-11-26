@@ -167,7 +167,9 @@ Models per field:
                 "dark_split": 0.629,      //  the fraction of the pair's power in the second beam that darkens
                 "residual": 0.0}],        //  the first beam's focus, and |E|² left there over the two intensities
                                           //  added (0: a null; levtrap.optics.dark_split)
-  "pattern": {...},                       // on request
+  "pattern": {...,                        // on request: lab frame, every optical field (#76)
+              "trap_NA": 0.8, "trap_axis": [0, 0, 1],   // the first beam's lens and direction
+              "at_trap_NA": {"forward": {...}, "backward": {...}}},  // cones of trap_NA about ±trap_axis
   "field": {"centre": [...], "planes": {"xz": {"u": [...], "v": [...], "I": [[...]]}, "yz": …, "xy": …},
             "max": …},                    // on request: intensity [W/m²] on the lab planes (#48)
   "curves": {...},                        // on request: force cuts, potential, map
@@ -179,6 +181,18 @@ Models per field:
 
 `curves` and `pattern` are computed only when asked for, so the headline
 numbers stay fast.
+
+The radiation pattern (#76) is computed for every optical field, in the lab
+frame: a coherent group (beams in any direction, through any focus) scatters
+its summed incident beam, the same one the force uses; fields that do not
+interfere add their patterns, collected powers and position information, and
+the fractions are those of the sums. `trap_NA` and `trap_axis` are the first
+beam's lens and direction ("the trapping lens", also when other beams have
+lenses of their own); `at_trap_NA.backward` is a cone of that NA about
+−`trap_axis` (looking back through the trapping lens), `forward` one about
++`trap_axis`. The collection and information curves (`collection`,
+`information_efficiency`) are about the fixed lab directions ±z, ±x, ±y. A beam
+focused by an asphere or a parabolic mirror has no pattern yet.
 
 ## 7. The screen
 
