@@ -4,6 +4,7 @@
  */
 import type { BeamField, PaulField, Result, Setup, Vec3 } from "../../engine/types.ts";
 import type { Quantity } from "../../lib/units.ts";
+import { angleFromWaist, modeOrder, naFromAngle } from "../../lib/linked.ts";
 import { shownFrequency } from "../answer.ts";
 import { directionOf, environmentOf, partsOf, positionOf, withEnvironment, withField, withParticle } from "../model.ts";
 
@@ -17,7 +18,7 @@ export interface SweepParam {
   /** SI */
   get(setup: Setup): number;
   set(setup: Setup, value: number): Setup;
-  /** spaced in log by default (it spans decades) */
+  /** its default range spans decades (×1/10 to ×10); log spacing then starts on (logByDefault, #72) */
   log: boolean;
   /** a sentence when a value cannot be used */
   check(value: number): string | null;
@@ -97,16 +98,21 @@ export function sweepParams(setup: Setup): SweepParam[] {
         out.push({ id: `lens${index}-tilt_y`, label: `${lensName} · tilt about y`, quantity: "angle", unit: "°", get: (s) => tilt(s)[1], set: (s, v) => asphere({ tilt_deg: [tilt(s)[0], v] })(s), log: false, check: within20 });
         return;
       }
+      // an ideal lens (#72): the sweep varies its NA and keeps the rest of the lens model
+      // (its mapping, #64, and its filling, #61); a lens given by waist or half-angle
+      // starts from the NA of that same focus and becomes an NA lens
       out.push({
         id: `lens${index}-NA`,
         label: `${name(`lens:${index}`)} · NA`,
         quantity: "number",
         unit: "",
-        get: (s) => {
-          const focus = (s.trap.fields[index] as BeamField).focus;
-          return focus.NA ?? 0.8;
+        get: (s) => idealNA(s.trap.fields[index] as BeamField, environmentOf(s).medium_index),
+        set: (s, v) => {
+          // drop only the other ways of giving the focus (one of NA, waist, angle_deg)
+          const given = new Set(["NA", "waist", "angle_deg"]);
+          const rest = Object.fromEntries(Object.entries((s.trap.fields[index] as BeamField).focus).filter(([k]) => !given.has(k)));
+          return at({ focus: { ...rest, kind: "lens", NA: v } as BeamField["focus"] })(s);
         },
-        set: (s, v) => at({ focus: { kind: "lens", NA: v } })(s),
         log: false,
         check: (v) => (v > 0 && v < n ? null : `Must be between 0 and the medium index (${n}).`),
       });
@@ -257,6 +263,32 @@ export function defaultRange(param: SweepParam, setup: Setup): [number, number] 
   if (param.id.endsWith("-NA")) return [Math.max(0.1, v - 0.5), Math.min(0.95 * environmentOf(setup).medium_index, v + 0.15)];
   if (v === 0) return [0, 10];
   return param.log ? [v / 10, v * 10] : [v / 2, v * 2];
+}
+
+/**
+ * The NA of an ideal lens however it is given (#72): NA itself, or n sin θ of
+ * its half-angle, or of the half-angle its waist implies with its mapping and
+ * the beam's mode order (the engine's relation, as the Inspector shows it;
+ * lib/linked.ts). NaN for a real lens or a mirror, which have no NA input.
+ */
+export function idealNA(beam: BeamField, nMedium: number): number {
+  const focus = beam.focus;
+  if (focus.kind === "asphere" || focus.kind === "parabolic_mirror") return Number.NaN;
+  if (focus.NA != null) return focus.NA;
+  const mapping = focus.mapping === "sine" ? "sine" : "ott";
+  const order = modeOrder(beam.mode?.type ?? "lg", beam.mode?.indices ?? [0, 0]);
+  const angle = focus.angle_deg != null ? (focus.angle_deg * Math.PI) / 180 : angleFromWaist(focus.waist!, beam.wavelength, nMedium, order, mapping);
+  return naFromAngle(angle, nMedium);
+}
+
+/**
+ * Log spacing starts on only for a range that spans a decade or more (#72): a
+ * pressure or RF-frequency scan over decades, not a resonance scan of
+ * 290–310 nm, whose points should fall on even steps.
+ */
+export function logByDefault(from: number, to: number): boolean {
+  if (!(from > 0 && to > 0)) return false;
+  return Math.max(from, to) / Math.min(from, to) >= 10;
 }
 
 /** Contiguous runs of points where the trap is not stable, as [from, to] in the swept value. */

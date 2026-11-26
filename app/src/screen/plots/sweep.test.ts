@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { BeamField, PaulField } from "../../engine/types.ts";
 import { PRESETS } from "../presets.ts";
+import { environmentOf } from "../model.ts";
 import { RECORDED } from "../recorded.ts";
-import { defaultRange, followFrom, jumpsAt, OUTPUTS, sweepParams, sweepValues, unstableRuns } from "./sweep.ts";
+import { defaultRange, followFrom, idealNA, jumpsAt, logByDefault, OUTPUTS, sweepParams, sweepValues, unstableRuns } from "./sweep.ts";
 
 const preset = (id: string) => PRESETS.find((p) => p.id === id)!.setup;
 
@@ -44,6 +45,58 @@ test("values, evenly or in log, and the default ranges", () => {
   assert.ok(Math.abs(lo - 1e-5) < 1e-12 && Math.abs(hi - 1e-3) < 1e-12);
   const na = defaultRange(p.find((x) => x.id === "lens0-NA")!, s);
   assert.ok(Math.abs(na[0] - 0.3) < 1e-12 && Math.abs(na[1] - 0.95) < 1e-12);
+});
+
+test("an NA sweep keeps the lens model: a sine mapping and a filling stay (#72)", () => {
+  const s = preset("tweezer");
+  const withFocus = (focus: BeamField["focus"]) => ({ ...s, trap: { ...s.trap, fields: [{ ...(s.trap.fields[0] as BeamField), focus }, ...s.trap.fields.slice(1)] } });
+  const sine = withFocus({ kind: "lens", NA: 0.8, mapping: "sine" });
+  const na = sweepParams(sine).find((p) => p.id === "lens0-NA")!;
+  assert.deepEqual((na.set(sine, 0.6).trap.fields[0] as BeamField).focus, { kind: "lens", NA: 0.6, mapping: "sine" });
+  const filled = withFocus({ kind: "lens", NA: 0.9, filling: 1.2 });
+  assert.deepEqual((na.set(filled, 0.7).trap.fields[0] as BeamField).focus, { kind: "lens", NA: 0.7, filling: 1.2 });
+});
+
+test("a lens given by waist or half-angle starts from its own NA, and the sweep drops only the waist (#72)", () => {
+  const s = preset("ws2-bottle");
+  const beam = s.trap.fields[0] as BeamField;
+  const n = environmentOf(s).medium_index;
+  const na = sweepParams(s).find((p) => p.id === "lens0-NA")!;
+  // OTT's relation tan θ = λ_m / (π W) for the Gaussian (order 0)
+  const expected = n * Math.sin(Math.atan(beam.wavelength / n / (Math.PI * (beam.focus as { waist: number }).waist)));
+  assert.ok(Math.abs(na.get(s) - expected) < 1e-12);
+  assert.ok(Math.abs(na.get(s) - 0.8) > 0.1, "not the old fallback of 0.8");
+  const [lo, hi] = defaultRange(na, s);
+  assert.ok(lo < na.get(s) && na.get(s) < hi);
+  assert.deepEqual((na.set(s, 0.4).trap.fields[0] as BeamField).focus, { kind: "lens", NA: 0.4 });
+  // the LG₁₀ beam's waist means a wider angle (its paraxial waist factor)
+  const lg = sweepParams(s).find((p) => p.id === "lens1-NA")!;
+  const b1 = s.trap.fields[1] as BeamField;
+  const gaussian = n * Math.sin(Math.atan(b1.wavelength / n / (Math.PI * (b1.focus as { waist: number }).waist)));
+  assert.equal(lg.get(s), idealNA(b1, n));
+  assert.ok(lg.get(s) > gaussian);
+  // a sine-mapped half-angle lens: NA = n sin θ, the mapping kept
+  const angled = { ...s, trap: { ...s.trap, fields: [{ ...beam, focus: { kind: "lens" as const, angle_deg: 30, mapping: "sine" as const } }, s.trap.fields[1]] } };
+  assert.ok(Math.abs(na.get(angled) - n * 0.5) < 1e-12);
+  assert.deepEqual((na.set(angled, 0.6).trap.fields[0] as BeamField).focus, { kind: "lens", NA: 0.6, mapping: "sine" });
+});
+
+test("log spacing starts on only over a decade or more: a 290–310 nm radius sweep is linear (#72)", () => {
+  const s = preset("tweezer");
+  const radius = sweepParams(s).find((p) => p.id === "particle-radius")!;
+  assert.equal(logByDefault(290e-9, 310e-9), false);
+  const xs = sweepValues(290e-9, 310e-9, 21, logByDefault(290e-9, 310e-9));
+  assert.ok(Math.abs(xs[10] - 300e-9) < 1e-18, "the middle point is 300 nm");
+  assert.ok(xs.every((x, i) => Math.abs(x - (290 + i) * 1e-9) < 1e-18), "whole nanometres");
+  // the default ranges that span decades (radius, pressure) still start in log
+  assert.equal(logByDefault(...defaultRange(radius, s)), true);
+  const pressure = sweepParams(s).find((p) => p.id === "environment-pressure")!;
+  assert.equal(logByDefault(...defaultRange(pressure, s)), true);
+  // and those within a decade, or through zero, do not
+  const power = sweepParams(s).find((p) => p.id === "beam0-power")!;
+  assert.equal(logByDefault(...defaultRange(power, s)), false);
+  assert.equal(logByDefault(0, 10), false);
+  assert.equal(logByDefault(10, 1), true);
 });
 
 test("the outputs read a result", () => {
