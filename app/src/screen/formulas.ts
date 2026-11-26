@@ -87,7 +87,7 @@ export const FORMULAS = {
     text: "Γ = γ k_B T / (ħ Ω) + Γ_recoil",
   },
   recoil: {
-    tex: tex`\frac{\Gamma_{\mathrm{recoil},i}}{\Omega_i} = \frac{1}{2 m \omega \Omega_i^2} \oint \Big| \frac{\partial \mathbf{F}}{\partial u_i} \Big|^2 d\Omega, \qquad \frac{\partial \mathbf{F}}{\partial u_i} = \mathbf{G}_i - i k\, (\hat{u}_i \cdot \hat{n})\, \mathbf{F}`,
+    tex: tex`\begin{gathered} \frac{\Gamma_{\mathrm{recoil},i}}{\Omega_i} = \frac{1}{2 m \omega \Omega_i^2} \oint \Big| \frac{\partial \mathbf{F}}{\partial u_i} \Big|^2 d\Omega, \\ \frac{\partial \mathbf{F}}{\partial u_i} = \mathbf{G}_i - i k\, (\hat{u}_i \cdot \hat{n})\, \mathbf{F} \end{gathered}`,
     text: "Γ/Ω = ∮ |∂F/∂u|² dΩ / (2 m ω Ω²), ∂F/∂u = G_u − i k (u·n) F: the position information in the scattered far field F. |k (u·n) F|² gives the scattered photons, |G_u|² the beam photons (what the sphere scatters from the field's gradient), the rest their cross term. A plane wave gives ω P_sca n² / (2 m c² Ω²) · (⟨(u·n)²⟩ + (u·e_in)² − 2 (u·e_in)(u·⟨n⟩))",
     source: "Tebbenjohanns, Frimmer & Novotny, PRA 100, 043821 (2019) (backaction = information); plane-wave limit: Jain et al., PRL 116, 243601 (2016), Seberson & Robicheaux, PRA 102, 033505 (2020) (levtrap.rates)",
   },
