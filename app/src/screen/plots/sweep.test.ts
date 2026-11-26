@@ -1,10 +1,25 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { BeamField, PaulField } from "../../engine/types.ts";
+import type { BeamField, PaulField, Pattern } from "../../engine/types.ts";
 import { PRESETS } from "../presets.ts";
 import { environmentOf } from "../model.ts";
 import { RECORDED } from "../recorded.ts";
-import { defaultRange, followFrom, idealNA, jumpsAt, logByDefault, OUTPUTS, sweepParams, sweepValues, unstableRuns } from "./sweep.ts";
+import {
+  coherentGroups,
+  defaultRange,
+  followFrom,
+  idealNA,
+  infoCollector,
+  informationOutput,
+  jumpsAt,
+  logByDefault,
+  naLadder,
+  OUTPUTS,
+  sweepParams,
+  sweepValues,
+  unstableRuns,
+  type InfoChoice,
+} from "./sweep.ts";
 
 const preset = (id: string) => PRESETS.find((p) => p.id === id)!.setup;
 
@@ -175,4 +190,92 @@ test("the new outputs: absorbed power, and recoil heating per mode", () => {
     read("recoil").map((v) => [v.name, v.value]),
     r.rates!.modes.map((m) => [m.name, m.recoil_heating]),
   );
+});
+
+// --- #79: the phase and split of coherent beams, and the information a lens collects -------------
+
+test("a coherent pair sweeps the second beam's phase and the pair's split; incoherent beams do neither (#79)", () => {
+  const ids = sweepParams(preset("ws2-bottle")).map((p) => p.id);
+  assert.ok(ids.includes("beam1-phase") && ids.includes("pair0-1-split"));
+  // only differences of phase matter: the first beam of the group has none to sweep
+  assert.ok(!ids.includes("beam0-phase"));
+  const counter = sweepParams(preset("counter")).map((p) => p.id);
+  assert.ok(!counter.some((id) => id.endsWith("-phase") || id.endsWith("-split")));
+});
+
+test("the coherent groups follow coherent_with through other beams, in setup order (#79)", () => {
+  const s = preset("ws2-bottle");
+  const [b1, b2] = s.trap.fields as BeamField[];
+  const three = { ...s, trap: { fields: [{ kind: "gravity" as const }, b1, b2, { ...b2, id: "b3", coherent_with: "b2" }, { ...b1, id: "lone" }] } };
+  assert.deepEqual(coherentGroups(three), [[1, 2, 3], [4]]);
+  const ids = sweepParams(three).map((p) => p.id);
+  // a group of three has phases but no single split
+  assert.ok(ids.includes("beam2-phase") && ids.includes("beam3-phase") && !ids.some((id) => id.endsWith("-split")));
+});
+
+test("the split moves power between the pair at a fixed total, and the phase reads and writes the beam (#79)", () => {
+  const s = preset("ws2-bottle");
+  const params = sweepParams(s);
+  const split = params.find((p) => p.id === "pair0-1-split")!;
+  assert.ok(Math.abs(split.get(s) - 0.5034 / 0.8) < 1e-12);
+  const t = split.set(s, 0.25);
+  const [a, b] = (t.trap.fields as BeamField[]).map((f) => f.power);
+  assert.ok(Math.abs(a + b - 0.8) < 1e-12 && Math.abs(b - 0.2) < 1e-12);
+  assert.equal((s.trap.fields[1] as BeamField).power, 0.5034);
+  assert.equal(split.check(1.2), "A fraction from 0 to 1.");
+  assert.equal(split.check(0), null);
+  assert.deepEqual(defaultRange(split, s), [0, 1]);
+  const phase = params.find((p) => p.id === "beam1-phase")!;
+  assert.equal(phase.get(s), Math.PI);
+  assert.equal((phase.set(s, 0.5).trap.fields[1] as BeamField).phase, 0.5);
+  assert.deepEqual(defaultRange(phase, s), [0, 2 * Math.PI]);
+  assert.equal(phase.quantity, "phase");
+});
+
+test("the NA ladder is the engine's: 0.05 steps below the medium index, then the index (#79)", () => {
+  const one = naLadder(1);
+  assert.equal(one.length, 20);
+  assert.deepEqual([one[0], one[1], one[18], one[19]], [0.05, 0.1, 0.95, 1]);
+  assert.deepEqual(naLadder(1.33).slice(-2), [1.3, 1.33]);
+});
+
+/** A pattern block cut down to what the information output reads: three NAs, forward and backward. */
+const cones = (scale: number) => ({ x: [0.1, 0.2, 0.3].map((v) => v * scale), y: [0.05, 0.1, 0.15].map((v) => v * scale), z: [0.2, 0.3, 0.4].map((v) => v * scale) });
+const pattern = {
+  NA: [0.4, 0.8, 1],
+  information_efficiency: { forward: cones(1), backward: cones(2) },
+  trap_NA: 0.8,
+  at_trap_NA: {
+    forward: { collection: 0.3, information: { x: 0.2, y: 0.1, z: 0.3 } },
+    backward: { collection: 0.2, information: { x: 0.4, y: 0.2, z: 0.6 } },
+  },
+} as unknown as Pattern;
+
+test("the information output reads the pattern as the Radiation tab does, and asks for it (#79)", () => {
+  const r = { ...RECORDED.tweezer!, pattern };
+  const s = preset("tweezer");
+  const read = (choice: InfoChoice) => informationOutput(choice).read(r, s);
+  assert.deepEqual(informationOutput({ direction: "backward", axis: "all", NA: null }).want, ["pattern"]);
+  // at the trapping lens's NA: the engine's at_trap_NA, per axis
+  assert.deepEqual(read({ direction: "backward", axis: "all", NA: null }), [
+    { name: "x", value: 0.4 },
+    { name: "y", value: 0.2 },
+    { name: "z", value: 0.6 },
+  ]);
+  // forward + backward add
+  assert.ok(Math.abs(read({ direction: "both", axis: "z", NA: null })[0].value! - 0.9) < 1e-12);
+  // at an NA of the ladder: that entry, not an interpolation
+  assert.deepEqual(read({ direction: "forward", axis: "y", NA: 1 }), [{ name: "y", value: 0.15 }]);
+  assert.ok(Math.abs(read({ direction: "both", axis: "x", NA: 0.4 })[0].value! - 0.3) < 1e-12);
+  // an NA the engine did not give, or a result without the pattern: no value
+  assert.deepEqual(read({ direction: "forward", axis: "x", NA: 0.55 }), [{ name: "x", value: null }]);
+  assert.deepEqual(informationOutput({ direction: "forward", axis: "x", NA: null }).read(RECORDED.tweezer!, s), [{ name: "x", value: null }]);
+  // no stable trap: no particle to detect, so no value, as the other outputs (the shading says why)
+  assert.deepEqual(informationOutput({ direction: "backward", axis: "z", NA: null }).read({ ...r, stable: false }, s), [{ name: "z", value: null }]);
+});
+
+test("the information plot's title names the lens (#79)", () => {
+  assert.equal(infoCollector({ direction: "backward", axis: "x", NA: null }), "the trapping lens");
+  assert.equal(infoCollector({ direction: "both", axis: "x", NA: null }), "the trapping lens and a forward lens of its NA");
+  assert.equal(infoCollector({ direction: "forward", axis: "x", NA: 0.9 }), "a forward lens of NA 0.9");
 });

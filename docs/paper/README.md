@@ -19,8 +19,11 @@ offer. The scattered power per multipole (Figs. 1b, 2c) is in a Result at the
 equilibrium (`optical.P_sca_multipoles`, #80) and under More in the app;
 the script computes it itself so that a wavelength with no equilibrium is
 taken at the focus, and `tests/test_multipoles.py` checks that the two agree
-for the 300 nm sphere. The power split that darkens the focus is computed
-in the script (`dark_split`); the app has no such helper.
+for the 300 nm sphere. The power split that darkens the focus is the
+engine's (`levtrap.optics.dark_split`, #79; the script's `dark_split` calls
+it): a Result reports it for every coherent pair (`coherent`), and the
+app's "Darken the focus" button in a coherent beam's inspector sets it.
+`tests/test_dark_split.py` checks it against OTT's split.
 
 The trap itself can be built in the app (two coherent LG beams, circular
 polarisation, phase π), and it is the preset "WS₂ bottle beam (dark trap)"

@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Engine } from "../../engine/client.ts";
 import { isAbortError } from "../../engine/client.ts";
-import type { LensResult, Pattern, Result, Setup } from "../../engine/types.ts";
+import type { LensResult, Pattern, Result, Setup, Want } from "../../engine/types.ts";
 import { formatNumber, formatSci, formatSI } from "../../lib/format.ts";
 import { toFieldText } from "../../lib/units.ts";
 import { answerFromError } from "../answer.ts";
@@ -22,7 +22,24 @@ import { Plot, type PlotSeries, type Tone } from "./Plot.tsx";
 import { PolarPlot } from "./PolarPlot.tsx";
 import { spectrum } from "./spectrum.ts";
 import { waveRange, wavefrontPixels, weightedRms } from "./wavefront.ts";
-import { defaultRange, followFrom, jumpsAt, logByDefault, OUTPUTS, sweepParams, sweepValues, unstableRuns } from "./sweep.ts";
+import { radiationUnavailable } from "./availability.ts";
+import {
+  defaultRange,
+  followFrom,
+  INFO_DIRECTIONS,
+  INFORMATION,
+  infoCollector,
+  informationOutput,
+  jumpsAt,
+  logByDefault,
+  naLadder,
+  OUTPUTS,
+  sweepParams,
+  sweepValues,
+  unstableRuns,
+  type InfoAxis,
+  type InfoChoice,
+} from "./sweep.ts";
 import styles from "./tabs.module.css";
 
 export interface TabProps {
@@ -487,6 +504,8 @@ interface SweepRun {
   key: string;
   param: string;
   output: string;
+  /** the blocks each solve computed */
+  want: Want[];
   xs: number[];
   /** per value: the result, or null if it failed */
   results: (Result | null)[];
@@ -505,7 +524,11 @@ export function SweepTab({ setup, engine }: TabProps) {
   // log spacing starts on only over a decade or more (#72); the box overrides it
   const isLog = log[param.id] ?? logByDefault(from, to);
   const [outputId, setOutputId] = useState("frequencies");
-  const output = OUTPUTS.find((o) => o.id === outputId)!;
+  // the information output (#79): which lens, along which axis, at which NA (null: the trapping lens's)
+  const [info, setInfo] = useState<InfoChoice>({ direction: "backward", axis: "all", NA: null });
+  const output = outputId === INFORMATION.id ? informationOutput(info) : OUTPUTS.find((o) => o.id === outputId)!;
+  const noPattern = radiationUnavailable(setup);
+  const nMedium = environmentOf(setup).medium_index;
   const [follow, setFollow] = useState(true);
   const [run, setRun] = useState<SweepRun | null>(null);
   const ctrl = useRef<AbortController | null>(null);
@@ -526,12 +549,13 @@ export function SweepTab({ setup, engine }: TabProps) {
     const xs = sweepValues(from, to, count, isLog);
     const key = `${setupKey}|${param.id}|${from}|${to}|${count}|${isLog}`;
     const results: (Result | null)[] = [];
-    setRun({ key, param: param.id, output: outputId, xs, results: [], done: false });
+    const want = output.want ?? [];
+    setRun({ key, param: param.id, output: outputId, want, xs, results: [], done: false });
     for (const v of xs) {
       if (c.signal.aborted) return;
       try {
         // continuation: start from the last stable equilibrium, so the sweep follows one trap
-        results.push(await engine().solve(param.set(setup, v), [], { signal: c.signal, start: follow ? followFrom(results) : null }));
+        results.push(await engine().solve(param.set(setup, v), want, { signal: c.signal, start: follow ? followFrom(results) : null }));
       } catch (err) {
         if (isAbortError(err)) return;
         // one value the engine refuses does not end the sweep: it is a gap
@@ -587,7 +611,43 @@ export function SweepTab({ setup, engine }: TabProps) {
         <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} data-testid="sweep-follow" />
         Follow one trap
       </label>
-      <SelectField id="sweep-output" label="Plot" value={outputId} options={OUTPUTS.map((o) => ({ value: o.id, label: o.label }))} onChange={setOutputId} />
+      <SelectField
+        id="sweep-output"
+        label="Plot"
+        value={outputId}
+        options={[...OUTPUTS.map((o) => ({ value: o.id, label: o.label })), { value: INFORMATION.id, label: INFORMATION.label, disabled: noPattern !== null }]}
+        onChange={setOutputId}
+      />
+      {outputId === INFORMATION.id && (
+        <>
+          <SelectField<InfoChoice["direction"]>
+            id="sweep-info-lens"
+            label="Lens"
+            value={info.direction}
+            options={INFO_DIRECTIONS}
+            onChange={(direction) => setInfo((i) => ({ ...i, direction }))}
+          />
+          <SelectField<InfoAxis>
+            id="sweep-info-axis"
+            label="Along"
+            value={info.axis}
+            options={[
+              { value: "all", label: "x, y and z" },
+              { value: "x", label: "x" },
+              { value: "y", label: "y" },
+              { value: "z", label: "z" },
+            ]}
+            onChange={(axis) => setInfo((i) => ({ ...i, axis }))}
+          />
+          <SelectField
+            id="sweep-info-na"
+            label="NA"
+            value={info.NA === null ? "trap" : String(info.NA)}
+            options={[{ value: "trap", label: "The trapping lens's" }, ...naLadder(nMedium).map((na) => ({ value: String(na), label: formatNumber(na, 3, true) }))]}
+            onChange={(v) => setInfo((i) => ({ ...i, NA: v === "trap" ? null : Number(v) }))}
+          />
+        </>
+      )}
       {running ? (
         <button type="button" className={ui.button} onClick={cancel} data-testid="sweep-cancel">
           Cancel
@@ -612,7 +672,12 @@ export function SweepTab({ setup, engine }: TabProps) {
       Choose an input and a range, and Run: the engine computes the trap at each value, following one trap from value to value; where it vanishes, a line marks the jump. The unstable values are shaded. Each value takes about a second.
     </Note>
   );
-  if (run && run.results.length) {
+  const missing = (output.want ?? []).filter((w) => !(run?.want ?? []).includes(w));
+  if (outputId === INFORMATION.id && noPattern) {
+    plot = <Note title="Sweep">{noPattern}</Note>;
+  } else if (run && run.results.length && missing.length) {
+    plot = <Note title="Sweep">This sweep did not compute the radiation pattern at each value. Run it again to plot the information collected.</Note>;
+  } else if (run && run.results.length) {
     const swept = params.find((p) => p.id === run.param) ?? param;
     const done = run.xs.slice(0, run.results.length);
     const names = new Map<string, [number, number][]>();
@@ -628,14 +693,16 @@ export function SweepTab({ setup, engine }: TabProps) {
     const xAxis =
       swept.quantity === "pressure"
         ? { label: swept.label, unit: "Pa", log: isLogRun(run), display: { unit: "mbar", factor: 100 } }
-        : { label: swept.label, unit, log: isLogRun(run) };
+        : swept.quantity === "phase"
+          ? { label: swept.label, unit: "rad", log: isLogRun(run), display: { unit: "π rad", factor: Math.PI } }
+          : { label: swept.label, unit, log: isLogRun(run) };
     plot = (
       <Plot
         id="sweep"
-        title={`${output.label} against ${swept.label}`}
+        title={output.id === INFORMATION.id ? `Fraction of the position information ${infoCollector(info)} collects, against ${swept.label}` : `${output.label} against ${swept.label}`}
         x={xAxis}
         y={output.unit ? { label: output.label, unit: output.unit } : { label: output.label, unit: "", display: { unit: output.id === "depth" ? "k_BT" : "", factor: 1 } }}
-        series={[...names].map(([name, points]) => ({ id: name, label: names.size > 1 ? `along ${name}` : output.label, tone: tone(name), points }))}
+        series={[...names].map(([name, points]) => ({ id: name, label: names.size > 1 || output.id === INFORMATION.id ? `along ${name}` : output.label, tone: tone(name), points }))}
         bands={unstableRuns(done, stable).map(([a, b]) => ({ from: a, to: b, label: "no stable trap" }))}
         markers={jumpsAt(done, run.results).map((x) => ({ x, label: "jump" }))}
       />

@@ -40,6 +40,7 @@ from levtrap.api import _single_beam, build_beam, build_tmatrix  # noqa: E402
 from levtrap.derived import C, recoil_ratio  # noqa: E402
 from levtrap.force import forcetorque  # noqa: E402
 from levtrap.materials import get_material  # noqa: E402
+from levtrap.optics import dark_split as engine_dark_split  # noqa: E402
 from levtrap.setup import parse  # noqa: E402
 from levtrap.solve import resolve_particle, solve  # noqa: E402
 
@@ -69,10 +70,12 @@ def _beams(split=(0.5, 0.5), wavelength=WL):
 def dark_split(wavelength=WL):
     """The power split (P1, P2) / P that nulls the field at the focus:
     P1 |E1(0)|^2 = P2 |E2(0)|^2 for unit-power beams (in OTT's non-paraxial
-    beams it is about 0.37 : 0.63)."""
+    beams it is about 0.37 : 0.63). The engine's levtrap.optics.dark_split
+    (#79), which a Result reports per coherent pair and the app's "Darken the
+    focus" button uses."""
     beams = parse(setup("WS2", 300e-9, (0.5, 0.5), wavelength))["trap"]["fields"]
-    e = [float(np.sum(np.abs(_single_beam(b, 1.0).em_field_xyz(np.zeros((1, 3)))) ** 2)) for b in beams]
-    return e[1] / (e[0] + e[1]), e[0] / (e[0] + e[1])
+    s = engine_dark_split(beams, [_single_beam(b, 1.0) for b in beams])["split"]
+    return 1 - s, s
 
 
 def setup(material="WS2", radius=300e-9, split=None, wavelength=WL):

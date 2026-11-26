@@ -465,6 +465,8 @@ export interface Result {
   mirrors?: MirrorResult[];
   /** each field's force and stiffness at the equilibrium; absent without one */
   breakdown?: FieldShare[];
+  /** per coherent pair of beams; absent when no two beams interfere (#79) */
+  coherent?: CoherentPair[];
   /** null when the trap has no beam */
   rates?: Rates | null;
   models: ModelInfo[];
@@ -476,6 +478,21 @@ export interface Result {
   curves?: Record<string, Curve>;
   /** on request; see levtrap.pattern.pattern_block */
   pattern?: Pattern;
+}
+
+/**
+ * A coherent pair of beams and the power split that darkens the focus
+ * (levtrap.optics.dark_split, #79): equal intensities of the two beams at the
+ * first beam's focus, which nulls the field there when the two fields are
+ * antiparallel (a bottle beam: one circular polarisation, opposite phases).
+ */
+export interface CoherentPair {
+  /** indices into trap.fields, in setup order */
+  fields: [number, number];
+  /** fraction of the pair's total power in the second beam; null when neither has a field at the focus */
+  dark_split: number | null;
+  /** |E|² left at the focus at that split, in the field the engine traps with (the pair rescaled to its total power), over the two beams' intensities there added: 0 a null, about 2 or more in phase */
+  residual: number | null;
 }
 
 /** What `solve_json` returns. */

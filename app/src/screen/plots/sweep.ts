@@ -2,11 +2,13 @@
  * The Sweep tab's model: which inputs of a setup can be swept, which numbers
  * can be read off each result, and the values to try. Pure; sweep.test.ts.
  */
-import type { BeamField, PaulField, Result, Setup, Vec3 } from "../../engine/types.ts";
+import type { BeamField, PaulField, Result, Setup, Vec3, Want } from "../../engine/types.ts";
 import type { Quantity } from "../../lib/units.ts";
 import { angleFromWaist, modeOrder, naFromAngle } from "../../lib/linked.ts";
+import { formatNumber } from "../../lib/format.ts";
 import { shownFrequency } from "../answer.ts";
 import { directionOf, environmentOf, partsOf, positionOf, withEnvironment, withField, withParticle } from "../model.ts";
+import { atTrapNA, informationAgainstNA, type LensDirection } from "./data.ts";
 
 export interface SweepParam {
   id: string;
@@ -25,6 +27,43 @@ export interface SweepParam {
 }
 
 const positive = (v: number) => (v > 0 ? null : "Must be greater than 0.");
+
+/**
+ * The beams that interfere, grouped, as indices into trap.fields: beams
+ * joined by `coherent_with`, directly or through others
+ * (`levtrap.optics.coherent_groups`); groups in setup order.
+ */
+export function coherentGroups(setup: Setup): number[][] {
+  const index = setup.trap.fields.flatMap((f, i) => (f.kind === "beam" ? [i] : []));
+  const beams = index.map((i) => setup.trap.fields[i] as BeamField);
+  const parent = beams.map((_, i) => i);
+  const root = (i: number): number => (parent[i] === i ? i : (parent[i] = root(parent[i])));
+  const ids = new Map(beams.flatMap((b, i) => (b.id != null ? [[b.id, i] as const] : [])));
+  beams.forEach((b, i) => {
+    const other = b.coherent_with != null ? ids.get(b.coherent_with) : undefined;
+    if (other !== undefined) {
+      const [a, c] = [root(i), root(other)];
+      parent[Math.max(a, c)] = Math.min(a, c);
+    }
+  });
+  const groups = new Map<number, number[]>();
+  beams.forEach((_, i) => groups.set(root(i), [...(groups.get(root(i)) ?? []), index[i]]));
+  return [...groups.values()];
+}
+
+/** The power of a coherent pair, split at a fixed total: `fraction` of it in the second beam (#79). */
+export function withSplit(setup: Setup, [first, second]: readonly [number, number], fraction: number): Setup {
+  const power = (i: number) => (setup.trap.fields[i] as BeamField).power;
+  const total = power(first) + power(second);
+  const s = withField<BeamField>(setup, first, { power: (1 - fraction) * total });
+  return withField<BeamField>(s, second, { power: fraction * total });
+}
+
+/** The fraction of a coherent pair's power in its second beam; NaN when the pair has none. */
+export function splitOf(setup: Setup, [first, second]: readonly [number, number]): number {
+  const [a, b] = [first, second].map((i) => (setup.trap.fields[i] as BeamField).power);
+  return a + b > 0 ? b / (a + b) : Number.NaN;
+}
 
 /** The inputs of this setup worth sweeping, in the order of its parts. */
 export function sweepParams(setup: Setup): SweepParam[] {
@@ -128,6 +167,36 @@ export function sweepParams(setup: Setup): SweepParam[] {
       out.push({ id: `paul${index}-dc_voltage`, label: `${trap} · DC voltage`, quantity: "voltage", unit: "V", get: get("dc_voltage"), set: (s, v) => at({ dc_voltage: v })(s), log: false, check: () => null });
     }
   });
+  // what decides how two coherent beams interfere (#79): the phase of each beam of a group but its
+  // first (only differences of phase matter), and the split of a pair at a fixed total power
+  for (const group of coherentGroups(setup)) {
+    if (group.length < 2) continue;
+    for (const index of group.slice(1)) {
+      out.push({
+        id: `beam${index}-phase`,
+        label: `${name(`field:${index}`)} · phase`,
+        quantity: "phase",
+        unit: "π rad",
+        get: (s) => (s.trap.fields[index] as BeamField).phase ?? 0,
+        set: (s, v) => withField<BeamField>(s, index, { phase: v }),
+        log: false,
+        check: (v) => (Number.isFinite(v) ? null : "Must be a number."),
+      });
+    }
+    if (group.length === 2) {
+      const pair = [group[0], group[1]] as const;
+      out.push({
+        id: `pair${pair[0]}-${pair[1]}-split`,
+        label: `${name(`field:${pair[1]}`)} · share of the pair's power`,
+        quantity: "number",
+        unit: "",
+        get: (s) => splitOf(s, pair),
+        set: (s, v) => withSplit(s, pair, v),
+        log: false,
+        check: (v) => (v >= 0 && v <= 1 ? null : "A fraction from 0 to 1."),
+      });
+    }
+  }
   out.push({
     id: "particle-radius",
     label: "Particle · radius",
@@ -180,7 +249,76 @@ export interface SweepOutput {
   unit: string;
   /** one value per series (by name); null where there is none */
   read(result: Result, setup: Setup): { name: string; value: number | null }[];
+  /** the blocks each solve must compute for it (beyond the headline numbers) */
+  want?: Want[];
 }
+
+export type InfoAxis = "x" | "y" | "z" | "all";
+
+/** Where an information sweep reads: a lens's direction, the axis, and its NA (null: the trapping lens's own). */
+export interface InfoChoice {
+  direction: Extract<LensDirection, "backward" | "forward" | "both">;
+  axis: InfoAxis;
+  NA: number | null;
+}
+
+export const INFO_DIRECTIONS: { value: InfoChoice["direction"]; label: string }[] = [
+  { value: "backward", label: "Backward (−z)" },
+  { value: "forward", label: "Forward (+z)" },
+  { value: "both", label: "Forward + backward" },
+];
+
+/**
+ * The NAs at which the engine gives the collected information
+ * (levtrap.pattern._na_ladder): 0.05 to just below the medium index in steps
+ * of 0.05, and the medium index itself.
+ */
+export function naLadder(nMedium: number): number[] {
+  const out: number[] = [];
+  for (let k = 1; 0.05 * k < nMedium - 1e-9; k += 1) out.push(Math.round(5 * k) / 100);
+  return [...out, nMedium];
+}
+
+/**
+ * The fraction of the position information a lens collects (Tebbenjohanns et
+ * al., PRA 100, 043821), at each swept value (#79): read from the pattern
+ * block as the Radiation tab does, at the trapping lens's NA (`at_trap_NA`,
+ * which follows a swept lens NA) or at one NA of the engine's ladder; both
+ * are the engine's own numbers, not interpolated. "Forward + backward" adds
+ * the two lenses (their cones do not overlap, #75).
+ */
+export function informationOutput(choice: InfoChoice): SweepOutput {
+  const axes = choice.axis === "all" ? (["x", "y", "z"] as const) : ([choice.axis] as const);
+  return {
+    id: "information",
+    label: "Information collected",
+    unit: "",
+    want: ["pattern"],
+    read: (r) => {
+      const pattern = r.pattern;
+      return axes.map((ax) => {
+        // no trap, no particle to detect: the engine's pattern is then about the search's fallback point
+        if (!pattern || !r.stable) return { name: ax, value: null };
+        if (choice.NA === null) return { name: ax, value: atTrapNA(pattern, choice.direction)?.information[ax] ?? null };
+        const i = pattern.NA.findIndex((na) => Math.abs(na - choice.NA!) < 1e-6);
+        return { name: ax, value: i < 0 ? null : (informationAgainstNA(pattern, choice.direction, ax)?.[i] ?? null) };
+      });
+    },
+  };
+}
+
+/** Who collects, in the plot's title: "Fraction of the position information <this> collects". */
+export function infoCollector({ direction, NA }: InfoChoice): string {
+  if (NA === null) {
+    // at the trapping lens's NA, backward is the trapping lens itself, looking back at the particle (#75)
+    return { backward: "the trapping lens", forward: "a forward lens of the trapping lens's NA", both: "the trapping lens and a forward lens of its NA" }[direction];
+  }
+  const na = `NA ${formatNumber(NA, 3, true)}`;
+  return { backward: `a backward lens of ${na}`, forward: `a forward lens of ${na}`, both: `a forward and a backward lens of ${na}` }[direction];
+}
+
+/** The information output's place in the Plot menu; its lens is chosen beside it. */
+export const INFORMATION = { id: "information", label: "Information collected (a lens)" };
 
 export const OUTPUTS: SweepOutput[] = [
   {
@@ -256,6 +394,9 @@ export function sweepValues(from: number, to: number, n: number, log: boolean): 
 export function defaultRange(param: SweepParam, setup: Setup): [number, number] {
   const v = param.get(setup);
   if (/-tilt_[xy]$/.test(param.id)) return [-1, 1];
+  // a full turn of the phase; the whole split, all in the first beam to all in the second (#79)
+  if (param.id.endsWith("-phase")) return [0, 2 * Math.PI];
+  if (param.id.endsWith("-split")) return [0, 1];
   if (param.id.endsWith("-hole_radius")) {
     const focus = (setup.trap.fields[Number(/^lens(\d+)/.exec(param.id)![1])] as BeamField).focus;
     return [0, focus.kind === "parabolic_mirror" ? focus.rim_radius / 2 : 1e-3];

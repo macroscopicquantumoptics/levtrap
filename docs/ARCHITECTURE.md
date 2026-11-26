@@ -163,6 +163,10 @@ Models per field:
               "rays": [...], "wavefront": {...}}],                         // with want "lens": traced rays, W map (#49)
   "mirrors": [{"field": 0, "reflected": 0.98, "rim_angle_deg": 112.6,     // per beam from a parabolic mirror (E3)
                "hole_angle_deg": 9.5, "deep": true, "clipping_loss": …, "Nmax": 25}],
+  "coherent": [{"fields": [0, 1],         // per coherent pair of beams (indices into trap.fields), if any (#79):
+                "dark_split": 0.629,      //  the fraction of the pair's power in the second beam that darkens
+                "residual": 0.0}],        //  the first beam's focus, and |E|² left there over the two intensities
+                                          //  added (0: a null; levtrap.optics.dark_split)
   "pattern": {...,                        // on request: lab frame, every optical field (#76)
               "trap_NA": 0.8, "trap_axis": [0, 0, 1],   // the first beam's lens and direction
               "at_trap_NA": {"forward": {...}, "backward": {...}}},  // cones of trap_NA about ±trap_axis

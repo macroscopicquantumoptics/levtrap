@@ -49,7 +49,7 @@ export function defaultKnobs(knobs: SweepParam[]): string[] {
   return knobs.slice(0, 1).map((k) => k.id);
 }
 
-/** The search's scale for a knob: u = forward(v), v = back(u); a numerical aperture lives in (0, n). */
+/** The search's scale for a knob: u = forward(v), v = back(u); a numerical aperture lives in (0, n), a share of a pair's power in (0, 1), a phase anywhere. */
 export function scaleFor(knob: SweepParam, setup: Setup): { forward(v: number): number; back(u: number): number } {
   if (knob.id.endsWith("-NA")) {
     const top = 0.98 * environmentOf(setup).medium_index;
@@ -58,6 +58,13 @@ export function scaleFor(knob: SweepParam, setup: Setup): { forward(v: number): 
       back: (u) => top / (1 + Math.exp(-u)),
     };
   }
+  if (knob.id.endsWith("-split")) {
+    // a share of a pair's power (#79) lives in (0, 1): logistic, as the NA
+    const clamp = (v: number) => Math.min(Math.max(v, 1e-4), 1 - 1e-4);
+    return { forward: (v) => Math.log(clamp(v) / (1 - clamp(v))), back: (u) => 1 / (1 + Math.exp(-u)) };
+  }
+  // a phase (#79) is any number, periodic: searched as it is
+  if (knob.id.endsWith("-phase")) return { forward: (v) => v, back: (u) => u };
   return { forward: (v) => Math.log(Math.max(v, 1e-300)), back: (u) => Math.exp(u) };
 }
 
