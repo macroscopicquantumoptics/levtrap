@@ -291,11 +291,12 @@ def _with_beams(*beams):
 
 
 def _pattern_at(setup, r=(0.0, 0.0, 0.0)):
-    """The pattern block with the particle at r (no trap search)."""
+    """The pattern block with the particle at r (no trap search). The particle is
+    passed as given, so each field's T-matrix uses the material's n at its own
+    wavelength, as solve() does."""
     from levtrap.setup import parse
-    from levtrap.solve import pattern_result, resolve_particle
+    from levtrap.solve import pattern_result
     s = parse(setup)
-    resolve_particle(s)
     return pattern_result(s, np.asarray(r, dtype=float))
 
 
@@ -379,6 +380,25 @@ def test_incoherent_opposing_beams_add_their_patterns():
     # the first beam's lens is the trapping lens
     assert both["trap_axis"] == [0.0, 0.0, 1.0] and both["trap_NA"] == pytest.approx(0.8)
 
+
+
+def test_incoherent_beams_of_two_wavelengths_add_information_not_power():
+    """#76: the shot-noise Fisher information of a field goes as |dF/dr|^2 / (hbar omega).
+    Two incoherent beams of different wavelengths add their scattered powers as they are,
+    but the second beam's information is weighted by omega_ref / omega = lambda_b / lambda_a
+    (the first beam's units): at 532 nm a watt carries half the photons it does at 1064 nm."""
+    a = _beam(id="a", power=0.15)
+    b = _beam(id="b", power=0.05, wavelength=0.532e-6, direction=[0, 0, -1])
+    r = (30e-9, 0.0, 40e-9)
+    pa, pb = _pattern_at(_with_beams(a), r), _pattern_at(_with_beams(b), r)
+    both = _pattern_at(_with_beams(a, b), r)
+    assert both["P_sca"] == pytest.approx(pa["P_sca"] + pb["P_sca"], rel=1e-9)
+    weight = 0.532 / 1.064
+    for ax in "xyz":
+        assert both["information_total"][ax] == pytest.approx(
+            pa["information_total"][ax] + weight * pb["information_total"][ax], rel=1e-9), ax
+        assert np.allclose(both["information"][ax],
+                           np.add(pa["information"][ax], weight * np.asarray(pb["information"][ax])), rtol=1e-9), ax
 
 @pytest.mark.parametrize("beams", [
     # one coherent group, foci 0.4 um apart along z (a translated beam in the summed field)

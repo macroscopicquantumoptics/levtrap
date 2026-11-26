@@ -649,6 +649,11 @@ def pattern_result(s: dict, r, optical=None) -> dict:
     NA collects looking back through it (``backward``, about minus the first
     beam's direction) and opposite it (``forward``). For one beam along +z
     these are the lab's -z and +z, as before.
+
+    Without ``optical``, the fields are built here from ``s``, whose particle
+    must be as given (not yet through :func:`resolve_particle`): a material's
+    n and k are then taken at each field's own wavelength, as :func:`solve`
+    does; a resolved particle would carry the first beam's n to every field.
     """
     from .api import _beam_angle, _single_beam, _tmatrix
     from .optics import optical_fields

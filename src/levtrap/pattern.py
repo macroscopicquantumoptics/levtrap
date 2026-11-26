@@ -362,7 +362,9 @@ def pattern_block(ibeam, T=None, *, n_medium: float, trap_NA: float | None = Non
     Their light does not interfere, so the patterns (scattered, total and
     information) add, and so do the collected powers and the Fisher
     information each field's photons carry: the fractions are those of the
-    sums.  Coefficients of different wavelengths are only ever squared and
+    sums. The information of a field of another wavelength is weighted by
+    omega_ref / omega (the shot-noise Fisher information per watt goes as
+    1 / hbar omega), so it is in the first field's units.  Coefficients of different wavelengths are only ever squared and
     added, never summed as amplitudes.
 
     ``trap_NA`` is the numerical aperture of the trapping lens and
@@ -374,6 +376,15 @@ def pattern_block(ibeam, T=None, *, n_medium: float, trap_NA: float | None = Non
     """
     parts = list(ibeam) if T is None else [(ibeam, T)]
     cols = [_columns(b, t) for b, t in parts]
+    # the shot-noise Fisher information of a field goes as |dF/dr|^2 / (hbar omega): photons of a
+    # shorter wavelength each carry more energy, so fewer of them reach the detector. Weight each
+    # field's information columns by omega_ref / omega_i = k_ref / k_i (the first field's units),
+    # so fields of different wavelengths add as information, not as power (#76)
+    k_ref = abs(parts[0][0].k_medium)
+    for (a, b), (beam, _) in zip(cols, parts):
+        s = math.sqrt(k_ref / abs(beam.k_medium))
+        a[:, 2:5] *= s
+        b[:, 2:5] *= s
     N = max(math.isqrt(a.shape[0] + 1) - 1 for a, _ in cols)
     # columns: per field, scattered, total, info x, y, z
     A = np.hstack([_pad(a, N) for a, _ in cols])
