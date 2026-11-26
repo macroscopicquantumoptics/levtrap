@@ -62,7 +62,9 @@ cd app && npm ci && npm run dev        # open http://localhost:3000/?backend=loc
 ```
 
 Without `?backend=local` the page runs the engine in the browser (Pyodide);
-for that, build the wheel and stage it with `npm run wheel` first. Checks:
+for that, build the wheel and stage it with `npm run wheel` first (then
+start or restart `npm run dev`: the page learns the wheel's build when it
+starts). Checks:
 `npm run typecheck`, `npm run lint`, `npm test` (unit tests; some call the
 Python engine) and `npm run test:e2e` (builds, then drives a browser).
 

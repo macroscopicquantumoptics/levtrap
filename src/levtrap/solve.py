@@ -372,8 +372,9 @@ def _coherent_pairs(s: dict, unit_beam) -> list[dict]:
 
 
 def _recoil_parts(beams: list[dict], parts: list[dict]) -> list[dict] | None:
-    """Per optical field, its Mie scattered pattern at the equilibrium and the
-    beams whose photons it scatters (direction, power weight), for
+    """Per optical field, its Mie scattered pattern at the equilibrium, the
+    position information its scattered light carries (#95) and the beams whose
+    photons it scatters (direction, power weight), for
     :func:`levtrap.rates.rates_block` (#78). ``None`` (the dipole fallback)
     when a field has no pattern (it scatters nothing)."""
     from .optics import coherent_groups
@@ -384,7 +385,8 @@ def _recoil_parts(beams: list[dict], parts: list[dict]) -> list[dict] | None:
     for group, p in zip(groups, parts):
         w = np.array([max(float(beams[i]["power"]), 0.0) for i in group])
         w = w / w.sum() if w.sum() > 0 else np.full(len(group), 1 / len(group))
-        out.append(dict(P_sca=p["P_sca"], mean=p["mean"], second=p["second"],
+        info = {k: p[k] for k in ("k", "info_scattered", "info_incident", "info_cross") if k in p}
+        out.append(dict(P_sca=p["P_sca"], mean=p["mean"], second=p["second"], **info,
                         beams=[(beams[i]["direction"], float(wi)) for i, wi in zip(group, w)]))
     return out
 

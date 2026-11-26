@@ -7,6 +7,7 @@
  * cross-origin isolation, which GitHub Pages does not offer, so a running
  * solve finishes and the client ignores its answer.
  */
+import { parseManifest } from "./build.ts";
 import { PYODIDE_URL, PYODIDE_VERSION, type Versions, type WorkerReply, type WorkerRequest } from "./protocol.ts";
 
 interface PyProxyFn {
@@ -17,6 +18,7 @@ interface Pyodide {
   pyimport(name: string): { install(url: string, opts: { deps: boolean }): Promise<void> };
   runPython(code: string): unknown;
   globals: { get(name: string): PyProxyFn };
+  FS: { writeFile(path: string, data: Uint8Array): void };
 }
 
 const ctx = self as unknown as {
@@ -43,10 +45,18 @@ async function init(wheelBase: string): Promise<void> {
   progress("Loading SciPy", 0.55);
   await py.loadPackage(["scipy", "micropip"]);
   progress("Installing levtrap", 0.85);
-  const manifest = (await (await fetch(new URL("manifest.json", wheelBase), { cache: "no-cache" })).json()) as {
-    wheel: string;
-  };
-  await py.pyimport("micropip").install(new URL(manifest.wheel, wheelBase).href, { deps: false });
+  // The manifest's address never changes, so ask the server every time. The
+  // wheel's does (wheels/<build>/, #96); no-cache there too, for a manifest
+  // from before that change.
+  const res = await fetch(new URL("manifest.json", wheelBase), { cache: "no-cache" });
+  if (!res.ok) throw new Error(`no engine wheel at ${res.url} (${res.status}); run npm run wheel`);
+  const manifest = parseManifest(await res.json());
+  const wheelUrl = new URL(manifest.wheel, wheelBase).href;
+  const wheel = await fetch(wheelUrl, { cache: "no-cache" });
+  if (!wheel.ok) throw new Error(`no engine wheel at ${wheelUrl} (${wheel.status})`);
+  const name = manifest.wheel.split("/").at(-1) as string;
+  py.FS.writeFile(`/tmp/${name}`, new Uint8Array(await wheel.arrayBuffer()));
+  await py.pyimport("micropip").install(`emfs:/tmp/${name}`, { deps: false });
   py.runPython("from levtrap.solve import solve_json");
   solveJson = py.globals.get("solve_json");
   const versions = JSON.parse(
@@ -56,7 +66,7 @@ async function init(wheelBase: string): Promise<void> {
     ) as string,
   ) as Versions;
   progress("Ready", 1);
-  post({ type: "ready", versions: { ...versions, backend: "pyodide", pyodide: PYODIDE_VERSION } });
+  post({ type: "ready", versions: { ...versions, backend: "pyodide", pyodide: PYODIDE_VERSION, build: manifest.build } });
 }
 
 async function pump(): Promise<void> {

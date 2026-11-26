@@ -11,11 +11,13 @@ export interface Versions {
   numpy?: string;
   scipy?: string;
   pyodide?: string;
+  /** The wheel's build (short sha256 of its bytes) from wheels/manifest.json; Pyodide only (#96). */
+  build?: string;
 }
 
 /** Client -> worker */
 export type WorkerRequest =
-  /** Absolute URL of the folder holding manifest.json and the wheel. */
+  /** Absolute URL of the folder holding manifest.json and the wheel's build folder. */
   | { type: "init"; wheelBase: string }
   /** setup, want and start are JSON text, handed to levtrap.solve.solve_json as is (start: null, or a lab position to follow). */
   | { type: "solve"; id: number; setup: string; want: string; start?: string }

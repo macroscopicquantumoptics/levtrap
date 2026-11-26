@@ -61,6 +61,22 @@ Rules:
   `presets` went with `web/` (E2).
 * Static site, no server, ever.
 
+How the browser gets the engine. `npm run wheel` (`app/scripts/stage-wheel.mjs`)
+copies the wheel to `public/wheels/<build>/levtrap-….whl`, where `<build>` is
+the first 12 hex digits of the sha256 of the wheel's bytes, and writes
+`public/wheels/manifest.json`: `{"wheel": "<build>/levtrap-….whl", "build": "<build>"}`.
+The worker (`app/src/engine/worker.ts`) fetches the manifest and the wheel
+with `cache: "no-cache"` and installs the wheel with micropip. GitHub Pages
+caches every file for ten minutes; a new wheel has a new address, so a
+browser never installs an old wheel under a new page (#96).
+`app/next.config.ts` reads the manifest's `build` when the app is built and
+bakes it in as `NEXT_PUBLIC_ENGINE_BUILD`. The worker reports the build it
+installed; when the two differ (an old page, still cached, with the new
+engine), the screen says so and offers a reload (`app/src/engine/build.ts`).
+So stage the wheel before `npm run build`, and restart `npm run dev` after
+staging a new one. With no wheel staged at build time, or with
+`?backend=local`, there is nothing to compare and no notice.
+
 ## 4. Setup file (version 1)
 
 ```jsonc
@@ -157,7 +173,7 @@ Models per field:
               "P_sca_multipoles": {"ED": …, …}},   // W: the beams' own split of P_sca at the equilibrium (#80)
   "paul": {"q": {...}, "a": {...}, "stable": true, "secular": {...}, "micromotion": [...]},
   "rates": {"gas_damping": …, "recoil_heating": [...], "reheating_phonons_per_s": [...],
-            "modes": [{"recoil_scattered": …, "recoil_incident": …, "recoil_cross": …, …}],  // recoil split (#78)
+            "modes": [{"recoil_scattered": …, "recoil_incident": …, "recoil_cross": …, …}],  // recoil split (#78, #95)
             "scattered_moments": {"mean": [...], "second": [[...]]}},  // <n>, <n n> of the Mie pattern (#78)
   "lenses": [{"field": 0, "focus_shift": [...], "clipping_loss": …, …,      // per beam through an asphere (E1)
               "rays": [...], "wavefront": {...}}],                         // with want "lens": traced rays, W map (#49)
@@ -200,6 +216,25 @@ another way have lenses of their own. `at_trap_NA.backward` is a cone of that NA
 +`trap_axis`. The collection and information curves (`collection`,
 `information_efficiency`) are about the fixed lab directions ±z, ±x, ±y. A beam
 focused by an asphere or a parabolic mirror has no pattern yet.
+
+The recoil heating (#95) is the backaction of the position information in the
+scattered light (Tebbenjohanns, Frimmer & Novotny, PRA 100, 043821 (2019)):
+Γ_u = M_uu / (2 m ω Ω_u), with M_uu = ∮ |∂F/∂u|² dΩ the information of the
+scattered far field F about the position along u (the `pattern` block's
+`information_total`, summed over fields that do not interfere, each at its own
+ω). Every solve computes M at the equilibrium (`levtrap.pattern.recoil_information`,
+model `information`), without the pattern's sphere grid: seven scatterings and a
+small exact quadrature. It splits exactly as ∂F/∂u = G_u − i k n_u F into the
+scattered photons (k² P_sca ⟨n n⟩, the Mie pattern), the beam photons (|G_u|²,
+what the sphere scatters from the incident field's gradient) and their cross
+term (2 Re ∮ G_u*·(−i k n_u F) dΩ, the interference of the two kicks; it is
+not tied to ⟨n⟩ and can appear across the beam): `recoil_scattered`,
+`recoil_incident`, `recoil_cross`. A plane wave gives
+the photon picture of `rates.recoil_heating` (the fallback, `mie-pattern`);
+at a focus the beam photons weigh ⟨cos θ⟩² < 1 along the axis (Gouy), and
+standing waves and dark foci follow the actual field. Absorbed photons are
+not included: above 1 % of P_sca a note says so, above 10 % the recoil is
+marked approximate.
 
 ## 7. The screen
 
