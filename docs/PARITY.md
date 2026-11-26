@@ -33,7 +33,7 @@ and the displacement spectrum with feedback cooling (E4,
 |---|---|---|
 | Preset: silica 1064 nm, NA 0.9 | In the app | Preset "Optical tweezer" (NA 0.8). NA 0.9 is one edit away. |
 | Preset: silica 1550 nm | In the app | The same preset with the wavelength changed; not a preset of its own. |
-| Preset: WS₂ bottle-beam dark trap (illustrative, not validated) | In the app | Preset "WS₂ bottle beam (dark trap)", tagged illustrative: not validated, and the power split (not given in the paper) is the one that darkens the focus ([#57](https://github.com/macroscopicquantumoptics/levtrap/pull/57), issue [#52](https://github.com/macroscopicquantumoptics/levtrap/issues/52)). It becomes a cited setup when C3 verifies a dark-trap reference. |
+| Preset: WS₂ bottle-beam dark trap (illustrative, not validated) | In the app | Preset "WS₂ bottle beam (dark trap)", tagged illustrative: not validated, and the power split (not given in the paper) is the one that darkens the focus ([#57](https://github.com/macroscopicquantumoptics/levtrap/pull/57), issue [#52](https://github.com/macroscopicquantumoptics/levtrap/issues/52)). It becomes a cited setup when C3 verifies a dark-trap reference. A second illustrative preset, "WS₂ counter-propagating bottle beams", has the same pair from both sides (the four-beam trap of #71; issue [#97](https://github.com/macroscopicquantumoptics/levtrap/issues/97)). |
 | Material, radius, n, k, density | In the app | Particle; n, k, density under Advanced, following the material (D2). |
 | Medium index | In the app | Environment, Advanced. |
 | Wavelength, total power | In the app | Beam: wavelength and power per beam. |

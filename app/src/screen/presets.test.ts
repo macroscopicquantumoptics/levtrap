@@ -82,3 +82,32 @@ test("the WS2 bottle beam is illustrative, not validated, and its focus is dark"
   const r = RECORDED["ws2-bottle"]!;
   assert.ok(r.stable && r.equilibrium![2] > 0.2e-6 && r.equilibrium![2] < 0.3e-6);
 });
+
+test("the counter-propagating bottle beams are the WS2 pair from both sides, holding the sphere at the dark focus (#71, #97)", () => {
+  const ws2 = PRESETS.find((p) => p.id === "ws2-bottle")!;
+  const both = PRESETS.find((p) => p.id === "ws2-counter-bottle")!;
+  assert.ok(both.illustrative);
+  assert.equal(both.slot, "dark_trap");
+  assert.match(both.source, /^Illustrative, not validated: the mirror-symmetric trap of #71/);
+  assert.deepEqual(both.references.map((r) => r.id), ["illetschek2026_ws2_dark_trap"]);
+  const beams = both.setup.trap.fields as BeamField[];
+  const pair = ws2.setup.trap.fields as BeamField[];
+  assert.equal(beams.length, 4);
+  // all four interfere, as #71 set them up
+  assert.ok(beams.slice(1).every((b) => b.coherent_with === "b1"));
+  // each pair is the WS2 bottle beam at half its power, in the same split
+  beams.forEach((b, i) => {
+    const p = pair[i % 2];
+    assert.ok(Math.abs(b.power - p.power / 2) < 1e-12);
+    assert.deepEqual([b.mode, b.focus, b.wavelength], [p.mode, p.focus, p.wavelength]);
+  });
+  // the second pair goes the other way, turned by 180° about x: Circular − and the phases swapped
+  assert.deepEqual(beams.map((b) => b.direction ?? [0, 0, 1]), [[0, 0, 1], [0, 0, 1], [0, 0, -1], [0, 0, -1]]);
+  assert.deepEqual(beams.map((b) => b.polarisation), ["circular+", "circular+", "circular-", "circular-"]);
+  assert.deepEqual(beams.map((b) => b.phase ?? 0), [0, Math.PI, Math.PI, 0]);
+  // mirror symmetry puts the sphere at the dark focus, held in all three directions (recorded)
+  const r = RECORDED["ws2-counter-bottle"]!;
+  assert.ok(r.stable && Math.max(...r.equilibrium!.map(Math.abs)) < 1e-12);
+  const f = Object.fromEntries(r.modes!.map((m) => [m.name, m.frequency ?? NaN]));
+  assert.ok(Math.abs(f.x / f.y - 1) < 1e-6 && f.z > f.x);
+});

@@ -242,10 +242,10 @@ export function TopBar({ name, canUndo, canRedo, onUndo, onRedo, show, onShow, o
 /**
  * The conventions a result depends on but no input shows (#71): beam frames,
  * the phase reference, the power of a coherent group, the NA ↔ waist mapping
- * (#64), and what the depth and the reheating rate include. Folded, so the
- * help stays three lines until asked. The physics is in src/levtrap/optics.py
- * (frames, phase, power), api._beam_angle (mapping), solver.py (depth) and
- * rates.py (reheating).
+ * (#64), the trapping lens (#97), and what the depth and the reheating rate
+ * include. Folded, so the help stays three lines until asked. The physics is
+ * in src/levtrap/optics.py (frames, phase, power), api._beam_angle (mapping),
+ * solve.trap_lens (trapping lens), solver.py (depth) and rates.py (reheating).
  */
 function Conventions() {
   return (
@@ -268,13 +268,19 @@ function Conventions() {
         <dd>
           Beams that do not interfere each keep their power, and their forces add. Beams that interfere form one field whose power is the sum of
           their powers: interference changes the power of the sum, so the field is rescaled to it. Opposing beams whose cones do not overlap (NA
-          below n/√2) keep their own powers.
+          below n/√2) keep their own powers. A beam of a coherent group shows the group&apos;s total power: a new total scales every beam of
+          the group and keeps their split.
         </dd>
         <dt>NA and waist</dt>
         <dd>
           Two descriptions of one focus, through its half-angle θ (NA = n sin θ). Gaussian (OTT), the default, takes tan θ = λ w<sub>p</sub> / (π n
           w₀), as OTT and the papers built on it do. Gaussian (sine) takes sin θ = λ w<sub>p</sub> / (π n w₀): at a small NA the textbook waist λ /
           (π NA), and a tighter focus. w<sub>p</sub> is 1 for a Gaussian and grows with a mode&apos;s order.
+        </dd>
+        <dt>Trapping lens</dt>
+        <dd>
+          The lens the first beam goes through. Beams going the same way as the first (the same direction, not merely the same axis) go through
+          it too, so its NA is the largest of theirs, at most n. The Radiation tab reads its NA from there.
         </dd>
         <dt>Depth</dt>
         <dd>
