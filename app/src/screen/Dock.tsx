@@ -93,14 +93,14 @@ export function Dock({ setup, answer, pending, status, tab, onTab, expanded, onT
   );
 }
 
+/** The engine build this page was built with ("" when no wheel was staged at build time). */
+const APP_ENGINE_BUILD: string = process.env.NEXT_PUBLIC_ENGINE_BUILD ?? "";
+
 /**
  * The page and the engine it loaded come from different builds: a page from
  * before a deploy (its HTML still cached) with the engine from after it (#96).
  * A reload brings the page up to date.
  */
-/** The engine build this page was built with ("" when no wheel was staged at build time). */
-const APP_ENGINE_BUILD: string = process.env.NEXT_PUBLIC_ENGINE_BUILD ?? "";
-
 function StaleEngine({ status }: { status: EngineStatus | null }) {
   const build = status?.state === "ready" ? status.versions.build : undefined;
   if (!engineMismatch(APP_ENGINE_BUILD, build)) return null;
