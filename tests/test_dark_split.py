@@ -68,18 +68,34 @@ def test_at_the_dark_split_the_focus_is_dark():
     assert intensity["dark"] < 1e-12 * intensity["even"]
 
 
-@pytest.mark.parametrize("phase, polarisation, residual", [
-    (math.pi, "circular+", 0.0),  # antiparallel: a null
-    (0.0, "circular+", 2.0),  # in phase: twice the intensities added
-    (math.pi / 2, "circular+", 1.0),  # in quadrature: no interference at the focus
-    (math.pi, "circular-", 1.0),  # opposite helicities are orthogonal at the focus
+def measured_residual(specs, units, split):
+    """|E|^2 at the first beam's focus in the field the engine traps with (the group rescaled to its
+    total power, optics._group_beam), over the two beams' intensities there added."""
+    specs = [dict(s, power=p) for s, p in zip(specs, (1 - split, split))]
+    origin = np.asarray(specs[0]["position"], dtype=float)
+    E = _group_beam(specs, units, origin, 0).em_field_xyz(np.zeros((1, 3)))[0]
+    a, b = (focus_field(s, u, origin) for s, u in zip(specs, units))
+    added = specs[0]["power"] * np.vdot(a, a).real + specs[1]["power"] * np.vdot(b, b).real
+    return float(np.vdot(E, E).real / added)
+
+
+@pytest.mark.parametrize("phase, polarisation", [
+    (math.pi, "circular+"),  # antiparallel: a null
+    (0.0, "circular+"),  # in phase: bright
+    (0.3, "circular+"),  # the review's case: the group's rescaling doubles the brightness here
+    (math.pi / 2, "circular+"),  # in quadrature
+    (math.pi, "circular-"),  # opposite helicities are orthogonal at the focus
 ])
-def test_the_residual_says_how_dark_the_focus_gets(phase, polarisation, residual):
-    """The split equalises the two intensities whatever the phase; only antiparallel fields then cancel."""
+def test_the_residual_is_the_brightness_the_engine_traps_with(phase, polarisation):
+    """The split equalises the two intensities whatever the phase; only antiparallel fields then cancel.
+    The residual is the focus's brightness in the group the engine builds, rescaled to its total power
+    (overlapping modes make that power depend on the phase), not in the bare sum of the two beams."""
     specs, units, _ = pair(bottle(phase=phase, polarisation=polarisation))
     d = dark_split(specs, units)
     assert d["split"] == pytest.approx(REF["split"][1], rel=1e-9)
-    assert d["residual"] == pytest.approx(residual, abs=1e-9)
+    assert d["residual"] == pytest.approx(measured_residual(specs, units, d["split"]), rel=1e-6, abs=1e-9)
+    if phase == math.pi and polarisation == "circular+":
+        assert d["residual"] == pytest.approx(0, abs=1e-9)
 
 
 def counter(phase, offset=0.0):
@@ -96,7 +112,11 @@ def test_two_opposing_beams_split_evenly(phase, residual):
     specs, units, _ = pair(counter(phase))
     d = dark_split(specs, units)
     assert d["split"] == pytest.approx(0.5, abs=1e-12)
-    assert d["residual"] == pytest.approx(residual, abs=1e-9)
+    assert d["residual"] == pytest.approx(measured_residual(specs, units, 0.5), rel=1e-6, abs=1e-9)
+    if residual == 0.0:
+        assert d["residual"] == pytest.approx(0, abs=1e-9)
+    else:
+        assert d["residual"] > 1  # an antinode: brighter than the two beams added
 
 
 def test_the_field_of_a_moved_turned_beam_is_the_engines():

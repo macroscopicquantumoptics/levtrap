@@ -485,7 +485,7 @@ export interface CoherentPair {
   fields: [number, number];
   /** fraction of the pair's total power in the second beam; null when neither has a field at the focus */
   dark_split: number | null;
-  /** |E|² left at the focus at that split, over the two beams' intensities added: 0 a null, 2 in phase */
+  /** |E|² left at the focus at that split, in the field the engine traps with (the pair rescaled to its total power), over the two beams' intensities there added: 0 a null, about 2 or more in phase */
   residual: number | null;
 }
 

@@ -105,8 +105,10 @@ def translation_nmax(beam: Bsc, offset: float, particle_nmax: int = 0) -> int:
 
 
 def _group_beam(specs: list[dict], units: list[Bsc], origin: np.ndarray, particle_nmax: int,
-                nmax_factor: float = 1.0) -> Bsc:
-    """Coherent sum of a group's beams in the lab orientation, about ``origin``."""
+                nmax_factor: float = 1.0, normalise: bool = True) -> Bsc:
+    """Coherent sum of a group's beams in the lab orientation, about ``origin``,
+    rescaled to the group's total power (``normalise``: overlapping modes make
+    the sum's power depend on their phases)."""
     powers = [max(float(b["power"]), 0.0) for b in specs]
     total = None
     for spec, unit, p in zip(specs, units, powers):
@@ -123,7 +125,7 @@ def _group_beam(specs: list[dict], units: list[Bsc], origin: np.ndarray, particl
             b = b.translate_xyz(-offset, Nmax=nmax)
         total = b if total is None else total + b
     target = sum(powers)
-    if len(specs) > 1 and total.power > 0:
+    if normalise and len(specs) > 1 and total.power > 0:
         total = total * math.sqrt(target / total.power)
     return total
 
@@ -185,11 +187,14 @@ def dark_split(specs: list[dict], units: list[Bsc]) -> dict | None:
 
         split = |a|^2 / (|a|^2 + |b|^2).
 
-    ``residual`` says how dark the focus is at that split: |E|^2 over the
-    two beams' intensities added, 1 + Re(a* . b) / (|a| |b|), from 0 (a
-    null: the fields are antiparallel) to 2 (in phase). The common rescaling
-    of a coherent group to its total power (:func:`_group_beam`) multiplies
-    both beams alike and changes neither.
+    ``residual`` says how dark the focus is at that split, in the field the
+    engine traps with: |E|^2 at the focus over the two beams' intensities
+    there added, P1 |a|^2 + P2 |b|^2. Before the group is rescaled this is
+    1 + Re(a* . b) / (|a| |b|), from 0 (a null: the fields are
+    antiparallel) to 2 (in phase); :func:`_group_beam` then rescales the
+    coherent sum to the total power P1 + P2, and as the two modes overlap the
+    sum's own power depends on their phase, so the residual carries that
+    factor too (#79 review). It does not move the split or the null.
 
     Returns ``None`` when neither beam has a field at the focus.
     """
@@ -201,5 +206,11 @@ def dark_split(specs: list[dict], units: list[Bsc]) -> dict | None:
     if ia + ib <= 0:
         return None
     cross = float(np.vdot(a, b).real)
+    split = ia / (ia + ib)
     residual = 1 + cross / math.sqrt(ia * ib) if ia > 0 and ib > 0 else 1.0
-    return dict(split=ia / (ia + ib), residual=residual)
+    # the engine's rescaling of the group at that split: (P1 + P2) / power of the coherent sum
+    at = [dict(s, power=f) for s, f in zip(specs, (1 - split, split))]
+    summed = _group_beam(at, units, np.asarray(origin, dtype=float), 0, normalise=False)
+    if summed.power > 0:
+        residual *= 1.0 / summed.power
+    return dict(split=split, residual=residual)
