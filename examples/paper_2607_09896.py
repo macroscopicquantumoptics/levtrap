@@ -16,10 +16,13 @@ far-field mapping (see levtrap.api._beam_angle).  These are assumptions —
 see docs/paper/README.md.
 
 Everything a trap is (equilibrium, frequencies, depths, scattered and
-absorbed power) comes from :func:`levtrap.solve.solve`. Two things the
-paper plots are not in a Result and are computed here from the same beam
-and T-matrix: the force map over the intensity (Fig. 1a/S1) and the
-scattered power per multipole (Figs. 1b, 2c).
+absorbed power) comes from :func:`levtrap.solve.solve`. The force map over
+the intensity (Fig. 1a/S1) is not in a Result and is computed here from the
+same beam and T-matrix. The scattered power per multipole (Figs. 1b, 2c) is
+in a Result at the equilibrium (``optical.P_sca_multipoles``, #80; the WS2
+case is checked against this script in tests/test_multipoles.py); the script
+keeps its own :func:`multipole_powers` so that a wavelength with no
+equilibrium is taken at the focus.
 """
 
 from __future__ import annotations

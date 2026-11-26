@@ -49,6 +49,20 @@ test("a counter-propagating beam copies the first and reverses it", () => {
   assert.deepEqual(newBeam(DEFAULT_SETUP, "co").direction, [0, 0, 1]);
 });
 
+test("a counter-propagating beam of a circular first beam keeps the lab-frame rotation (#71)", () => {
+  // Polarisation is in each beam's own frame and circular light keeps its helicity:
+  // "circular+" against beam 1 would turn the other way in the lab (σ⁺σ⁻, no standing wave).
+  const withPol = (polarisation: BeamField["polarisation"]) => withField<BeamField>(DEFAULT_SETUP, 0, { polarisation });
+  assert.equal(newBeam(withPol("circular+"), "counter").polarisation, "circular-");
+  assert.equal(newBeam(withPol("circular-"), "counter").polarisation, "circular+");
+  // a co-propagating beam shares beam 1's frame, so it copies the polarisation
+  assert.equal(newBeam(withPol("circular+"), "co").polarisation, "circular+");
+  // linear and Jones-vector polarisations are copied as they are
+  assert.equal(newBeam(withPol("x"), "counter").polarisation, "x");
+  assert.equal(newBeam(withPol("y"), "counter").polarisation, "y");
+  assert.deepEqual(newBeam(withPol([[1, 0], [0, 1]]), "counter").polarisation, [[1, 0], [0, 1]]);
+});
+
 test("Paul trap and gravity read with their key values", () => {
   const s = addField(addField(withParticle(DEFAULT_SETUP, { charge: 50 }), newPaulTrap("linear")), newGravity());
   const parts = Object.fromEntries(partsOf(s).map((p) => [p.name, p.summary]));

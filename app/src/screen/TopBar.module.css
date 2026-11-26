@@ -95,6 +95,34 @@
   font-size: 11px;
 }
 
+/* Conventions (#71): folded; open, it scrolls inside the help rather than past the screen */
+.conventions {
+  margin: 0 0 12px;
+}
+
+.conventions summary {
+  cursor: pointer;
+}
+
+.conventionList {
+  max-height: min(48vh, 420px);
+  margin: 6px 0 0;
+  overflow-y: auto;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.conventionList dt {
+  margin-top: 6px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.conventionList dd {
+  margin: 2px 0 0;
+}
+
 .about {
   margin: 0 0 6px;
   color: var(--text-muted);

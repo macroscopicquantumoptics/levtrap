@@ -57,7 +57,7 @@ These are the rules of `docs/ARCHITECTURE.md` §7. Each has a test in
 | **Warnings are sentences in the strip.** | "No stable trap along x and y: outside the first Mathieu stability region." followed by the usual cause and what to change. Each engine warning has a code and its copy in `src/screen/warnings.ts`; a test checks the engine still writes each one. No banners, no pop-ups. |
 | **Plots are inline SVG in the theme's colours.** | The Forces tab. No Plotly. |
 | **Undo and redo, light and dark.** | One step per edit; Ctrl Z and Ctrl Shift Z. Every edit is autosaved in the browser; a reload opens where you left off (a saved setup that no longer validates is not opened, and the screen says why). |
-| **A setup travels as a file or a link.** | File menu: open and save a setup `.json` (the engine's own format, so `levtrap.solve` reads it), copy a share link (the setup lz-compressed in the fragment: no server, nothing sent), copy the Python that computes the same numbers, export the results (CSV: every number in SI with its model; JSON: the setup and the whole result) and the scene as PNG. Opening a file is an edit, so Ctrl Z takes it back. A link opens in place of the autosave and then leaves the address. |
+| **A setup travels as a file or a link.** | File menu: open and save a setup `.json` (the engine's own format, so `levtrap.solve` reads it), copy a share link (the setup lz-compressed in the fragment: no server, nothing sent), copy the Python that computes the same numbers, export the results (CSV: every number in SI with its model; JSON: the setup and the whole result) and the scene as PNG. Opening a file is an edit, so Ctrl Z takes it back. A link opens in place of the autosave and then leaves the address. Where the clipboard is refused (an embedded pane, an iframe), the link is shown under the scene in a read-only field, selected on focus, with a Copy button: a neutral notice that waits to be dismissed and never widens the screen (#74). |
 
 Three more rules came out of building it:
 
@@ -205,10 +205,10 @@ next. The reason each one is visible is in the last column.
 |---|---|---|
 | Power | visible | The knob turned most often. |
 | Wavelength | visible | A lab names its laser by wavelength and power. |
-| Polarisation | visible | It is why f_x and f_y differ. |
-| Direction | visible on a second beam | "Against beam 1" or "with beam 1": the difference between a counter-propagating trap and a superposition. |
+| Polarisation | visible | It is why f_x and f_y differ. It is in the beam's own frame (#71): on a beam not along beam 1 a note says so, and against beam 1 that Circular + turns the other way in the lab. |
+| Direction | visible on a second beam | "Against beam 1" or "with beam 1": the difference between a counter-propagating trap and a superposition. Add field → Counter-propagating beam copies beam 1 but flips a circular polarisation (Circular + ↔ Circular −), so the two turn the same way in the lab and, once they interfere, make a standing wave (#71). |
 | Interferes with | visible when there is another beam | Whether the forces add or the fields do (a standing wave). |
-| Phase | visible when the beam interferes with another | Only then does it mean anything. |
+| Phase | visible when the beam interferes with another | Only then does it mean anything. Its note gives the reference: a factor e^iφ on the beam's field at its own focus, in its own frame (#71). |
 | Mode (Gaussian, LG, HG) and its indices; focus position x, y, z | Advanced | Most traps use a Gaussian beam focused at the origin. |
 
 **Lens**
@@ -267,6 +267,11 @@ quote; its explanation splits it into scattered photons, beam photons and
 their cross term, from the scattered light's Mie pattern, #78) and the
 pressure below which recoil wins, and for a Paul trap q, a and the
 micromotion amplitude. Each of them explains itself too.
+"Scattered by multipole" gives the largest shares of the scattered power
+("MQ 61.5 % · MD 20.6 % · EQ 15.2 %" for the WS₂ dark trap): the beams' own
+split at the equilibrium, and in its explanation each multipole's power
+beside its share for a plane wave on the same sphere (#80). The two differ:
+a focused or structured beam excites each order with its own weight.
 
 The line at the right of the tabs says where the numbers came from:
 "Recorded from the engine for this preset" or "Computed in 240 ms".
@@ -283,7 +288,7 @@ result the strip already has, and Sweep runs one solve per value when asked.
 | Forces | The force along each eigen-axis of the trap, through the equilibrium. "Dipole approximation" draws the same with the light as a point dipole, dashed: where Mie theory matters shows. |
 | Potential | The potential along each axis in k_BT (the force integrated from the equilibrium), and the harmonic trap of the same stiffness dashed: anharmonicity shows where they part. Its barriers are the depths in the strip. |
 | Design | The inverse of a sweep: type the trap you want (f_x, f_y, f_z and the depth, each ticked to aim for it; they start at the trap's own numbers) and tick the inputs that may change (by default a beam's power and NA, or a Paul trap's RF voltage and frequency). Find searches with Nelder–Mead on Σ ln²(achieved / wanted), one solve per trial (at most 40, following one trap), each input on a scale that keeps it allowed (log for a positive input, logistic for an NA). The table gives now, wanted and found; Apply puts the values found into the setup (one undo step). With fewer inputs than targets it finds the best compromise. `src/screen/plots/design.ts`. |
-| Sweep | Any input of the setup (power, wavelength, NA, radius, charge, RF voltage and frequency, pressure, temperature…) against a headline number (the frequencies, the depth, the position along the beam, the scattered power). One solve per value, with progress and Cancel; the values without a stable trap are shaded. "Follow one trap" (on by default, #50) starts each value from the equilibrium found at the one before (continuation); where that trap vanished and the engine searched afresh, a line marks the jump and the progress counts them. Outputs also include the absorbed power and the recoil heating per mode.|
+| Sweep | Any input of the setup (power, wavelength, NA, radius, charge, RF voltage and frequency, pressure, temperature…) against a headline number (the frequencies, the depth, the position along the beam, the scattered power). One solve per value, with progress and Cancel; the values without a stable trap are shaded. "Follow one trap" (on by default, #50) starts each value from the equilibrium found at the one before (continuation); where that trap vanished and the engine searched afresh, a line marks the jump and the progress counts them. Outputs also include the absorbed power and the recoil heating per mode. An NA sweep changes only the NA of an ideal lens and keeps its mapping and filling (#72); a lens given by waist or half-angle starts from its own NA (the Inspector's relation) and becomes an NA lens of the same model. Log spacing starts on only when the range spans a decade or more (the default range of radius, pressure and RF frequency; a 290–310 nm scan is linear); the box overrides it. `src/screen/plots/sweep.ts`.|
 | Radiation | Where the scattered light goes, in two planes through the beam axis (polar); the fraction a lens of each NA collects, forward and backward; and the fraction of the position information a backward lens collects, per axis. The trapping lens's NA is marked. |
 | Heating | The reheating rate of each mode against pressure (10⁻⁹ to 10³ mbar), with photon recoil alone dashed, the setup's pressure marked, and a dot where recoil and gas heat equally. "At 1e-6 mbar" shows the rates as a table. |
 | Wavefront | For a real lens (#49): the wavefront error about its best focus across the beam on the lens, on a diverging scale (red ahead, blue behind a perfect converging wave), with its intensity-weighted rms, the lens readout's number. Tilt and defocus are taken out (the focus moved instead). Without a real lens the tab says how to choose one. |
@@ -379,7 +384,7 @@ be ticketed, is `docs/PARITY.md` (E2).
 | Draw the optical axis horizontal or vertical | removed | z is horizontal; gravity's direction says how the trap stands. |
 | 3D view: build, intensity or gradient, three cut planes, glow, contrast, log brightness, show particle, force arrows, reset | Show menu (D3): intensity slice, force arrows, trap axes | The scene is always there; nothing to build. The sliders go. |
 | Sweep: vary, from, to, steps, show, run, cancel | Plots drawer: Sweep (D5) | |
-| "Start here" panel, "What am I looking at?" notes, glossary | removed | Every number explains itself; the help is three lines. |
+| "Start here" panel, "What am I looking at?" notes, glossary | removed | Every number explains itself; the help is three lines, plus a folded Conventions section (#71): beam frames, the phase reference, the power of beams that interfere, the NA ↔ waist mapping (#64), and what Depth and Reheating include. |
 
 `web/lens.html` (lens tilt), all in E1:
 
@@ -397,8 +402,9 @@ Old outputs: z_eq is in the verdict and under More; f_x, f_y, f_z and the
 depth are the strip; scattered power and mass are under More; the recoil
 ratio became the Heating tab; Q_sca, Q_abs, absorbed power and N_max move
 into the explanations (D4). The force curves are the Forces tab; the force
-map becomes an overlay of the scene (D3); the multipole bars wait for
-decision 6.
+map becomes an overlay of the scene (D3); the multipole bars became the
+"Scattered by multipole" row under More (#80); the per-order switches wait
+for decision 6.
 
 New inputs with no old counterpart: charge, pressure, gas, the Paul trap,
 gravity, a beam's direction and focus position.

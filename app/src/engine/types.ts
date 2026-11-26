@@ -398,6 +398,18 @@ export interface FieldShare {
   stiffness: Record<string, number>;
 }
 
+/** One number per multipole of the scattered light (#80): ED, MD the electric
+ * and magnetic dipole, EQ, MQ quadrupole, EO, MO octupole, "higher" n >= 4. */
+export interface Multipoles {
+  ED: number;
+  MD: number;
+  EQ: number;
+  MQ: number;
+  EO: number;
+  MO: number;
+  higher: number;
+}
+
 export interface Result {
   version: 1;
   /** with a start (continuation): where the search began, and whether the followed trap vanished */
@@ -424,6 +436,10 @@ export interface Result {
     Qsca: number;
     Qabs: number;
     size_parameter: number;
+    /** plane-wave Q_sca per multipole (#80) */
+    Qsca_multipoles?: Multipoles;
+    /** W: the beams' own scattered power per multipole at the equilibrium; adds up to P_sca (#80) */
+    P_sca_multipoles?: Multipoles;
     Nmax: { beam: number; particle: number };
   } | null;
   /** present for a Paul trap */
