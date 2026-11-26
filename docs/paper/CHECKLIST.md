@@ -32,7 +32,8 @@ marked † are new: computed for this checklist with the script's own `setup()`,
 **Tests.** Today no test asserts any number from this paper. The only overlap is
 `tests/test_api.py::test_materials`, which asserts WS₂ n = 3.79 and SiO₂ n = 1.44 at 1550 nm (`pytest.approx`,
 rel 1e-6). `tests/test_literature.py` has no dark-trap entry:
-`docs/validation/references.json` contains neither this paper nor Magrini 2021 (Ref. [2]).
+`docs/validation/references.json` lists this paper as wanted, not verified
+(`illetschek2026_ws2_dark_trap`: the power split is not stated), and has no entry for Magrini 2021 (Ref. [2]).
 `app/tests/e2e/ws2-preset.spec.ts` only checks that the preset traps "downstream of
 the focus". I ran `pytest tests/test_literature.py tests/test_examples.py
 tests/test_lens_mapping.py tests/test_references.py`: 32 passed, 2 xfailed (Jain 2016
@@ -187,13 +188,16 @@ by `tests/test_ott_dark_trap.py` against `tests/fixtures/ott_dark_trap.json`, wh
 
 ## Gaps, ranked by importance (to close step 1)
 
+Hoang's issues #72, #78, #79 and #80 (all closed) are linked from the gap they help with.
+
 1. **Find why z_eq, Q_sca and Γ/Ω are off.** These gaps survive every split, mapping and
    power reading tried above, so they are not just ambiguity. They are also not in levtrap's
    code: real OTT gives the same trap (section above). In order:
    - **(a)** Ask the authors for their OTT script, or at least the beam calls, the split and Nmax. This is the cheapest path (`README.md` already lists the questions; add A9, A10 and the Fig. 1a bottle size).
-   - **(b)** Meanwhile, reproduce Fig. 1a's *intensity* over the paper's full ±2λ × ±3λ. Fit the beam angles and split so that the wall and plug positions match. Then rerun Fig. 2. The intensity alone, with no particle, is the cleanest fingerprint of their beam.
+   - **(b)** Meanwhile, reproduce Fig. 1a's *intensity* over the paper's full ±2λ × ±3λ. Fit the beam angles and split so that the wall and plug positions match. Then rerun Fig. 2. The app's Sweep can now scan a coherent pair's split and phase, and "Darken the focus" sets the dark split (#79); an NA sweep keeps the lens's mapping and starts from the actual NA of a lens given by its waist, as the WS₂ preset's are (#72). The intensity alone, with no particle, is the cleanest fingerprint of their beam.
    - **(c)** ~~Test whether levtrap's LG p = 1 mode or coherent sum differs from OTT's.~~ Done: identical to OTT 1.5 (section above). What's left is whether the authors used another OTT version, for example a draft 1.6 with `mergeBeams`.
    - **(d)** Re-derive Q with and without the factor 4 in the JSON, and label the plots with the convention.
+   - **(e)** Compare Γ/Ω like for like. The paper uses only the scattered-photon formula ωP_sca/(5mc²Ω²) (row 3.9). The app's recoil (#78) uses the Mie pattern's ⟨n n⟩ and adds the beam photons and a cross term, so its Γ/Ω is not the paper's quantity; for the WS₂ preset along z it shows 0.72 in total (0.20 from the scattered photons), where ωP_sca/(5mc²Ω_z²) gives 0.24.
 2. **Pin what exists.** Add `tests/test_paper_2607.py`, fast because each point solves in about 1 s:
    - regression checks of today's numbers (window 292–305 nm; z_eq(300) = 0.153λ; Ω(300) = 23.8/29.9 kHz; Γ/Ω(298) = 0.237; MQ-only has no trap; ±2 % or ±1 nm);
    - the paper's values as `xfail` with an issue number.
@@ -206,7 +210,7 @@ by `tests/test_ott_dark_trap.py` against `tests/fixtures/ott_dark_trap.json`, wh
    - unstable axial point, 1a.3;
    - far-field patterns, 3.8, with the existing `pattern`;
    - the Fig. S3 plot;
-   - signed Im amplitudes at z = 0 for Fig. 1b, to match the paper's quantity;
+   - signed Im amplitudes at z = 0 for Fig. 1b, to match the paper's quantity. The scattered power per multipole is now in a Result at the equilibrium and under More in the app (#80); the signed amplitudes are not;
    - Re(α_MQ) < 0 against the window, 2.t1.
 5. **SiO₂ bright-trap comparisons (3.4, 3.5, 3.7).** Needs Magrini 2021's trap parameters from that paper (C3-style read), then a verified `references.json` entry for the 0.18. The 20.4 then follows from the same-mass radius, provided the density question (T.3) is settled.
 6. **Decide on scope for internal temperature (4a, S4, S5).** It needs:
