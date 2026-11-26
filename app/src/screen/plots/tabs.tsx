@@ -17,7 +17,7 @@ import { useAnswer } from "../hooks.ts";
 import { canonical, environmentOf, pressureText, subscript } from "../model.ts";
 import { NumberField, SelectField } from "../ui/fields.tsx";
 import ui from "../ui/ui.module.css";
-import { atTrapNA, axisCuts, collectedAgainstNA, harmonic, heatingCurves, informationAgainstNA, LENS_DIRECTIONS, polarCut, potential, type LensDirection } from "./data.ts";
+import { atTrapNA, axisCuts, collectedAgainstNA, harmonic, heatingCurves, informationAgainstNA, LENS_DIRECTIONS, polarCut, potential, trapLensNote, type LensDirection } from "./data.ts";
 import { Plot, type PlotSeries, type Tone } from "./Plot.tsx";
 import { PolarPlot } from "./PolarPlot.tsx";
 import { spectrum } from "./spectrum.ts";
@@ -30,6 +30,7 @@ import {
   INFORMATION,
   infoCollector,
   informationOutput,
+  isSideLens,
   jumpsAt,
   logByDefault,
   naLadder,
@@ -37,6 +38,7 @@ import {
   sweepParams,
   sweepValues,
   unstableRuns,
+  withLens,
   type InfoAxis,
   type InfoChoice,
 } from "./sweep.ts";
@@ -434,6 +436,9 @@ export function RadiationTab({ setup, engine, recorded, onPattern }: TabProps & 
   const lens = LENS_DIRECTIONS.find((d) => d.value === direction) ?? LENS_DIRECTIONS[0];
   const percent = (v: number) => `${formatNumber(100 * v, 2, true)} %`;
   const trapNA = pattern.trap_NA ? formatNumber(pattern.trap_NA, 2, true) : "";
+  // which beam's NA that is, when there are several (#97)
+  const lensNote = trapLensNote(pattern, setup);
+  const atLens = `At the trapping lens's NA ${trapNA}${lensNote ? ` (${lensNote})` : ""}`;
   let series: PlotSeries[];
   let atTrap: string | null = null;
   if (view === "collection") {
@@ -445,7 +450,7 @@ export function RadiationTab({ setup, engine, recorded, onPattern }: TabProps & 
     ];
     const [b, f, both] = (["backward", "forward", "both"] as const).map((d) => atTrapNA(pattern, d));
     if (b && f && both)
-      atTrap = `At the trapping lens's NA ${trapNA}: the trapping lens collects ${percent(b.collection)} of the scattered light looking back, a lens of the same NA opposite it ${percent(f.collection)}, the two together ${percent(both.collection)}.`;
+      atTrap = `${atLens}: the trapping lens collects ${percent(b.collection)} of the scattered light looking back, a lens of the same NA opposite it ${percent(f.collection)}, the two together ${percent(both.collection)}.`;
   } else {
     series = (["x", "y", "z"] as const).map((ax) => ({
       id: ax,
@@ -457,7 +462,7 @@ export function RadiationTab({ setup, engine, recorded, onPattern }: TabProps & 
     const at = atTrapNA(pattern, direction);
     if (at) {
       const who = direction === "backward" ? "the trapping lens collects" : direction === "forward" ? "a forward lens of the same NA collects" : "the trapping lens and a forward lens of the same NA collect";
-      atTrap = `At the trapping lens's NA ${trapNA}, ${who} of the position information: x ${percent(at.information.x)}, y ${percent(at.information.y)}, z ${percent(at.information.z)}.`;
+      atTrap = `${atLens}, ${who} this share of the position information: x ${percent(at.information.x)}, y ${percent(at.information.y)}, z ${percent(at.information.z)}.`;
     }
   }
   const controls = (
@@ -625,7 +630,7 @@ export function SweepTab({ setup, engine }: TabProps) {
             label="Lens"
             value={info.direction}
             options={INFO_DIRECTIONS}
-            onChange={(direction) => setInfo((i) => ({ ...i, direction }))}
+            onChange={(direction) => setInfo((i) => withLens(i, direction, nMedium))}
           />
           <SelectField<InfoAxis>
             id="sweep-info-axis"
@@ -643,7 +648,8 @@ export function SweepTab({ setup, engine }: TabProps) {
             id="sweep-info-na"
             label="NA"
             value={info.NA === null ? "trap" : String(info.NA)}
-            options={[{ value: "trap", label: "The trapping lens's" }, ...naLadder(nMedium).map((na) => ({ value: String(na), label: formatNumber(na, 3, true) }))]}
+            // a side lens has no value at the trapping lens's NA, only on the ladder (#97)
+            options={[{ value: "trap", label: "The trapping lens's", disabled: isSideLens(info.direction) }, ...naLadder(nMedium).map((na) => ({ value: String(na), label: formatNumber(na, 3, true) }))]}
             onChange={(v) => setInfo((i) => ({ ...i, NA: v === "trap" ? null : Number(v) }))}
           />
         </>

@@ -4,7 +4,7 @@ import { gasDamping, gasHeating, KB, logSpace, meanFreePath } from "../../lib/ga
 import { PRESETS } from "../presets.ts";
 import type { Pattern } from "../../engine/types.ts";
 import { RECORDED } from "../recorded.ts";
-import { atTrapNA, axisCuts, collectedAgainstNA, harmonic, heatingCurves, informationAgainstNA, LENS_DIRECTIONS, polarCut, potential } from "./data.ts";
+import { atTrapNA, axisCuts, collectedAgainstNA, harmonic, heatingCurves, informationAgainstNA, LENS_DIRECTIONS, polarCut, potential, trapLensNote } from "./data.ts";
 
 const near = (a: number, b: number, rel = 1e-6) => assert.ok(Math.abs(a - b) <= rel * Math.abs(b), `${a} != ${b}`);
 const tweezer = PRESETS.find((p) => p.id === "tweezer")!;
@@ -152,4 +152,18 @@ test("at the trapping lens's NA: backward is the trapping lens, forward its twin
   assert.equal(atTrapNA(pattern, "side_y"), null);
   // no trapping lens (a Paul trap, or an NA above the medium's index): nothing to show
   assert.equal(atTrapNA({ ...pattern, trap_NA: null, at_trap_NA: null }, "backward"), null);
+});
+
+test("the trapping lens's NA says whose it is when several beams go its way (#97)", () => {
+  const ws2 = PRESETS.find((p) => p.id === "ws2-bottle")!;
+  const lens = { ...pattern, trap_NA: 0.71, trap_NA_fields: [0, 1], trap_NA_field: 1 } as Pattern;
+  assert.equal(
+    trapLensNote(lens, ws2.setup),
+    "Beam 2's: Beam 1 and Beam 2 go the same way through one lens, which needs the larger of their NAs",
+  );
+  // the other beams go other ways: the first beam's own lens
+  assert.equal(trapLensNote({ ...lens, trap_NA_fields: [0], trap_NA_field: 0 }, ws2.setup), "Beam 1's; no other beam goes its way");
+  // one beam, or a recording from before #97: nothing to add
+  assert.equal(trapLensNote({ ...lens, trap_NA_fields: [0], trap_NA_field: 0 }, tweezer.setup), null);
+  assert.equal(trapLensNote(pattern, ws2.setup), null);
 });

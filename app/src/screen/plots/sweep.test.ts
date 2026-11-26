@@ -8,7 +8,9 @@ import {
   coherentGroups,
   defaultRange,
   followFrom,
+  groupPower,
   idealNA,
+  INFO_DIRECTIONS,
   infoCollector,
   informationOutput,
   jumpsAt,
@@ -18,6 +20,8 @@ import {
   sweepParams,
   sweepValues,
   unstableRuns,
+  withGroupPower,
+  withLens,
   type InfoChoice,
 } from "./sweep.ts";
 
@@ -213,6 +217,20 @@ test("the coherent groups follow coherent_with through other beams, in setup ord
   assert.ok(ids.includes("beam2-phase") && ids.includes("beam3-phase") && !ids.some((id) => id.endsWith("-split")));
 });
 
+test("a coherent group's total power scales its beams, keeping their split (#97)", () => {
+  const s = preset("ws2-bottle");
+  assert.ok(Math.abs(groupPower(s, [0, 1]) - 0.8) < 1e-12);
+  const t = withGroupPower(s, [0, 1], 1.2);
+  const [a, b] = (t.trap.fields as BeamField[]).map((f) => f.power);
+  assert.ok(Math.abs(a + b - 1.2) < 1e-12);
+  assert.ok(Math.abs(b / (a + b) - 0.5034 / 0.8) < 1e-12);
+  // nothing else changes
+  assert.deepEqual({ ...(t.trap.fields[1] as BeamField), power: 0.5034 }, s.trap.fields[1]);
+  // a group with no power yet: split evenly
+  const dark = withGroupPower(s, [0, 1], 0);
+  assert.deepEqual((withGroupPower(dark, [0, 1], 0.6).trap.fields as BeamField[]).map((f) => f.power), [0.3, 0.3]);
+});
+
 test("the split moves power between the pair at a fixed total, and the phase reads and writes the beam (#79)", () => {
   const s = preset("ws2-bottle");
   const params = sweepParams(s);
@@ -243,7 +261,7 @@ test("the NA ladder is the engine's: 0.05 steps below the medium index, then the
 const cones = (scale: number) => ({ x: [0.1, 0.2, 0.3].map((v) => v * scale), y: [0.05, 0.1, 0.15].map((v) => v * scale), z: [0.2, 0.3, 0.4].map((v) => v * scale) });
 const pattern = {
   NA: [0.4, 0.8, 1],
-  information_efficiency: { forward: cones(1), backward: cones(2) },
+  information_efficiency: { forward: cones(1), backward: cones(2), side_x: cones(0.5), side_y: cones(0.25) },
   trap_NA: 0.8,
   at_trap_NA: {
     forward: { collection: 0.3, information: { x: 0.2, y: 0.1, z: 0.3 } },
@@ -278,4 +296,36 @@ test("the information plot's title names the lens (#79)", () => {
   assert.equal(infoCollector({ direction: "backward", axis: "x", NA: null }), "the trapping lens");
   assert.equal(infoCollector({ direction: "both", axis: "x", NA: null }), "the trapping lens and a forward lens of its NA");
   assert.equal(infoCollector({ direction: "forward", axis: "x", NA: 0.9 }), "a forward lens of NA 0.9");
+  assert.equal(infoCollector({ direction: "side_x", axis: "x", NA: 0.5 }), "a side lens on the x axis of NA 0.5");
+  assert.equal(infoCollector({ direction: "side_y", axis: "z", NA: 0.25 }), "a side lens on the y axis of NA 0.25");
+});
+
+test("the information output offers the Radiation tab's side lenses, on the NA ladder (#97)", () => {
+  assert.deepEqual(
+    INFO_DIRECTIONS.map((d) => d.value),
+    ["backward", "forward", "both", "side_x", "side_y"],
+  );
+  assert.deepEqual(INFO_DIRECTIONS[3], { value: "side_x", label: "Side, on the x axis" });
+  const r = { ...RECORDED.tweezer!, pattern };
+  const s = preset("tweezer");
+  const read = (choice: InfoChoice) => informationOutput(choice).read(r, s);
+  // a side lens reads its own direction's list at that NA
+  assert.deepEqual(read({ direction: "side_x", axis: "all", NA: 0.8 }), [
+    { name: "x", value: 0.1 },
+    { name: "y", value: 0.05 },
+    { name: "z", value: 0.15 },
+  ]);
+  assert.deepEqual(read({ direction: "side_y", axis: "z", NA: 1 }), [{ name: "z", value: 0.1 }]);
+  // the engine gives no side lens at the trapping lens's NA: no value, not the trapping lens's
+  assert.deepEqual(read({ direction: "side_y", axis: "x", NA: null }), [{ name: "x", value: null }]);
+});
+
+test("choosing a side lens moves the trapping lens's NA to the ladder; an NA of the ladder stays (#97)", () => {
+  const atTrap: InfoChoice = { direction: "backward", axis: "z", NA: null };
+  assert.deepEqual(withLens(atTrap, "side_x", 1), { direction: "side_x", axis: "z", NA: 0.5 });
+  assert.deepEqual(withLens({ ...atTrap, NA: 0.9 }, "side_y", 1), { direction: "side_y", axis: "z", NA: 0.9 });
+  // forward, backward and both keep the trapping lens's NA
+  assert.deepEqual(withLens(atTrap, "forward", 1), { direction: "forward", axis: "z", NA: null });
+  // in water the ladder still has 0.5
+  assert.equal(withLens(atTrap, "side_x", 1.33).NA, 0.5);
 });

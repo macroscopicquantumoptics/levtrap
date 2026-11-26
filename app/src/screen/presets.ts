@@ -16,7 +16,7 @@ import { addField, canonical, newBeam, newGravity, newPaulTrap } from "./model.t
 import type { Reference, Slot } from "./referenceTypes.ts";
 import { REFERENCES } from "./references.ts";
 
-export type PresetId = "tweezer" | "counter" | "paul-linear" | "paul-ring" | "ws2-bottle";
+export type PresetId = "tweezer" | "counter" | "paul-linear" | "paul-ring" | "ws2-bottle" | "ws2-counter-bottle";
 
 export interface Preset {
   id: PresetId;
@@ -107,6 +107,31 @@ const BASE: Base[] = [
             polarisation: "circular+",
             phase: Math.PI,
           },
+        ],
+      },
+    },
+  },
+  {
+    // #71, #76, #97: the mirror-symmetric four-beam dark trap of #71 (tests/test_pattern.py FOUR_BEAM)
+    id: "ws2-counter-bottle",
+    slot: "dark_trap",
+    name: "WS₂ counter-propagating bottle beams",
+    blurb: "The WS₂ bottle beam from both sides: two LG₀₀ + LG₁₀ pairs, one along +z and one along −z, share one dark focus and hold the sphere at it.",
+    source:
+      "Illustrative, not validated: the mirror-symmetric trap of #71, after Illetschek et al., arXiv:2607.09896. Each pair has half the WS₂ bottle beam's power, in the split that darkens its focus",
+    illustrative: true,
+    setup: {
+      version: 1,
+      particle: { radius: 3e-7, material: "WS2" },
+      environment: DEFAULT_SETUP.environment,
+      trap: {
+        fields: [
+          // the WS₂ bottle beam along +z, at half its power; all four beams interfere, as #71 set them up
+          { kind: "beam", id: "b1", wavelength: 1.55e-6, power: 0.1483, focus: { kind: "lens", waist: 1.59e-6 }, mode: { type: "lg", indices: [0, 0] }, polarisation: "circular+" },
+          { kind: "beam", id: "b2", coherent_with: "b1", wavelength: 1.55e-6, power: 0.2517, focus: { kind: "lens", waist: 8.66e-7 }, mode: { type: "lg", indices: [1, 0] }, polarisation: "circular+", phase: Math.PI },
+          // the same pair along −z: turned by 180° about x, so Circular − turns the same way in the lab (#71)
+          { kind: "beam", id: "b3", coherent_with: "b1", wavelength: 1.55e-6, power: 0.1483, focus: { kind: "lens", waist: 1.59e-6 }, mode: { type: "lg", indices: [0, 0] }, polarisation: "circular-", direction: [0, 0, -1], position: [0, 0, 0], phase: Math.PI },
+          { kind: "beam", id: "b4", coherent_with: "b1", wavelength: 1.55e-6, power: 0.2517, focus: { kind: "lens", waist: 8.66e-7 }, mode: { type: "lg", indices: [1, 0] }, polarisation: "circular-", direction: [0, 0, -1], position: [0, 0, 0], phase: 0 },
         ],
       },
     },
