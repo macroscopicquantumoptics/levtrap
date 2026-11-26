@@ -120,6 +120,28 @@
   accent-color: var(--focus-ring);
 }
 
+/* selects beside a plot's title: each label as wide as its text, each select as wide as its
+   options (a field's label column is otherwise minmax(0, 1fr), which a toolbar shrinks to nothing) */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+
+.controls > * {
+  grid-template-columns: max-content 196px;
+}
+
+/* what lenses of the trapping lens's NA collect, under the Radiation tab's plot (#75) */
+.atTrap {
+  flex: none;
+  margin: 0;
+  padding: 2px 6px 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
 /* ---- heating table ------------------------------------------------------------- */
 
 .heatingHead {

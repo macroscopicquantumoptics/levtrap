@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import type { Engine } from "../engine/client.ts";
-import type { Setup } from "../engine/types.ts";
+import type { Pattern, Setup } from "../engine/types.ts";
 import { AddField } from "./AddField.tsx";
 import { Dock, type TabId } from "./Dock.tsx";
 import { useAnswer, useIsClient, useMedia } from "./hooks.ts";
 import { Inspector } from "./Inspector.tsx";
-import { partsOf, type PartId } from "./model.ts";
+import { canonical, partsOf, type PartId } from "./model.ts";
 import { PartsRow } from "./PartsRow.tsx";
 import { PresetPicker } from "./PresetPicker.tsx";
 import { DEFAULT_PRESET, presetById, presetForSetup } from "./presets.ts";
@@ -17,6 +17,7 @@ import { fileActions, type Notice } from "./files/actions.ts";
 import { ShareLink } from "./files/ShareLink.tsx";
 import { PythonDialog } from "./files/PythonDialog.tsx";
 import { pythonSnippet } from "./files/python.ts";
+import { withPattern } from "./files/results.ts";
 import { readLinkFragment } from "./files/setupText.ts";
 import { initialState, reduce, type ScreenState } from "./store.ts";
 import { TopBar, type ShowOptions } from "./TopBar.tsx";
@@ -111,6 +112,15 @@ function ScreenBody({ engine }: ScreenProps) {
   const [picker, setPicker] = useState(params.firstVisit);
   const [notice, setNotice] = useState<Notice | null>(() => firstNotice(params));
   const [python, setPython] = useState(false);
+  // the last pattern the Radiation tab computed, with the setup it belongs to: the results export carries it (#75)
+  const [radiation, setRadiation] = useState<{ key: string; pattern: Pattern } | null>(null);
+  const keepPattern = useCallback((of: Setup, pattern: Pattern) => {
+    const key = canonical(of);
+    setRadiation((prev) => (prev && prev.key === key && prev.pattern === pattern ? prev : { key, pattern }));
+  }, []);
+  const setupKey = useMemo(() => canonical(setup), [setup]);
+  // the pattern of this very setup, from the scene's surface or the Radiation tab, if either has computed it
+  const computedPattern = (show.pattern && !radiated.pending ? radiated.answer.result?.pattern : null) ?? (radiation?.key === setupKey ? radiation.pattern : null);
 
   // a shared setup is in the address only to arrive: from now on autosave keeps it, and a reload does not undo edits
   useEffect(() => {
@@ -140,7 +150,7 @@ function ScreenBody({ engine }: ScreenProps) {
   const files = fileActions({
     setup,
     name,
-    result: answer.result,
+    result: withPattern(answer.result, computedPattern),
     open: (next) => edit(next, null),
     say: setNotice,
     showPython: () => setPython(true),
@@ -260,6 +270,7 @@ function ScreenBody({ engine }: ScreenProps) {
           engine={engine}
           recorded={params.recorded}
           onEdit={(next) => edit(next)}
+          onPattern={keepPattern}
         />
       </div>
 
