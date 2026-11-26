@@ -7,11 +7,17 @@ import { download } from "./download.ts";
 import { resultsCsv, resultsJson } from "./results.ts";
 import { readSetupText, setupFileText, shareUrl } from "./setupText.ts";
 
-/** A sentence over the screen: a confirmation goes by itself, a problem waits to be dismissed. */
+/**
+ * A sentence over the screen: a confirmation goes by itself, a problem waits
+ * to be dismissed. "info" is neither (#74): the share link shown because the
+ * clipboard refused it, in a field to copy from, waiting until dismissed.
+ */
 export interface Notice {
-  tone: "ok" | "bad";
+  tone: "ok" | "info" | "bad";
   text: string;
   testId: string;
+  /** the share link, shown in a read-only field with a Copy button (tone "info") */
+  link?: string;
 }
 
 export interface FileActions {
@@ -62,7 +68,8 @@ export function fileActions({ setup, name, result, open, say, showPython }: Cont
         await navigator.clipboard.writeText(url);
         say({ tone: "ok", text: "A link to this setup is on the clipboard. It holds the whole setup; nothing is sent anywhere.", testId: "link-copied" });
       } catch {
-        say({ tone: "bad", text: `The clipboard is not available here. The link: ${url}`, testId: "link-copied" });
+        // not an error: the link is shown to copy by hand, in a field rather than a sentence it would widen (#74)
+        say({ tone: "info", text: "The clipboard is not available here.", testId: "link-shown", link: url });
       }
     },
     python: showPython,
