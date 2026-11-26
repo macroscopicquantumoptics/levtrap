@@ -270,6 +270,8 @@ test("the information output reads the pattern as the Radiation tab does, and as
   // an NA the engine did not give, or a result without the pattern: no value
   assert.deepEqual(read({ direction: "forward", axis: "x", NA: 0.55 }), [{ name: "x", value: null }]);
   assert.deepEqual(informationOutput({ direction: "forward", axis: "x", NA: null }).read(RECORDED.tweezer!, s), [{ name: "x", value: null }]);
+  // no stable trap: no particle to detect, so no value, as the other outputs (the shading says why)
+  assert.deepEqual(informationOutput({ direction: "backward", axis: "z", NA: null }).read({ ...r, stable: false }, s), [{ name: "z", value: null }]);
 });
 
 test("the information plot's title names the lens (#79)", () => {

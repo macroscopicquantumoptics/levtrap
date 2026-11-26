@@ -297,7 +297,8 @@ export function informationOutput(choice: InfoChoice): SweepOutput {
     read: (r) => {
       const pattern = r.pattern;
       return axes.map((ax) => {
-        if (!pattern) return { name: ax, value: null };
+        // no trap, no particle to detect: the engine's pattern is then about the search's fallback point
+        if (!pattern || !r.stable) return { name: ax, value: null };
         if (choice.NA === null) return { name: ax, value: atTrapNA(pattern, choice.direction)?.information[ax] ?? null };
         const i = pattern.NA.findIndex((na) => Math.abs(na - choice.NA!) < 1e-6);
         return { name: ax, value: i < 0 ? null : (informationAgainstNA(pattern, choice.direction, ax)?.[i] ?? null) };
