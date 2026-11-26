@@ -2,7 +2,7 @@
  * The data behind the drawer's plots, from a Result: pure functions, tested
  * in data.test.ts.
  */
-import type { Result, Setup, Vec3 } from "../../engine/types.ts";
+import type { ConeFractions, Pattern, Result, Setup, Vec3 } from "../../engine/types.ts";
 import { gasDamping, gasHeating, KB, logSpace } from "../../lib/gas.ts";
 import { environmentOf } from "../model.ts";
 
@@ -122,4 +122,56 @@ export function polarCut(theta: number[], phi: number[], value: number[], plane:
       .map(({ t, i }) => ({ angle: sign * t, value: value[i] }));
   const points = [...side(plus, 1), ...side(minus, -1)].sort((a, b) => a.angle - b.angle);
   return { angle: points.map((p) => p.angle), value: points.map((p) => p.value) };
+}
+
+/**
+ * Where a collection lens looks from the particle (#75). The engine's four
+ * directions (levtrap.pattern.DIRECTIONS: forward is +z, the beam's way), and
+ * "both": a lens forward and one backward of the same NA. Their cones of
+ * half-angle asin(NA/n) meet only at θ = 90°, and only when NA = n, so what
+ * they collect adds.
+ */
+export type LensDirection = "backward" | "forward" | "both" | "side_x" | "side_y";
+
+/** label: the menu; phrase: the plot's title; name: the results CSV. */
+export const LENS_DIRECTIONS: { value: LensDirection; label: string; phrase: string; name: string }[] = [
+  { value: "backward", label: "Backward (−z)", phrase: "a backward lens (−z)", name: "backward lens (-z)" },
+  { value: "forward", label: "Forward (+z)", phrase: "a forward lens (+z)", name: "forward lens (+z)" },
+  { value: "both", label: "Forward + backward", phrase: "a forward and a backward lens of the same NA", name: "forward + backward lenses" },
+  { value: "side_x", label: "Side, on the x axis", phrase: "a side lens on the x axis", name: "side lens (+x)" },
+  { value: "side_y", label: "Side, on the y axis", phrase: "a side lens on the y axis", name: "side lens (+y)" },
+];
+
+const sum = (a: readonly number[], b: readonly number[]) => a.map((v, i) => v + b[i]);
+
+/** The fraction of P_sca a lens of each NA in `pattern.NA` collects; null if the result lacks the direction. */
+export function collectedAgainstNA(pattern: Pattern, direction: LensDirection): number[] | null {
+  const c = pattern.collection;
+  if (direction === "both") return c.forward && c.backward ? sum(c.forward, c.backward) : null;
+  return c[direction] ?? null;
+}
+
+/** The fraction of the position information along `axis` a lens of each NA collects. */
+export function informationAgainstNA(pattern: Pattern, direction: LensDirection, axis: "x" | "y" | "z"): number[] | null {
+  const e = pattern.information_efficiency;
+  if (direction === "both") return e.forward && e.backward ? sum(e.forward[axis], e.backward[axis]) : null;
+  return e[direction]?.[axis] ?? null;
+}
+
+/**
+ * What lenses of the trapping lens's NA collect (`at_trap_NA`): backward is
+ * the trapping lens itself, looking back at the particle; forward a lens of the
+ * same NA opposite it; both the two together. Null for the side directions
+ * (the engine gives none) or when the result has no trapping lens's NA.
+ */
+export function atTrapNA(pattern: Pattern, direction: LensDirection): ConeFractions | null {
+  const at = pattern.at_trap_NA;
+  if (!at || !pattern.trap_NA) return null;
+  if (direction === "forward" || direction === "backward") return at[direction] ?? null;
+  if (direction !== "both" || !at.forward || !at.backward) return null;
+  const { forward: f, backward: b } = at;
+  return {
+    collection: f.collection + b.collection,
+    information: { x: f.information.x + b.information.x, y: f.information.y + b.information.y, z: f.information.z + b.information.z },
+  };
 }

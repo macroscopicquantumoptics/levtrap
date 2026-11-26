@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { gasDamping, gasHeating, KB, logSpace, meanFreePath } from "../../lib/gas.ts";
 import { PRESETS } from "../presets.ts";
+import type { Pattern } from "../../engine/types.ts";
 import { RECORDED } from "../recorded.ts";
-import { axisCuts, harmonic, heatingCurves, polarCut, potential } from "./data.ts";
+import { atTrapNA, axisCuts, collectedAgainstNA, harmonic, heatingCurves, informationAgainstNA, LENS_DIRECTIONS, polarCut, potential } from "./data.ts";
 
 const near = (a: number, b: number, rel = 1e-6) => assert.ok(Math.abs(a - b) <= rel * Math.abs(b), `${a} != ${b}`);
 const tweezer = PRESETS.find((p) => p.id === "tweezer")!;
@@ -103,4 +104,52 @@ test("a polar cut takes both halves of a plane through the axis", () => {
   );
   const yz = polarCut(theta, phi, value, "yz");
   assert.deepEqual(yz.value.slice(3), [5 + Math.PI / 2, 15 + Math.PI / 2, 25 + Math.PI / 2]);
+});
+
+/** A pattern block cut down to what the NA curves read (#75): three NAs, four directions. */
+const cones = (scale: number) => ({ x: [0.1, 0.2, 0.3].map((v) => v * scale), y: [0.05, 0.1, 0.15].map((v) => v * scale), z: [0.2, 0.3, 0.4].map((v) => v * scale) });
+const pattern = {
+  NA: [0.4, 0.8, 1],
+  collection: { forward: [0.1, 0.3, 0.5], backward: [0.05, 0.2, 0.4], side_x: [0.02, 0.1, 0.2], side_y: [0.03, 0.12, 0.25] },
+  information_efficiency: { forward: cones(1), backward: cones(2), side_x: cones(0.5), side_y: cones(0.25) },
+  trap_NA: 0.8,
+  at_trap_NA: {
+    forward: { collection: 0.3, information: { x: 0.2, y: 0.1, z: 0.3 } },
+    backward: { collection: 0.2, information: { x: 0.4, y: 0.2, z: 0.6 } },
+  },
+} as unknown as Pattern;
+
+test("each direction's NA curves are the engine's own lists (#75)", () => {
+  for (const d of ["forward", "backward", "side_x", "side_y"] as const) {
+    assert.deepEqual(collectedAgainstNA(pattern, d), pattern.collection[d]);
+    for (const ax of ["x", "y", "z"] as const) assert.deepEqual(informationAgainstNA(pattern, d, ax), pattern.information_efficiency[d][ax]);
+  }
+  assert.deepEqual(
+    LENS_DIRECTIONS.map((d) => d.value),
+    ["backward", "forward", "both", "side_x", "side_y"],
+  );
+});
+
+test("forward + backward adds the two cones, which never overlap for NA <= n (#75)", () => {
+  collectedAgainstNA(pattern, "both")!.forEach((v, i) => near(v, pattern.collection.forward[i] + pattern.collection.backward[i]));
+  informationAgainstNA(pattern, "both", "z")!.forEach((v, i) => near(v, 3 * pattern.information_efficiency.forward.z[i]));
+  // a result without one of the two has no sum to draw
+  const half = { ...pattern, collection: { forward: [0.1, 0.3, 0.5] }, information_efficiency: { forward: cones(1) } } as unknown as Pattern;
+  assert.equal(collectedAgainstNA(half, "both"), null);
+  assert.equal(informationAgainstNA(half, "both", "x"), null);
+  assert.equal(collectedAgainstNA(half, "side_x"), null);
+});
+
+test("at the trapping lens's NA: backward is the trapping lens, forward its twin, both their sum, sides none (#75)", () => {
+  assert.equal(atTrapNA(pattern, "backward"), pattern.at_trap_NA!.backward);
+  assert.equal(atTrapNA(pattern, "forward"), pattern.at_trap_NA!.forward);
+  const both = atTrapNA(pattern, "both")!;
+  near(both.collection, 0.5);
+  near(both.information.x, 0.6);
+  near(both.information.y, 0.3);
+  near(both.information.z, 0.9);
+  assert.equal(atTrapNA(pattern, "side_x"), null);
+  assert.equal(atTrapNA(pattern, "side_y"), null);
+  // no trapping lens (a Paul trap, or an NA above the medium's index): nothing to show
+  assert.equal(atTrapNA({ ...pattern, trap_NA: null, at_trap_NA: null }, "backward"), null);
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import type { Engine, EngineStatus } from "../engine/client.ts";
-import type { Result, Setup } from "../engine/types.ts";
+import type { Pattern, Result, Setup } from "../engine/types.ts";
 import { formatSI } from "../lib/format.ts";
 import type { Answer } from "./answer.ts";
 import type { PartId } from "./model.ts";
@@ -40,10 +40,12 @@ export interface DockProps {
   recorded: boolean;
   /** an edit from a tab (Design → Apply) */
   onEdit?(setup: Setup): void;
+  /** the Radiation tab's pattern, once computed, for the results export (#75) */
+  onPattern?(setup: Setup, pattern: Pattern): void;
 }
 
 /** The bottom of the screen: the results strip, always visible, and the plots drawer under it. */
-export function Dock({ setup, answer, pending, status, tab, onTab, expanded, onToggle, onSelect, engine, recorded, onEdit }: DockProps) {
+export function Dock({ setup, answer, pending, status, tab, onTab, expanded, onToggle, onSelect, engine, recorded, onEdit, onPattern }: DockProps) {
   return (
     <section className={`${ui.island} ${styles.dock}`} aria-label="Results">
       <ResultsStrip setup={setup} answer={answer} pending={pending} status={status} expanded={expanded} onToggle={onToggle} onSelect={onSelect} />
@@ -70,7 +72,7 @@ export function Dock({ setup, answer, pending, status, tab, onTab, expanded, onT
       {tab && (
         <div className={styles.drawer} role="tabpanel" id="drawer" aria-labelledby={`tab-${tab}`} data-testid="drawer" data-tab={tab}>
           <div className={styles.panel} data-pending={pending || undefined}>
-            <Panel tab={tab} setup={setup} result={answer.result} engine={engine} recorded={recorded} onEdit={onEdit} />
+            <Panel tab={tab} setup={setup} result={answer.result} engine={engine} recorded={recorded} onEdit={onEdit} onPattern={onPattern} />
           </div>
           <button type="button" className={`${ui.iconButton} ${styles.close}`} aria-label="Close the plots" onClick={() => onTab(null)}>
             <Icon name="close" />
@@ -107,12 +109,28 @@ function EngineLine({ status, answer }: { status: EngineStatus | null; answer: A
   );
 }
 
-function Panel({ tab, setup, result, engine, recorded, onEdit }: { tab: TabId; setup: Setup; result: Result | null; engine: (() => Engine) | null; recorded: boolean; onEdit?(setup: Setup): void }) {
+function Panel({
+  tab,
+  setup,
+  result,
+  engine,
+  recorded,
+  onEdit,
+  onPattern,
+}: {
+  tab: TabId;
+  setup: Setup;
+  result: Result | null;
+  engine: (() => Engine) | null;
+  recorded: boolean;
+  onEdit?(setup: Setup): void;
+  onPattern?(setup: Setup, pattern: Pattern): void;
+}) {
   if (tab === "forces") return <ForcesTab setup={setup} engine={engine} recorded={recorded} />;
   if (tab === "potential") return <PotentialTab setup={setup} engine={engine} recorded={recorded} />;
   if (tab === "sweep") return <SweepTab setup={setup} engine={engine} recorded={recorded} />;
   if (tab === "design") return <DesignTab setup={setup} result={result} engine={engine} onEdit={onEdit} />;
-  if (tab === "radiation") return <RadiationTab setup={setup} engine={engine} recorded={recorded} />;
+  if (tab === "radiation") return <RadiationTab setup={setup} engine={engine} recorded={recorded} onPattern={onPattern} />;
   if (tab === "spectrum") return <SpectrumTab setup={setup} result={result} />;
   if (tab === "wavefront") return <WavefrontTab setup={setup} engine={engine} recorded={recorded} />;
   return <HeatingTab setup={setup} result={result} />;
