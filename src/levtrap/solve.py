@@ -169,8 +169,9 @@ def solve(setup: dict | str, want: Iterable[str] = (), start=None) -> dict:
       the curl of the force and the gas damping (:func:`_dynamics`, #101):
       ``growth_rate`` [1/s] per mode, ``unstable``, ``damping_needed`` and
       ``gas_damping`` [1/s], ``pressure_threshold`` [Pa] (dynamically
-      unstable below it), ``curl`` (K's antisymmetric part per block, N/m),
-      ``curl_ratio``, the full ``K`` [N/m] and ``notes``. ``None`` when not
+      unstable below it), ``curl`` (K's antisymmetric part per block, N/m;
+      0 within the finite-difference error of K), ``curl_ratio``, the full
+      ``K`` [N/m] (with that noise dropped) and ``notes``. ``None`` when not
       stable, and for a Paul trap alone (no curl).
     * ``equilibrium`` — [x, y, z] in m, or ``None``.
     * ``modes`` — the three eigen-modes of the stiffness matrix: ``name``
@@ -610,11 +611,12 @@ def _dynamics(s: dict, trap, modes: list[dict], mass: float, hybrid: bool = Fals
     needed or when no gas pressure gives enough.
     """
     from .rates import damping_pressure, gas_damping, gas_properties
-    from .solver import curl, dynamics
+    from .solver import curl, dynamics, without_noise
 
-    K = trap.K_full
-    if K is None:
+    if trap.K_full is None:
         return None
+    # a curl within the finite-difference error of K is noise: it is dropped before the check
+    K = without_noise(trap.K_full, trap.K_error)
     env = s["environment"]
     T, p, gas = float(env["temperature"]), float(env["pressure"]), env["gas"]
     radius = float(s["particle"]["radius"])
@@ -624,7 +626,8 @@ def _dynamics(s: dict, trap, modes: list[dict], mass: float, hybrid: bool = Fals
     need = d["damping_needed"]
     Ks = 0.5 * (K + K.T)
     notes = ["linear stability of m r'' = -K r - m gamma r', with the full stiffness matrix (curl included) "
-             "and the gas damping, the same along every axis"]
+             "and the gas damping, the same along every axis; a curl within the finite-difference error of K "
+             "(from K at two steps) is dropped as noise"]
     if hybrid:
         notes.append("Paul trap: the RF enters as its time-averaged pseudopotential, which has no curl; the curl is "
                      "the light's, and the RF's parametric resonances are the Floquet check of the paul block")

@@ -265,7 +265,6 @@ export interface ModeRates {
   crossover_pressure: number | null;
 }
 
-/** The `rates` block (rates.rates_block). */
 /** levtrap.solve._dynamics: linear stability with the full stiffness matrix and the gas damping (#101). */
 export interface Dynamics {
   /** 1/s per mode (same order as Result.modes): the motion along it goes as exp(rate t); negative when damped */
@@ -278,15 +277,16 @@ export interface Dynamics {
   gas_damping: number;
   /** Pa: below it the motion grows; null without a curl, or when no gas pressure damps it enough */
   pressure_threshold: number | null;
-  /** N/m: the antisymmetric part of K per block, (K_ij − K_ji) / 2; 0 below round-off */
+  /** N/m: the antisymmetric part of K per block, (K_ij − K_ji) / 2; 0 within the finite-difference error of K (noise) */
   curl: { xy: number; xz: number; yz: number };
   /** the antisymmetric part's norm over the symmetric part's */
   curl_ratio: number;
-  /** N/m, lab frame: K_ij = −∂F_i/∂x_j, curl included */
+  /** N/m, lab frame: K_ij = −∂F_i/∂x_j, curl included (its noise dropped) */
   K: number[][];
   notes: string[];
 }
 
+/** The `rates` block (rates.rates_block). */
 export interface Rates {
   gas: {
     species: Gas;

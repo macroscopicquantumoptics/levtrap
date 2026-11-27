@@ -292,7 +292,7 @@ function Conventions() {
         <dd>
           &ldquo;Stable trap&rdquo; needs two things. The force must pull the particle back along every axis. And its motion must not grow:
           light&apos;s force can have a curl, which pushes a displaced particle round an axis (circularly polarised light does this with its spin).
-          In a thin gas, too little damping, the particle then spirals out, though the force alone would hold it. The strip says so, and the
+          A thin gas damps the motion too little, so the particle spirals out, though the force alone would hold it. The strip says so, and the
           pressure above which the gas damps it enough; the Heating tab shades the pressures below it. Paul traps are checked with their
           time-averaged pseudopotential, which has no curl.
         </dd>

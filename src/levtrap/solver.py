@@ -41,7 +41,7 @@ import numpy as np
 from .fields import total_force
 from .traps import find_traps, trap_depth
 
-__all__ = ["Trap", "find_trap", "stiffness", "dynamics", "curl", "damping_needed", "NONCONSERVATIVE_WARN"]
+__all__ = ["Trap", "find_trap", "stiffness", "dynamics", "curl", "without_noise", "damping_needed", "NONCONSERVATIVE_WARN"]
 
 NONCONSERVATIVE_WARN = 0.03
 AXIS_NAMES = ("x", "y", "z")
@@ -54,6 +54,7 @@ class Trap:
     equilibrium: np.ndarray | None          # [m]
     K: np.ndarray | None                    # symmetrised stiffness [N/m]
     K_full: np.ndarray | None = None        # K_ij = -dF_i/dr_j, curl included [N/m], lab frame
+    K_error: np.ndarray | None = None       # estimated finite-difference error of K_full [N/m], per entry
     modes: list[dict] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     jumped: bool = False  # a start was given and the equilibrium followed from it vanished
@@ -299,6 +300,9 @@ def find_trap(fields, mass: float, *, centre=(0.0, 0.0, 0.0), ranges=(1.5e-6, 1.
     out.equilibrium = r_eq
     out.K = Ks
     out.K_full = K
+    # Richardson: central differences err as h^2, so K(h) - K(2h) is about 3 times K(h)'s error
+    K2, _ = stiffness(fields, r_eq, 2 * h)
+    out.K_error = np.abs(K - K2) / 3
     out.modes = modes
     out.stable = bool(np.all(ev > 0))
     return out
@@ -307,21 +311,42 @@ def find_trap(fields, mass: float, *, centre=(0.0, 0.0, 0.0), ranges=(1.5e-6, 1.
 # --- dynamic stability (#101) ------------------------------------------------------------
 
 CURL_TOL = 1e-9  # a curl below this fraction of the highest trap angular frequency is round-off
+CURL_NOISE = 3  # a curl within this many times its estimated finite-difference error is noise
 MODE_WEIGHT = 0.05  # an eigen-motion counts for a mode when this share of it lies along the mode's axis
 
 
-def curl(K) -> dict:
+def curl(K, error=None) -> dict:
     """The antisymmetric part of K per block [N/m]: ``xy`` = (K_xy - K_yx) / 2,
     ``xz``, ``yz`` likewise. With F = -K r, a positive ``xy`` pushes a
     particle displaced along +x towards +y, and one displaced along +y
-    towards -x: round the z axis, anticlockwise seen from +z. A part below
-    :data:`CURL_TOL` of K's largest entry is round-off and reads 0."""
+    towards -x: round the z axis, anticlockwise seen from +z.
+
+    A part below :data:`CURL_TOL` of K's largest entry is round-off and
+    reads 0. ``error`` (per entry of K, as :attr:`Trap.K_error`): a part
+    within :data:`CURL_NOISE` times its error, (error_ij + error_ji) / 2,
+    is finite-difference noise and reads 0 too. A tilted, linearly polarised
+    beam with the particle on its axis has no curl, but its K from central
+    differences shows one of about 1e-5 of K; that part shrinks as the step
+    squared, while a real curl does not."""
     K = np.asarray(K, dtype=float)
     floor = CURL_TOL * float(np.max(np.abs(K)))
+    err = np.zeros((3, 3)) if error is None else np.asarray(error, dtype=float)
     out = {}
     for i, j in ((0, 1), (0, 2), (1, 2)):
         a = float(0.5 * (K[i, j] - K[j, i]))
-        out[f"{AXIS_NAMES[i]}{AXIS_NAMES[j]}"] = a if abs(a) > floor else 0.0
+        noise = CURL_NOISE * 0.5 * float(err[i, j] + err[j, i])
+        out[f"{AXIS_NAMES[i]}{AXIS_NAMES[j]}"] = a if abs(a) > max(floor, noise) else 0.0
+    return out
+
+
+def without_noise(K, error=None) -> np.ndarray:
+    """K with each block's curl replaced by :func:`curl`'s: the symmetric part
+    as it is, the antisymmetric part only where it is above its noise."""
+    K = np.asarray(K, dtype=float)
+    out = 0.5 * (K + K.T)
+    for (i, j), a in zip(((0, 1), (0, 2), (1, 2)), curl(K, error).values()):
+        out[i, j] += a
+        out[j, i] -= a
     return out
 
 

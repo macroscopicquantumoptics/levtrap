@@ -100,6 +100,28 @@ test("results as CSV: one quantity per row, SI units, the model", () => {
   assert.deepEqual(json.result.modes, r.modes);
 });
 
+test("results as CSV: the motion with the curl (#101)", () => {
+  const r = RECORDED["ws2-bottle"]!;
+  const d = r.dynamics!;
+  assert.ok(d.unstable && d.pressure_threshold != null);
+  const rows = resultRows(r);
+  const one = (q: string, axis = "") => rows.find((x) => x.quantity === q && x.axis === axis);
+  assert.equal(one("stable")!.value, "true");
+  assert.equal(one("spirals out at this pressure")!.value, "true");
+  assert.equal(one("spirals out below")!.value, d.pressure_threshold);
+  assert.equal(one("spirals out below")!.unit, "Pa");
+  assert.equal(one("damping needed")!.value, d.damping_needed);
+  assert.deepEqual(
+    rows.filter((x) => x.quantity === "growth rate").map((x) => [x.axis, x.value, x.unit]),
+    r.modes.map((m, i) => [m.name, d.growth_rate[i], "1/s"]),
+  );
+  assert.equal(one("curl of the stiffness", "xy")!.value, d.curl.xy);
+  assert.match(one("growth rate", r.modes[0].name)!.model, /linear stability/);
+  assert.ok(resultsCsv(r).includes("spirals out at this pressure,,true,,"));
+  // a linearly polarised tweezer does not spiral out
+  assert.equal(resultRows(RECORDED.tweezer!).find((x) => x.quantity === "spirals out at this pressure")!.value, "false");
+});
+
 /** The Radiation tab's numbers, cut down: two NAs, the four directions, and the trapping lens's NA (#75). */
 const fractions = { x: [0.1, 0.3], y: [0.1, 0.2], z: [0.2, 0.4] };
 const pattern = {

@@ -15,7 +15,7 @@ import pytest
 from levtrap.rates import damping_pressure, gas_damping, gas_properties
 from levtrap.setup import DEFAULT_SETUP
 from levtrap.solve import solve
-from levtrap.solver import curl, damping_needed, dynamics
+from levtrap.solver import curl, damping_needed, dynamics, without_noise
 
 MASS = 1e-17  # kg
 AXES = np.eye(3)
@@ -78,6 +78,28 @@ def test_curl_per_block_and_its_sign():
     assert curl(K) == pytest.approx(dict(xy=0.3, xz=0.0, yz=0.1))
     # positive xy: a particle at +x is pushed towards +y (F = -K r)
     assert (-K @ np.array([1.0, 0, 0]))[1] > 0
+
+
+def test_a_curl_within_its_error_is_noise():
+    K = np.array([[1.0, 0.3, 1e-4], [-0.3, 1.0, 0.0], [-1e-4, 0.0, 2.0]])
+    err = np.full((3, 3), 1e-4)
+    # xy is far above its error and stays; xz (1e-4) is within 3 times its error and reads 0
+    assert curl(K, err) == pytest.approx(dict(xy=0.3, xz=0.0, yz=0.0))
+    clean = without_noise(K, err)
+    assert clean[0, 1] == pytest.approx(0.3) and clean[1, 0] == pytest.approx(-0.3)
+    assert clean[0, 2] == 0.0 and clean[2, 0] == 0.0
+    np.testing.assert_allclose(clean + clean.T, K + K.T)
+
+
+@pytest.mark.parametrize("direction", [[0, math.sin(0.3), math.cos(0.3)], [math.sin(0.2), math.sin(0.1), 1.0]])
+def test_a_tilted_linear_tweezer_shows_no_curl(direction):
+    # on its axis a linearly polarised beam has no curl, whichever way it points; the
+    # central differences give one of about 1e-5 of K, which must not be shown as a curl
+    s = copy.deepcopy(DEFAULT_SETUP)
+    s["trap"]["fields"][0]["direction"] = direction
+    d = solve(s)["dynamics"]
+    assert d["curl"] == dict(xy=0.0, xz=0.0, yz=0.0)
+    assert not d["unstable"] and d["damping_needed"] == 0.0
 
 
 def test_damping_pressure_inverts_the_gas_damping():
@@ -164,3 +186,36 @@ def test_dynamics_is_none_without_a_trap():
     s["trap"]["fields"].append(dict(kind="gravity"))
     r = solve(s)
     assert not r["stable"] and r["dynamics"] is None
+
+
+def paul_with_light(polarisation):
+    """A linear Paul trap, a beam and gravity, as in tests/test_hybrid.py."""
+    s = copy.deepcopy(DEFAULT_SETUP)
+    s["particle"]["charge"] = 30
+    beam = copy.deepcopy(DEFAULT_SETUP["trap"]["fields"][0])
+    beam["polarisation"] = polarisation
+    s["trap"]["fields"] = [beam, {"kind": "paul", "geometry": "linear", "rf_voltage": 300, "rf_frequency": 5e3,
+                                  "endcap_voltage": 5, "r0": 1e-3, "z0": 2e-3,
+                                  "geometry_factors": {"radial": 1.0, "axial": 0.3}}, {"kind": "gravity"}]
+    return s
+
+
+def test_paul_trap_with_circular_light_spirals_out():
+    # the RF enters as its pseudopotential (no curl); the light's spin gives the curl
+    r = solve(paul_with_light("circular+"))
+    d = r["dynamics"]
+    assert r["stable"] and d is not None and d["unstable"]
+    assert d["damping_needed"] > 0 and d["pressure_threshold"] > s_pressure(r)
+    assert d["notes"][-1].startswith("Paul trap: the RF enters as its time-averaged pseudopotential")
+
+
+def test_paul_trap_with_linear_light_holds():
+    r = solve(paul_with_light("x"))
+    d = r["dynamics"]
+    assert r["stable"] and d is not None and not d["unstable"]
+    assert d["pressure_threshold"] is None
+    assert d["notes"][-1].startswith("Paul trap: the RF enters as its time-averaged pseudopotential")
+
+
+def s_pressure(r):
+    return r["rates"]["gas"]["pressure"]

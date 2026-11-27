@@ -162,6 +162,11 @@ eigenvalues μ of K/m). `pressure_threshold` is the pressure whose gas damping
 dynamically unstable. In the WS2 dark trap (circular +, 1e-6 mbar N₂) the
 curl is 9 % of K: x and y grow at about 1e4 /s, and the gas holds the
 particle only above about 65 mbar. With linear polarisation there is no curl.
+Central differences give a small false curl (about 1e-5 of K for a tilted,
+linearly polarised beam). So K is also taken at twice the step: the
+difference estimates its error, and a curl within three times that error is
+noise. It reads 0 and is dropped before the check. A real curl does not
+change with the step.
 The 3 % `nonconservative` note is a different matter: it says the depth and
 frequencies, taken from the symmetric part, are approximate. A Paul trap
 alone has no curl (its pseudopotential and gravity are conservative), so its
