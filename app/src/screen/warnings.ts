@@ -6,6 +6,8 @@
  * reworded warning fails a test instead of losing its advice.
  */
 
+import { pressureText } from "./model.ts";
+
 export type WarningCode =
   | "no-trap-axial"
   | "no-trap-nowhere"
@@ -16,6 +18,7 @@ export type WarningCode =
   | "micromotion"
   | "not-converged"
   | "nonconservative"
+  | "spirals-out"
   | "pseudopotential-inaccurate"
   | "ring-endcap"
   | "other";
@@ -49,6 +52,10 @@ const axes = (list: string) => {
   const a = list.split(/,\s*/).filter(Boolean);
   return a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}` : a[0];
 };
+
+/** The usual cause of a curl, and what to change (#101). */
+export const SPIRAL_CAUSE =
+  "Usually the spin of circularly polarised light, or a beam with a vortex, pushes the particle round the beam axis: linear polarisation removes the spin's push.";
 
 export const RULES: Rule[] = [
   {
@@ -108,6 +115,16 @@ export const RULES: Rule[] = [
     code: "nonconservative",
     pattern: /^The force is not conservative here/,
     fatal: false,
+  },
+  {
+    // #101: statically stable, but the curl grows the motion faster than the gas damps it
+    code: "spirals-out",
+    pattern:
+      /^The particle spirals out at this pressure: the curl of the force grows its motion along ([\w, ]+) at ([\d.e+-]+) \/s, faster than the gas damps it; (?:the gas holds it above ([\d.e+-]+) Pa|no gas pressure damps it enough)\.?$/,
+    fatal: false,
+    text: (m) => `The particle spirals out along ${axes(m[1])} at this pressure: the light's curl force makes its motion grow faster than the gas damps it.`,
+    hint: (m) =>
+      `${m[3] ? `The gas holds it above ${pressureText(Number(m[3]))}. ` : "No gas pressure damps it enough. "}${SPIRAL_CAUSE}`,
   },
   {
     code: "pseudopotential-inaccurate",

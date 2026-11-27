@@ -140,9 +140,34 @@ class Field(Protocol):
 `solve.py` sums the forces of all fields and, on the summed force:
 
 * finds the equilibrium (3D Newton from a coarse scan),
-* takes the 3×3 stiffness matrix by central differences, diagonalises it,
-  and reports eigen-frequencies and eigen-axes,
-* integrates the depth along each eigen-axis to the nearest barrier.
+* takes the 3×3 stiffness matrix by central differences, diagonalises its
+  symmetric part, and reports eigen-frequencies and eigen-axes,
+* integrates the depth along each eigen-axis to the nearest barrier,
+* checks the motion with the full matrix, curl included, and the gas
+  damping (`dynamics`, #101).
+
+`stable` is the static verdict: the symmetric part of K is positive. Optical
+forces need not be conservative. The antisymmetric part (the curl) does not
+change that verdict, but it can make the motion grow. The spin of circularly
+polarised light, for example, gives K_xy = −K_yx = a: a displaced particle is
+pushed round the beam axis. With k_x = k_y = k = m ω₀² one circular motion
+grows at (a/k) ω₀/2 − γ/2, so in vacuum the particle spirals out (Svak et
+al., Nat. Commun. 9, 5453 (2018)). With k_x ≠ k_y and no damping the motion
+stays bounded while |a| < |k_x − k_y|/2. `levtrap.solver.dynamics` takes the
+eigenvalues of [[0, I], [−K/m, −γ I]] and reports the largest growth rate per
+mode. `damping_needed` is the smallest γ that holds every motion (exact for
+damping the same on every axis: γ* = max |Im μ| / √(Re μ) over the
+eigenvalues μ of K/m). `pressure_threshold` is the pressure whose gas damping
+(`rates.gas_damping`, root-found in log p) reaches γ*. Below it the trap is
+dynamically unstable. In the WS2 dark trap (circular +, 1e-6 mbar N₂) the
+curl is 9 % of K: x and y grow at about 1e4 /s, and the gas holds the
+particle only above about 65 mbar. With linear polarisation there is no curl.
+The 3 % `nonconservative` note is a different matter: it says the depth and
+frequencies, taken from the symmetric part, are approximate. A Paul trap
+alone has no curl (its pseudopotential and gravity are conservative), so its
+`dynamics` is `null`. With light the RF enters as its time-averaged
+pseudopotential; the curl is the light's, and the RF's parametric
+resonances stay the Floquet check of the `paul` block.
 
 So any new trap type is one new `Field`; frequencies, depth and stability
 come for free. Coherent beams are grouped into a single optical field before
@@ -175,6 +200,12 @@ Models per field:
   "rates": {"gas_damping": …, "recoil_heating": [...], "reheating_phonons_per_s": [...],
             "modes": [{"recoil_scattered": …, "recoil_incident": …, "recoil_cross": …, …}],  // recoil split (#78, #95)
             "scattered_moments": {"mean": [...], "second": [[...]]}},  // <n>, <n n> of the Mie pattern (#78)
+  "dynamics": {"growth_rate": [9.7e3, 9.7e3, -1.7e-4],  // 1/s per mode, with the curl and the gas damping (#101)
+               "unstable": true,                        // some motion grows at this pressure
+               "damping_needed": 1.95e4, "gas_damping": 3.3e-4,  // 1/s
+               "pressure_threshold": 6.5e3,             // Pa: dynamically unstable below it; null if none
+               "curl": {"xy": -3.1e-6, "xz": 0, "yz": 0},  // N/m: (K_ij − K_ji)/2 per block
+               "curl_ratio": 0.095, "K": [[...]], "notes": [...]},  // null when not stable or a Paul trap alone
   "lenses": [{"field": 0, "focus_shift": [...], "clipping_loss": …, …,      // per beam through an asphere (E1)
               "rays": [...], "wavefront": {...}}],                         // with want "lens": traced rays, W map (#49)
   "mirrors": [{"field": 0, "reflected": 0.98, "rim_angle_deg": 112.6,     // per beam from a parabolic mirror (E3)

@@ -36,7 +36,9 @@ test("the counter-propagating bottle beams: a preset, held at the dark focus; th
   await expect(page.getByTestId("preset-ws2-counter-bottle-source")).toContainText("Illustrative, not validated: the mirror-symmetric trap of #71");
   await page.getByTestId("preset-ws2-counter-bottle").click();
   await expect(page.getByTestId("presets")).toBeHidden();
-  await expect(page.getByTestId("verdict")).toContainText("Stable trap.");
+  // held at the dark focus by the force; the light's spin spirals it out in vacuum (#101)
+  await expect(page.getByTestId("verdict")).toContainText("Stable without the curl");
+  await expect(page.getByTestId("verdict")).toContainText("The particle rests at the focus.");
   await settled(page);
   await selectPart(page, "field:0");
   const total = page.getByTestId("field-beam0-group-power");

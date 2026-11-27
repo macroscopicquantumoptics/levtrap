@@ -85,6 +85,15 @@ const CASES: { code: WarningCode; engine: string; fixed: string; text: string; h
     fatal: false,
   },
   {
+    code: "spirals-out",
+    engine:
+      "The particle spirals out at this pressure: the curl of the force grows its motion along x, y at 9.74e+03 /s, faster than the gas damps it; the gas holds it above 6.54e+03 Pa.",
+    fixed: "The particle spirals out at this pressure: the curl of the force grows its motion ",
+    text: "The particle spirals out along x and y at this pressure: the light's curl force makes its motion grow faster than the gas damps it.",
+    hint: /^The gas holds it above 65\.4 mbar\. Usually the spin of circularly polarised light/,
+    fatal: false,
+  },
+  {
     code: "pseudopotential-inaccurate",
     engine: "Paul q = 0.45: pseudopotential is inaccurate, using Mathieu",
     fixed: ": pseudopotential is inaccurate, using Mathieu",

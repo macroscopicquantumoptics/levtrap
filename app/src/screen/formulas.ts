@@ -42,8 +42,13 @@ export const FORMULAS = {
     text: "F(r₀) = Σ F_j(r₀) = 0",
   },
   stiffness: {
-    tex: tex`K_{ij} = -\left.\frac{\partial F_i}{\partial x_j}\right|_{\mathbf{r}_0}, \qquad k_n = \operatorname{eig}\,\tfrac{1}{2}\left(K + K^{\mathsf{T}}\right)`,
-    text: "k = eigenvalues of −∂F/∂r at the equilibrium (symmetrised)",
+    tex: tex`K_{ij} = -\left.\frac{\partial F_i}{\partial x_j}\right|_{\mathbf{r}_0}, \qquad k_n = \operatorname{eig}\,\tfrac{1}{2}\left(K + K^{\mathsf{T}}\right), \qquad a_{ij} = \tfrac{1}{2}\left(K_{ij} - K_{ji}\right)`,
+    text: "k = eigenvalues of −∂F/∂r at the equilibrium (symmetrised); a = the antisymmetric part, the curl, per block",
+  },
+  dynamics: {
+    tex: tex`\begin{gathered} m\ddot{\mathbf{r}} = -K\mathbf{r} - m\gamma\dot{\mathbf{r}}: \quad \lambda = \operatorname{eig} \begin{pmatrix} 0 & I \\ -K/m & -\gamma I \end{pmatrix}, \quad \sigma_n = \max \operatorname{Re}\lambda \\ \gamma^{*} = \max_{\mu} \frac{|\operatorname{Im}\mu|}{\sqrt{\operatorname{Re}\mu}}, \quad \mu = \operatorname{eig}\,K/m, \qquad \gamma(p^{*}) = \gamma^{*} \end{gathered}`,
+    text: "σ = the largest Re λ, λ the eigenvalues of [[0, I], [−K/m, −γ I]] with the full K (curl included); the motion grows when σ > 0, that is when γ is below γ* = max |Im μ| / √(Re μ), μ the eigenvalues of K/m; p* is the pressure where the gas damping γ(p) reaches γ*",
+    source: "linear stability of a non-conservative trap (levtrap.solver.dynamics); circular-polarisation orbits: Svak et al., Nat. Commun. 9, 5453 (2018)",
   },
   mass: {
     tex: tex`m = \tfrac{4}{3}\pi R^3 \rho`,

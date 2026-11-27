@@ -21,7 +21,11 @@
    (optical forces need not be conservative).
 4. Eigen-decomposition of K: frequencies f = sqrt(k / m) / 2 pi and axes.
    ``stable`` only when Newton converged and all three eigenvalues are
-   positive.
+   positive: the static verdict, from the symmetric part alone.
+4b. The dynamic verdict is separate (:func:`dynamics`, #101): the full K,
+   curl included, with the gas damping. A curl (K_xy = -K_yx, as the spin
+   of circularly polarised light gives) can make a statically stable trap's
+   motion spiral out when the damping is weak.
 5. Depth along each eigen-axis: U(s) = -integral F . e ds on a line through
    the equilibrium, barrier = smaller of the two sides
    (:func:`levtrap.traps.trap_depth`).
@@ -29,6 +33,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -36,7 +41,7 @@ import numpy as np
 from .fields import total_force
 from .traps import find_traps, trap_depth
 
-__all__ = ["Trap", "find_trap", "stiffness", "NONCONSERVATIVE_WARN"]
+__all__ = ["Trap", "find_trap", "stiffness", "dynamics", "curl", "damping_needed", "NONCONSERVATIVE_WARN"]
 
 NONCONSERVATIVE_WARN = 0.03
 AXIS_NAMES = ("x", "y", "z")
@@ -48,6 +53,7 @@ class Trap:
     converged: bool
     equilibrium: np.ndarray | None          # [m]
     K: np.ndarray | None                    # symmetrised stiffness [N/m]
+    K_full: np.ndarray | None = None        # K_ij = -dF_i/dr_j, curl included [N/m], lab frame
     modes: list[dict] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     jumped: bool = False  # a start was given and the equilibrium followed from it vanished
@@ -292,6 +298,72 @@ def find_trap(fields, mass: float, *, centre=(0.0, 0.0, 0.0), ranges=(1.5e-6, 1.
     out.converged = True
     out.equilibrium = r_eq
     out.K = Ks
+    out.K_full = K
     out.modes = modes
     out.stable = bool(np.all(ev > 0))
     return out
+
+
+# --- dynamic stability (#101) ------------------------------------------------------------
+
+CURL_TOL = 1e-9  # a curl below this fraction of the highest trap angular frequency is round-off
+MODE_WEIGHT = 0.05  # an eigen-motion counts for a mode when this share of it lies along the mode's axis
+
+
+def curl(K) -> dict:
+    """The antisymmetric part of K per block [N/m]: ``xy`` = (K_xy - K_yx) / 2,
+    ``xz``, ``yz`` likewise. With F = -K r, a positive ``xy`` pushes a
+    particle displaced along +x towards +y, and one displaced along +y
+    towards -x: round the z axis, anticlockwise seen from +z. A part below
+    :data:`CURL_TOL` of K's largest entry is round-off and reads 0."""
+    K = np.asarray(K, dtype=float)
+    floor = CURL_TOL * float(np.max(np.abs(K)))
+    out = {}
+    for i, j in ((0, 1), (0, 2), (1, 2)):
+        a = float(0.5 * (K[i, j] - K[j, i]))
+        out[f"{AXIS_NAMES[i]}{AXIS_NAMES[j]}"] = a if abs(a) > floor else 0.0
+    return out
+
+
+def damping_needed(K, mass: float) -> float:
+    """The smallest damping rate gamma [1/s] that keeps m r'' = -K r - m gamma r'
+    from growing; 0 when K's curl is round-off (below :data:`CURL_TOL`).
+
+    With the same damping along every axis, each eigenvalue mu of K / m gives
+    lambda^2 + gamma lambda + mu = 0, which lambda = i omega solves when
+    gamma = |Im mu| / sqrt(Re mu); above that gamma both roots decay. A
+    symmetric K has real mu and needs no damping; so does a curl a smaller
+    than half the split of two stiffnesses (|a| < |k_x - k_y| / 2). For
+    k_x = k_y = k it is a / (m omega_0) = (a / k) omega_0. Infinite when some
+    Re mu <= 0 (a statically unstable K)."""
+    mu = np.linalg.eigvals(np.asarray(K, dtype=float) / mass)
+    if np.any(mu.real <= 0):
+        return math.inf
+    scale = float(np.sqrt(np.max(np.abs(mu))))
+    g = float(np.max(np.abs(mu.imag) / np.sqrt(mu.real)))
+    return g if g > CURL_TOL * scale else 0.0
+
+
+def dynamics(K, mass: float, gamma: float, axes) -> dict:
+    """Linear stability of m r'' = -K r - m gamma r' with the full K (curl
+    included) and the gas damping rate ``gamma`` [1/s].
+
+    The eigenvalues lambda of [[0, I], [-K/m, -gamma I]]: the motion goes as
+    exp(lambda t). ``growth_rate``: for each of ``axes`` (the modes' unit
+    vectors, lab frame), the largest Re lambda [1/s] of the eigen-motions
+    with at least :data:`MODE_WEIGHT` of their displacement along it;
+    negative when the mode is damped. ``damping_needed``:
+    :func:`damping_needed`. ``unstable``: the damping is below that, so some
+    motion grows. A symmetric K is stable at any damping (growth rates
+    -gamma / 2 or less; 0 without damping)."""
+    K = np.asarray(K, dtype=float)
+    A = np.block([[np.zeros((3, 3)), np.eye(3)], [-K / mass, -gamma * np.eye(3)]])
+    lam, vec = np.linalg.eig(A)
+    pos = vec[:3]
+    norm = np.sum(np.abs(pos) ** 2, axis=0)
+    growth = []
+    for e in axes:
+        w = np.abs(np.asarray(e, dtype=float) @ pos) ** 2 / np.where(norm > 0, norm, 1.0)
+        growth.append(float(np.max(lam.real[w >= min(MODE_WEIGHT, float(w.max()))])))
+    need = damping_needed(K, mass)
+    return dict(growth_rate=growth, damping_needed=need, unstable=bool(need > 0 and gamma < need))

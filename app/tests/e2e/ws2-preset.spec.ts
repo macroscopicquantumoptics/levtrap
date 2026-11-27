@@ -11,8 +11,8 @@ test("the WS2 bottle beam is offered as illustrative, and opens a dark trap", as
   await shot(page, "presets-ws2-desktop-light");
   await page.getByTestId("preset-ws2-bottle").click();
   await expect(page.getByTestId("presets")).toBeHidden();
-  // the recorded result: held above the dark focus
-  await expect(page.getByTestId("verdict")).toContainText("Stable trap.");
+  // the recorded result: held above the dark focus by the force, but its circular polarisation spirals it out in vacuum (#101)
+  await expect(page.getByTestId("verdict")).toContainText("Stable without the curl, but at this pressure the particle spirals out");
   await expect(page.getByTestId("verdict")).toContainText("downstream of the focus");
   await expect(partButton(page, "field:1")).toContainText("LG");
   await shot(page, "scene-ws2-desktop-light");

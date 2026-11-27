@@ -266,6 +266,27 @@ export interface ModeRates {
 }
 
 /** The `rates` block (rates.rates_block). */
+/** levtrap.solve._dynamics: linear stability with the full stiffness matrix and the gas damping (#101). */
+export interface Dynamics {
+  /** 1/s per mode (same order as Result.modes): the motion along it goes as exp(rate t); negative when damped */
+  growth_rate: number[];
+  /** some motion grows at this pressure: the particle spirals out */
+  unstable: boolean;
+  /** 1/s: the smallest damping that holds every motion; 0 without a curl */
+  damping_needed: number;
+  /** 1/s, at the setup's pressure */
+  gas_damping: number;
+  /** Pa: below it the motion grows; null without a curl, or when no gas pressure damps it enough */
+  pressure_threshold: number | null;
+  /** N/m: the antisymmetric part of K per block, (K_ij − K_ji) / 2; 0 below round-off */
+  curl: { xy: number; xz: number; yz: number };
+  /** the antisymmetric part's norm over the symmetric part's */
+  curl_ratio: number;
+  /** N/m, lab frame: K_ij = −∂F_i/∂x_j, curl included */
+  K: number[][];
+  notes: string[];
+}
+
 export interface Rates {
   gas: {
     species: Gas;
@@ -475,6 +496,13 @@ export interface Result {
   coherent?: CoherentPair[];
   /** null when the trap has no beam */
   rates?: Rates | null;
+  /**
+   * The motion with the curl of the force and the gas damping (#101).
+   * `stable` is static: the symmetric part of the stiffness matrix. This
+   * says whether the motion still grows. null when not stable, or for a
+   * Paul trap alone (no curl); absent in a Result from before #101.
+   */
+  dynamics?: Dynamics | null;
   models: ModelInfo[];
   /** sentences, ready to show */
   warnings: string[];

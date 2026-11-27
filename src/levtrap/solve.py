@@ -163,7 +163,15 @@ def solve(setup: dict | str, want: Iterable[str] = (), start=None) -> dict:
     -------
     dict (``json.dumps``-able):
 
-    * ``stable`` — a restoring force along all three axes.
+    * ``stable`` — a restoring force along all three axes (static: the
+      symmetric part of the stiffness matrix; see ``dynamics`` for the curl).
+    * ``dynamics`` — for a stable trap with light, its linear stability with
+      the curl of the force and the gas damping (:func:`_dynamics`, #101):
+      ``growth_rate`` [1/s] per mode, ``unstable``, ``damping_needed`` and
+      ``gas_damping`` [1/s], ``pressure_threshold`` [Pa] (dynamically
+      unstable below it), ``curl`` (K's antisymmetric part per block, N/m),
+      ``curl_ratio``, the full ``K`` [N/m] and ``notes``. ``None`` when not
+      stable, and for a Paul trap alone (no curl).
     * ``equilibrium`` — [x, y, z] in m, or ``None``.
     * ``modes`` — the three eigen-modes of the stiffness matrix: ``name``
       (the lab axis each is closest to), ``axis`` (unit vector),
@@ -313,6 +321,16 @@ def solve(setup: dict | str, want: Iterable[str] = (), start=None) -> dict:
                                      scattering=_recoil_parts(beams, parts))
     result["rates"] = rates
     result["models"] += rate_models
+    result["dynamics"] = _dynamics(s, trap, modes, mass, hybrid=paul is not None) if stable else None
+    dyn = result["dynamics"]
+    if dyn is not None and dyn["unstable"]:
+        growing = [m["name"] for m, g in zip(modes, dyn["growth_rate"]) if g > 0]
+        p_star = dyn["pressure_threshold"]
+        warnings.append(f"The particle spirals out at this pressure: the curl of the force grows its motion "
+                        f"along {', '.join(growing)} at {max(dyn['growth_rate']):.3g} /s, faster than the gas "
+                        f"damps it; "
+                        + (f"the gas holds it above {p_star:.3g} Pa." if p_star is not None
+                           else "no gas pressure damps it enough."))
     if "curves" in want or "dipole" in want:
         radius = float(p["radius"])
 
@@ -565,6 +583,7 @@ def _solve_paul(s, f, gravity, mass, p, warnings, want, t0) -> dict:
                   secular=dict(pseudopotential=sec["pseudopotential"], exact=sec["exact"]),
                   micromotion=paul.micromotion(r_eq) if r_eq is not None else None),
         rates=None,
+        dynamics=None,  # the pseudopotential and gravity have no curl: nothing to spiral out (#101)
         models=[dict(quantity="modes", **model.as_dict())],
         warnings=warnings,
     )
@@ -575,6 +594,53 @@ def _solve_paul(s, f, gravity, mass, p, warnings, want, t0) -> dict:
     if "field" in want:
         result["field"] = None  # no light
     return result
+
+
+def _dynamics(s: dict, trap, modes: list[dict], mass: float, hybrid: bool = False) -> dict | None:
+    """The ``dynamics`` block (#101): linear stability with the full stiffness
+    matrix, curl included, and the gas damping (:func:`levtrap.solver.dynamics`).
+
+    The static verdict (``stable``) uses the symmetric part of K alone. A curl
+    (K_xy = -K_yx = a, as the spin of circularly polarised light gives) pushes
+    a displaced particle round the axis; with k_x = k_y = k = m omega_0^2 one
+    circular motion grows at (a / k) omega_0 / 2 - gamma / 2, so in vacuum it
+    spirals out (Svak et al., Nat. Commun. 9, 5453 (2018)).
+    ``pressure_threshold`` [Pa]: below it the gas damps too little
+    (:func:`levtrap.rates.damping_pressure`); ``None`` when no damping is
+    needed or when no gas pressure gives enough.
+    """
+    from .rates import damping_pressure, gas_damping, gas_properties
+    from .solver import curl, dynamics
+
+    K = trap.K_full
+    if K is None:
+        return None
+    env = s["environment"]
+    T, p, gas = float(env["temperature"]), float(env["pressure"]), env["gas"]
+    radius = float(s["particle"]["radius"])
+    g = gas_properties(gas, T)
+    gamma = gas_damping(p, radius, mass, g["viscosity"], g["mass"], T)
+    d = dynamics(K, mass, gamma, [m["axis"] for m in modes])
+    need = d["damping_needed"]
+    Ks = 0.5 * (K + K.T)
+    notes = ["linear stability of m r'' = -K r - m gamma r', with the full stiffness matrix (curl included) "
+             "and the gas damping, the same along every axis"]
+    if hybrid:
+        notes.append("Paul trap: the RF enters as its time-averaged pseudopotential, which has no curl; the curl is "
+                     "the light's, and the RF's parametric resonances are the Floquet check of the paul block")
+    if env["medium_index"] != 1:
+        notes.append("medium index is not 1 but the gas damping assumes a dilute gas")
+    return dict(
+        growth_rate=d["growth_rate"],
+        unstable=d["unstable"],
+        damping_needed=need,
+        gas_damping=gamma,
+        pressure_threshold=damping_pressure(need, radius, mass, gas, T) if need > 0 else None,
+        curl=curl(K),
+        curl_ratio=float(np.linalg.norm(0.5 * (K - K.T)) / max(np.linalg.norm(Ks), 1e-300)),
+        K=[[float(v) for v in row] for row in K],
+        notes=notes,
+    )
 
 
 def _hybrid_paul(paul, fields, trap, modes, mass, temp, warnings):

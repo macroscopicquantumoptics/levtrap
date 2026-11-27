@@ -73,6 +73,13 @@ export interface HeatingCurves {
   }[];
   /** Pa: the setup's pressure */
   now: number;
+  /**
+   * Pa: below it the curl of the force makes the particle spiral out
+   * (Result.dynamics.pressure_threshold, #101); Infinity when no pressure
+   * damps it enough; null when there is no curl. The curl does not depend
+   * on the gas, so it holds along the whole axis.
+   */
+  spiralsBelow: number | null;
 }
 
 /**
@@ -98,7 +105,9 @@ export function heatingCurves(result: Result, setup: Setup, points = 121): Heati
     const recoil = mode.recoil_heating;
     return [{ name: mode.name, gas, recoil, total: gas.map((g) => g + recoil), crossover: mode.crossover_pressure }];
   });
-  return { pressure, modes, now: env.pressure };
+  const dyn = result.dynamics;
+  const spiralsBelow = !dyn || !(dyn.damping_needed > 0) ? null : (dyn.pressure_threshold ?? Infinity);
+  return { pressure, modes, now: env.pressure, spiralsBelow };
 }
 
 export interface PolarCut {

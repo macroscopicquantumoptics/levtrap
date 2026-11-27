@@ -8,7 +8,7 @@ import { formatMass, formatNumber, formatSci, formatSI } from "../lib/format.ts"
 import { toFieldText } from "../lib/units.ts";
 import { shownFrequency } from "./answer.ts";
 import type { FormulaId } from "./formulas.ts";
-import { environmentOf, subscript } from "./model.ts";
+import { environmentOf, pressureText, subscript } from "./model.ts";
 
 export interface Explanation {
   /** "Trap frequency along x" */
@@ -152,6 +152,25 @@ export function explainDepth(result: Result, setup: Setup): Explanation {
 
 // --- secondary numbers ----------------------------------------------------------------
 
+/**
+ * K's antisymmetric part per block (#101): the curl, which pushes a
+ * displaced particle round an axis. Empty without the dynamics block.
+ */
+function curlInputs(result: Result): Explanation["inputs"] {
+  const curl = result.dynamics?.curl;
+  if (!curl) return [];
+  const blocks = [
+    ["xy", "z"],
+    ["xz", "y"],
+    ["yz", "x"],
+  ] as const;
+  return blocks.map(([b, about]) => ({
+    symbol: String.raw`a_{${b}}`,
+    value: curl[b] === 0 ? "0" : formatSI(curl[b], "N/m"),
+    note: curl[b] === 0 ? `(K_${b[0]}${b[1]} − K_${b[1]}${b[0]}) / 2: no curl about ${about}` : `(K_${b[0]}${b[1]} − K_${b[1]}${b[0]}) / 2: the curl about ${about}, which pushes the particle round that axis`,
+  }));
+}
+
 export interface Secondary {
   id: string;
   label: string;
@@ -202,12 +221,66 @@ export function secondaryNumbers(result: Result, setup: Setup): Secondary[] {
         value,
         copy: copyTriple(ks, "N/m"),
         formula: "stiffness",
-        inputs: result.modes.map((m) => ({
-          symbol: `k_${m.name}`,
-          value: formatSI(m.stiffness, "N/m"),
-          note: `along (${m.axis.map((c) => formatNumber(c, 2, true)).join(", ")})`,
-        })),
+        inputs: [
+          ...result.modes.map((m) => ({
+            symbol: `k_${m.name}`,
+            value: formatSI(m.stiffness, "N/m"),
+            note: `along (${m.axis.map((c) => formatNumber(c, 2, true)).join(", ")})`,
+          })),
+          ...curlInputs(result),
+        ],
         model: model(result, "modes"),
+      }),
+    });
+  }
+
+  const dyn = result.dynamics;
+  // shown only when the force has a curl that needs damping (#101); without one there is nothing to add
+  if (dyn && dyn.damping_needed > 0 && result.modes.length === dyn.growth_rate.length) {
+    const p = dyn.pressure_threshold;
+    const value = dyn.unstable
+      ? p != null
+        ? `spirals out below ${pressureText(p)}`
+        : "spirals out at any pressure"
+      : `held above ${p != null ? pressureText(p) : "—"}`;
+    out.push({
+      id: "dynamics",
+      label: "Motion with the curl",
+      value,
+      explain: () => ({
+        title: "Motion with the curl and the gas damping",
+        value,
+        copy: copyTriple(dyn.growth_rate, "1/s"),
+        formula: "dynamics",
+        inputs: [
+          ...result.modes.map((m, i) => ({
+            symbol: String.raw`\sigma_${m.name}`,
+            value: `${formatSci(dyn.growth_rate[i], 3)} /s`,
+            note:
+              dyn.growth_rate[i] > 0 && dyn.unstable
+                ? `grows along ${m.name}: a factor e every ${formatSI(1 / dyn.growth_rate[i], "s")}`
+                : dyn.growth_rate[i] < 0
+                  ? `damped along ${m.name}`
+                  : `along ${m.name}: neither grows nor decays (no damping)`,
+          })),
+          { symbol: String.raw`\gamma`, value: `${formatSci(dyn.gas_damping, 3)} /s`, note: `gas damping at ${pressureText(env.pressure)}` },
+          {
+            symbol: String.raw`\gamma^{*}`,
+            value: `${formatSci(dyn.damping_needed, 3)} /s`,
+            note: dyn.damping_needed > 0 ? "the damping the curl needs: less, and the motion grows" : "no curl: any damping holds it",
+          },
+          ...(dyn.damping_needed > 0
+            ? [
+                {
+                  symbol: "p^{*}",
+                  value: dyn.pressure_threshold != null ? pressureText(dyn.pressure_threshold) : "—",
+                  note: dyn.pressure_threshold != null ? "the gas damps enough above this pressure" : "no gas pressure damps enough",
+                },
+              ]
+            : []),
+          ...curlInputs(result),
+        ],
+        model: { name: "Linear stability with the full stiffness matrix", validity: "Valid for small motion", notes: dyn.notes },
       }),
     });
   }
