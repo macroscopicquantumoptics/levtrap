@@ -30,12 +30,22 @@ export function useScrollEdges(): [(node: HTMLElement | null) => void, Edges, HT
     });
     watch();
     items.observe(node, { childList: true, subtree: true, characterData: true });
+    // the browser leaves a focused item where it is while any of it shows, even under the fade:
+    // reached with the keyboard, scroll it clear, by the row's scroll padding
+    const focus = (e: FocusEvent) => {
+      const item = e.target;
+      if (item instanceof HTMLElement && item !== node && item.matches(":focus-visible")) {
+        item.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
+    };
     node.addEventListener("scroll", measure, { passive: true });
+    node.addEventListener("focusin", focus);
     measure();
     return () => {
       resize.disconnect();
       items.disconnect();
       node.removeEventListener("scroll", measure);
+      node.removeEventListener("focusin", focus);
     };
   }, [node]);
   return [setNode, edges, node];
@@ -53,7 +63,7 @@ export interface ScrollRowProps {
  * fades out, and a small arrow there scrolls by most of the row's width
  * (#103). The fade is a mask on the row's own pixels, so it suits both themes
  * and any background. The arrows are for the pointer only: the items in the
- * row stay reachable with Tab, and the browser scrolls a focused one into view.
+ * row stay reachable with Tab, and one focused from the keyboard scrolls clear of the fade.
  */
 export function ScrollRow({ children, className, testId }: ScrollRowProps) {
   const [ref, edges, node] = useScrollEdges();
