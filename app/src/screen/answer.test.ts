@@ -94,6 +94,24 @@ test("the verdict is a sentence", () => {
   });
 });
 
+test("a trap whose curl outgrows the gas damping is not called stable (#101)", () => {
+  const ws2 = preset("ws2-bottle");
+  const a = instantAnswer(ws2)!;
+  assert.equal(a.result!.stable, true, "the force alone holds it");
+  assert.equal(a.result!.dynamics!.unstable, true);
+  const v = verdict(a, ws2);
+  assert.equal(v.tone, "bad");
+  assert.match(v.text, /^Stable without the curl, but at this pressure the particle spirals out: its motion along x and y grows by a factor e every 103 µs\.$/);
+  assert.match(v.hint!, /^The gas damps it enough above 65\.4 mbar\. Usually the spin of circularly polarised light/);
+  // where it rests, and the 3 % note on the depth and frequencies, still follow; the engine's spiral warning does not repeat
+  assert.equal(v.more[0], "The particle rests 237 nm downstream of the focus.");
+  assert.ok(v.more.some((s) => s.startsWith("The force is not conservative here")));
+  assert.ok(!v.more.some((s) => s.includes("spirals out")));
+  // with linear polarisation there is no curl: a stable trap
+  const linear = { ...a.result!, warnings: [], dynamics: { ...a.result!.dynamics!, unstable: false, damping_needed: 0, pressure_threshold: null } };
+  assert.match(verdict({ ...a, result: linear }, ws2).text, /^Stable trap\./);
+});
+
 test("an unstable trap says along which axis, the usual cause, and the other warnings with their advice", () => {
   const recorded = instantAnswer(DEFAULT_SETUP)!.result!;
   const unstable: Result = {

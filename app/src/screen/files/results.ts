@@ -72,6 +72,16 @@ export function resultRows(result: Result): Row[] {
     for (const m of result.rates.modes) add("recoil heating cross term", m.name, m.recoil_cross, "phonons/s", recoil);
     for (const m of result.rates.modes) add("recoil exceeds gas heating below", m.name, m.crossover_pressure, "Pa", recoil);
   }
+  const dyn = result.dynamics;
+  if (dyn) {
+    // the motion with the curl of the force and the gas damping (#101); "stable" is the static verdict
+    const model = "linear stability: full stiffness matrix with the gas damping";
+    add("spirals out at this pressure", "", dyn.unstable ? "true" : "false", "", model);
+    result.modes.forEach((m, i) => add("growth rate", m.name, dyn.growth_rate[i] ?? null, "1/s", model));
+    add("damping needed", "", dyn.damping_needed, "1/s", model);
+    add("spirals out below", "", dyn.pressure_threshold, "Pa", model);
+    for (const b of ["xy", "xz", "yz"] as const) add("curl of the stiffness", b, dyn.curl[b], "N/m", model);
+  }
   if (result.pattern) patternRows(result.pattern, add, modelOf(result, "pattern") || "mie (ok)");
   return rows;
 }

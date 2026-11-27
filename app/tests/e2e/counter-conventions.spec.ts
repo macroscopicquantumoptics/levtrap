@@ -53,7 +53,7 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(conventions).toBeVisible();
     await expect(conventions).not.toHaveAttribute("open", "");
     await conventions.locator("summary").click();
-    for (const term of ["Frames", "Phase", "Power", "NA and waist", "Trapping lens", "Depth", "Reheating"]) {
+    for (const term of ["Frames", "Phase", "Power", "NA and waist", "Trapping lens", "Depth", "Stability", "Reheating"]) {
       await expect(conventions.locator("dt", { hasText: term })).toBeVisible();
     }
     await shot(page, `help-conventions-desktop-${scheme}`);

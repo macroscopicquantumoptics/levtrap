@@ -6,10 +6,10 @@
 import { EngineError } from "../engine/client.ts";
 import type { BeamField, Result, Setup, TrapMode, Want } from "../engine/types.ts";
 import { formatNumber, formatSI } from "../lib/format.ts";
-import { directionOf, partForPath, partsOf, positionOf, type PartId } from "./model.ts";
+import { directionOf, partForPath, partsOf, positionOf, pressureText, type PartId } from "./model.ts";
 import { presetForSetup } from "./presets.ts";
 import { RECORDED } from "./recorded.ts";
-import { describeWarning } from "./warnings.ts";
+import { describeWarning, SPIRAL_CAUSE } from "./warnings.ts";
 
 /** "preset": the engine's result recorded for a preset; "engine": computed just now. */
 export type Origin = "engine" | "preset";
@@ -115,7 +115,11 @@ export interface Verdict {
 
 const listAxes = (axes: string[]) => (axes.length > 1 ? `${axes.slice(0, -1).join(", ")} and ${axes[axes.length - 1]}` : axes[0]);
 
-/** The stability verdict as sentences. */
+/**
+ * The stability verdict as sentences. A trap the force holds (`stable`)
+ * whose motion the curl still grows at this pressure (`dynamics.unstable`,
+ * #101) is not called stable: it says so, and where the gas would hold it.
+ */
 export function verdict(answer: Answer, setup: Setup): Verdict {
   const { result, notice } = answer;
   if (!result) return { tone: "none", text: notice?.text ?? "No result yet.", more: [] };
@@ -149,6 +153,20 @@ export function verdict(answer: Answer, setup: Setup): Verdict {
       const where = eq[1] < -0.9 * offset ? "below" : eq[1] > 0.9 * offset ? "above" : "from";
       details.push(`The particle rests ${formatSI(offset, "m")} ${where} the trap centre.`);
     }
+  }
+  const dyn = result.dynamics;
+  if (dyn?.unstable) {
+    // #101: the symmetric part holds the particle, but the curl grows its motion faster than the gas damps it
+    const others = described.filter((w) => w.code !== "spirals-out").map((w) => (w.hint ? `${w.text} ${w.hint}` : w.text));
+    const growing = result.modes.filter((_, i) => dyn.growth_rate[i] > 0).map((m) => m.name);
+    const rate = Math.max(...dyn.growth_rate);
+    const p = dyn.pressure_threshold;
+    return {
+      tone: "bad",
+      text: `Stable without the curl, but at this pressure the particle spirals out: its motion along ${listAxes(growing.length ? growing : result.modes.map((m) => m.name))} grows by a factor e every ${formatSI(1 / rate, "s")}.`,
+      hint: `${p != null ? `The gas damps it enough above ${pressureText(p)}.` : "No gas pressure damps it enough."} ${SPIRAL_CAUSE}`,
+      more: [...details, ...others],
+    };
   }
   return { tone: "ok", text: ["Stable trap.", ...details].join(" "), more: warnings };
 }

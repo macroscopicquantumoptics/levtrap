@@ -78,6 +78,19 @@ test("heating against pressure: gas grows with pressure, recoil does not, and th
   assert.equal(heatingCurves(RECORDED["paul-linear"]!, PRESETS.find((p) => p.id === "paul-linear")!.setup), null);
 });
 
+test("the heating plot marks where the WS₂ dark trap spirals out; the tweezer has no curl (#101)", () => {
+  assert.equal(heatingCurves(r, tweezer.setup)!.spiralsBelow, null);
+  const ws2 = PRESETS.find((p) => p.id === "ws2-bottle")!;
+  const result = RECORDED["ws2-bottle"]!;
+  const h = heatingCurves(result, ws2.setup)!;
+  const p = result.dynamics!.pressure_threshold!;
+  assert.equal(h.spiralsBelow, p);
+  assert.ok(p > h.now && p < h.pressure[h.pressure.length - 1], "the threshold is on the plot, above the setup's pressure");
+  // at the threshold the gas damps at the rate the curl needs (the engine's root, recomputed with the port)
+  const g = result.rates!.gas;
+  near(gasDamping(p, ws2.setup.particle.radius, result.particle.mass, g.viscosity, g.molecular_mass, g.temperature), result.dynamics!.damping_needed, 1e-4);
+});
+
 test("log spacing", () => {
   assert.deepEqual(
     logSpace(1, 1000, 4).map((x) => Math.round(x)),

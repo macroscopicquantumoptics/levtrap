@@ -170,13 +170,21 @@ export function HeatingTab({ setup, result }: { setup: Setup; result: Result | n
     <div className={styles.tab} data-testid="heating">
       <Plot
         id="heating"
-        title={`Reheating against the pressure of ${subscript(env.gas)} at ${formatNumber(env.temperature, 3, true)} K; dots where photon recoil and the gas heat equally`}
+        title={`Reheating against the pressure of ${subscript(env.gas)} at ${formatNumber(env.temperature, 3, true)} K; dots where photon recoil and the gas heat equally${h.spiralsBelow != null ? "; shaded where the curl outgrows the gas damping" : ""}`}
         x={{ label: "Pressure", unit: "Pa", log: true, display: { unit: "mbar", factor: 100 } }}
         y={{ label: "Reheating", unit: "", log: true, display: { unit: "phonons/s", factor: 1 } }}
         series={series}
         fitTo={h.modes.map((m) => m.name)}
         dashed="photon recoil alone"
-        markers={[{ x: h.now, label: `now: ${pressureText(h.now)}` }]}
+        markers={[
+          { x: h.now, label: `now: ${pressureText(h.now)}` },
+          ...(h.spiralsBelow != null && Number.isFinite(h.spiralsBelow) ? [{ x: h.spiralsBelow, label: `spirals out below ${pressureText(h.spiralsBelow)}` }] : []),
+        ]}
+        bands={
+          h.spiralsBelow != null
+            ? [{ from: h.pressure[0], to: Math.min(h.spiralsBelow, h.pressure[h.pressure.length - 1]), label: "the particle spirals out" }]
+            : []
+        }
         dots={h.modes
           .filter((m) => m.crossover != null)
           .map((m) => ({ x: m.crossover!, y: 2 * m.recoil, tone: tone(m.name), label: `along ${m.name}: recoil exceeds gas heating below ${pressureText(m.crossover!)}` }))}

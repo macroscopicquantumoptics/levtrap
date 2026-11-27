@@ -242,10 +242,11 @@ export function TopBar({ name, canUndo, canRedo, onUndo, onRedo, show, onShow, o
 /**
  * The conventions a result depends on but no input shows (#71): beam frames,
  * the phase reference, the power of a coherent group, the NA ↔ waist mapping
- * (#64), the trapping lens (#97), and what the depth and the reheating rate
- * include. Folded, so the help stays three lines until asked. The physics is
- * in src/levtrap/optics.py (frames, phase, power), api._beam_angle (mapping),
- * solve.trap_lens (trapping lens), solver.py (depth) and rates.py (reheating).
+ * (#64), the trapping lens (#97), what the depth and the reheating rate
+ * include, and what "stable" checks (#101). Folded, so the help stays three
+ * lines until asked. The physics is in src/levtrap/optics.py (frames, phase,
+ * power), api._beam_angle (mapping), solve.trap_lens (trapping lens),
+ * solver.py (depth, dynamics) and rates.py (reheating).
  */
 function Conventions() {
   return (
@@ -287,6 +288,14 @@ function Conventions() {
         <dd>
           The lowest energy barrier from the trap along the three axes of its modes, of the summed force of every field: the beams, the Paul
           trap&apos;s pseudopotential and gravity. Escape routes off those three lines are not searched.
+        </dd>
+        <dt>Stability</dt>
+        <dd>
+          &ldquo;Stable trap&rdquo; needs two things. The force must pull the particle back along every axis. And its motion must not grow:
+          light&apos;s force can have a curl, which pushes a displaced particle round an axis (circularly polarised light does this with its spin).
+          A thin gas damps the motion too little, so the particle spirals out, though the force alone would hold it. The strip says so, and the
+          pressure above which the gas damps it enough; the Heating tab shades the pressures below it. Paul traps are checked with their
+          time-averaged pseudopotential, which has no curl.
         </dd>
         <dt>Reheating</dt>
         <dd>

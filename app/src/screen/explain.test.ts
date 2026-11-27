@@ -98,6 +98,28 @@ test("the second row: every number of a tweezer and of a Paul trap, explained", 
   assert.ok(Math.abs(A - r.paul!.micromotion![1]) < 1e-6 * A);
 });
 
+test("the stiffness shows the curl per block, and a trap with a curl explains its motion (#101)", () => {
+  const ws2 = PRESETS.find((p) => p.id === "ws2-bottle")!;
+  const result = RECORDED["ws2-bottle"]!;
+  const rows = secondaryNumbers(result, ws2.setup);
+  const stiffness = rows.find((r) => r.id === "stiffness")!.explain();
+  const curl = Object.fromEntries(stiffness.inputs.filter((i) => i.symbol.startsWith("a_")).map((i) => [i.symbol, i]));
+  assert.deepEqual(Object.keys(curl), ["a_{xy}", "a_{xz}", "a_{yz}"]);
+  assert.equal(curl["a_{xy}"].value, "−3.11 µN/m");
+  assert.match(curl["a_{xy}"].note, /the curl about z/);
+  assert.equal(curl["a_{xz}"].value, "0");
+  const motion = rows.find((r) => r.id === "dynamics")!;
+  assert.equal(motion.value, "spirals out below 65.4 mbar");
+  const e = motion.explain();
+  assert.equal(e.formula, "dynamics");
+  assert.match(e.inputs.find((i) => i.symbol === String.raw`\sigma_x`)!.note, /grows along x: a factor e every 103 µs/);
+  assert.match(e.inputs.find((i) => i.symbol === String.raw`\sigma_z`)!.note, /damped along z/);
+  // a tweezer has no curl: no row, and zeros in the stiffness
+  const plain = secondaryNumbers(RECORDED.tweezer!, tweezer.setup);
+  assert.equal(plain.find((r) => r.id === "dynamics"), undefined);
+  assert.ok(plain.find((r) => r.id === "stiffness")!.explain().inputs.filter((i) => i.symbol.startsWith("a_")).every((i) => i.value === "0"));
+});
+
 test("photon recoil per oscillation: Γ/Ω per mode, split into scattered photons, beam photons and their cross term (#78, #95)", () => {
   const result = RECORDED.tweezer!;
   const recoil = secondaryNumbers(result, tweezer.setup).find((s) => s.id === "recoil")!;

@@ -62,7 +62,7 @@ __all__ = [
     "HBAR", "AMU", "GASES", "gas_properties", "mean_speed", "mean_free_path", "knudsen",
     "gas_damping", "epstein_damping", "stokes_damping", "gas_heating", "jones_vector",
     "dipole_second_moment", "recoil_heating", "recoil_tensors", "information_heating", "information_tensors",
-    "crossover_pressure", "mode_rates", "rates_block",
+    "crossover_pressure", "damping_pressure", "mode_rates", "rates_block",
 ]
 
 HBAR = 1.054_571_817e-34  # reduced Planck constant [J s] (CODATA 2018, exact h / 2 pi)
@@ -373,6 +373,32 @@ def crossover_pressure(recoil: float, Omega: float, radius: float, mass: float, 
     lo, hi = math.log10(p_min), math.log10(p_max)
     if f(lo) > 0 or f(hi) < 0:
         return None
+    return float(10.0 ** brentq(f, lo, hi, xtol=1e-12))
+
+
+def damping_pressure(gamma: float, radius: float, mass: float, gas: str, temperature: float,
+                     p_min: float = 1e-12, p_max: float = 1e7) -> float | None:
+    """Pressure [Pa] at which the gas damping (:func:`gas_damping`) reaches
+    ``gamma`` [1/s] (#101: below it a curl force makes the motion grow).
+
+    The damping rises monotonically with pressure up to the Stokes value; if
+    ``gamma`` is above the damping at ``p_max`` there is no such pressure and
+    ``None`` is returned (also for gamma <= 0). Root-found on log p.
+    """
+    from scipy.optimize import brentq
+
+    g = gas_properties(gas, temperature)
+
+    def f(logp):
+        return math.log(gas_damping(10.0**logp, radius, mass, g["viscosity"], g["mass"], temperature) / gamma)
+
+    if not (gamma > 0 and math.isfinite(gamma)):
+        return None
+    lo, hi = math.log10(p_min), math.log10(p_max)
+    if f(hi) < 0:
+        return None
+    if f(lo) > 0:
+        return p_min
     return float(10.0 ** brentq(f, lo, hi, xtol=1e-12))
 
 
