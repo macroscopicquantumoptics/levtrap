@@ -1,0 +1,73 @@
+/*
+ * A row that scrolls sideways (#103): the edge with more past it fades out,
+ * with a small arrow on it. The fade is a mask on the row's own pixels, so it
+ * needs no background colour and suits both themes.
+ */
+
+.wrap {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+/* the row itself */
+.wrap > :first-child {
+  --fade-start: 0px;
+  --fade-end: 0px;
+  flex: 1 1 auto;
+  min-width: 0;
+  /* a tab or chip reached with Tab scrolls clear of the fade */
+  scroll-padding-inline: 40px;
+}
+
+.wrap[data-more-start] > :first-child,
+.wrap[data-more-end] > :first-child {
+  mask-image: linear-gradient(to right, transparent, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent);
+}
+
+.wrap[data-more-start] > :first-child {
+  --fade-start: 40px;
+}
+
+.wrap[data-more-end] > :first-child {
+  --fade-end: 40px;
+}
+
+/* the arrow, on the faded edge: for the pointer only (the row's items take focus themselves) */
+.arrow {
+  position: absolute;
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--island);
+  box-shadow: var(--island-shadow);
+  color: var(--text-muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.arrow:hover {
+  color: var(--text);
+}
+
+.arrow[data-side="start"] {
+  left: 0;
+}
+
+.arrow[data-side="end"] {
+  right: 0;
+}
+
+.arrow[data-side="start"] svg {
+  transform: rotate(90deg);
+}
+
+.arrow[data-side="end"] svg {
+  transform: rotate(-90deg);
+}

@@ -448,6 +448,21 @@
     border-left: 0;
     padding: 4px 8px 6px;
   }
+
+  /* the four tiles share the width: a value wraps inside its tile rather than run past it,
+     and the depth's kelvin figure goes on a line of its own under the k_BT (#103) */
+  .value {
+    flex-wrap: wrap;
+    column-gap: 3px;
+    row-gap: 0;
+  }
+
+  .also {
+    flex-basis: 100%;
+    margin-left: 0;
+    font-size: 11px;
+    line-height: 1.2;
+  }
 }
 
 @media (max-width: 520px) {
@@ -471,5 +486,16 @@
     width: auto;
     max-height: 70dvh;
     overflow: auto;
+  }
+}
+
+/* the narrowest phones (320 px): a little smaller still, so "96.8 kHz" keeps one line */
+@media (max-width: 360px) {
+  .figure {
+    font-size: 16px;
+  }
+
+  .number {
+    padding: 6px 4px 5px;
   }
 }
