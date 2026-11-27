@@ -217,6 +217,11 @@ export function DesignTab({ setup, result, engine, onEdit }: { setup: Setup; res
               the depth as P.
             </p>
           )}
+          {found.predicted && !search?.running && (
+            <p className={styles.error} data-testid="design-predicted">
+              Predicted, not yet checked: the solve that checks the fitted power failed. The frequencies and depth follow from the power law; the other numbers are those of the trial before the power was fitted.
+            </p>
+          )}
           {found.clamped && (
             <p className={styles.error} data-testid="design-clamped">
               The power is at its {found.clamped === "high" ? `upper limit, ${formatSI(POWER_RANGE[1], "W", 3)} in all: the targets need more` : `lower limit, ${formatSI(POWER_RANGE[0], "W", 3)} in all: the targets need less`}.

@@ -293,7 +293,7 @@ export interface Found {
   score: number;
   /** the power wanted was beyond POWER_RANGE, and is at its "low" or "high" end */
   clamped: ScaleFit["clamped"];
-  /** the result is scaleResult's prediction, not yet solved */
+  /** the result is scaleResult's prediction, not yet solved: its recoil and Paul numbers are the unscaled trial's */
   predicted?: boolean;
 }
 
@@ -312,8 +312,10 @@ export function designMethod(chosen: SweepParam[], setup: Setup, targets: Partia
   return { method: chosen.length === 1 ? "scale" : "search+scale", scale };
 }
 
-/** The most solves the one-step scale takes: one, more only if the first misses (a stale result, rounding, the trap lost). */
+/** The most solves that check the one-step scale: one, more only if the first misses (a stale result, rounding, the trap lost). One solve more comes first when there is no current result. */
 export const SCALE_STEPS = 3;
+/** The most solves that check the power fitted in a search: a second only if the first failed. */
+export const CHECK_TRIES = 2;
 /** A fitted scale this close to 1 (in ln s) is the answer already. */
 const SCALE_TOL = 1e-4;
 
@@ -407,14 +409,18 @@ export async function findDesign({
       return score;
     },
     others.map((k, i) => scales[i].forward(k.get(setup))),
-    { budget: scale ? budget - 1 : budget, aborted },
+    { budget: scale ? budget - CHECK_TRIES : budget, aborted },
   );
   const predicted = best as Found | null;
-  if (predicted?.predicted && !aborted()) {
-    // one solve checks the fitted power
-    const r = await run(predicted.setup);
-    if (r) best = { ...predicted, result: r, score: mismatch(r, targets), predicted: false };
-    done();
+  // one solve checks the fitted power; a second only if the first failed.
+  // If both fail, the best stays a prediction (predicted: true) and the table says so.
+  if (predicted?.predicted) {
+    for (let tries = 0; tries < CHECK_TRIES && !aborted(); tries += 1) {
+      const r = await run(predicted.setup);
+      if (r) best = { ...predicted, result: r, score: mismatch(r, targets), predicted: false };
+      done();
+      if (r) break;
+    }
   }
   return { method, best, solves };
 }

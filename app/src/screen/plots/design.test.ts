@@ -249,3 +249,22 @@ test("with the NA too, the search is over the NA alone, the power fitted for eac
   // every trial is solved at the setup's own power: the scale is not searched
   for (const s of calls.slice(0, -1)) assert.equal((s.trap.fields[0] as BeamField).power, 0.2);
 });
+
+test("a check solve that fails is tried once more; if that fails too, the design stays a prediction", async () => {
+  const setup = preset("tweezer");
+  const knobs = designKnobs(setup);
+  const chosen = [knobs.find((k) => k.id === "beam0-power")!, knobs.find((k) => k.id === "lens0-NA")!];
+  const targets = { x: 150e3, z: 40e3 };
+  // the trials are at the setup's power; only the checks are not
+  const failing = (fails: number) => {
+    const inner = fakeTweezer([]);
+    let left = fails;
+    return async (s: Setup) => ((s.trap.fields[0] as BeamField).power !== 0.2 && left-- > 0 ? null : inner(s));
+  };
+  const once = await findDesign({ setup, result: RECORDED.tweezer!, chosen, targets, solve: failing(1), budget: 20 });
+  assert.equal(once.best!.predicted, false, "the second try checks it");
+  assert.ok(once.solves <= 20);
+  const twice = await findDesign({ setup, result: RECORDED.tweezer!, chosen, targets, solve: failing(2), budget: 20 });
+  assert.equal(twice.best!.predicted, true, "both checks failed: still a prediction");
+  assert.ok(twice.solves <= 20);
+});
