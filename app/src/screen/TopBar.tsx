@@ -269,7 +269,8 @@ function Conventions() {
           Beams that do not interfere each keep their power, and their forces add. Beams that interfere form one field whose power is the sum of
           their powers: interference changes the power of the sum, so the field is rescaled to it. Opposing beams whose cones do not overlap (NA
           below n/√2) keep their own powers. A beam of a coherent group shows the group&apos;s total power: a new total scales every beam of
-          the group and keeps their split.
+          the group and keeps their split. Every beam&apos;s power times s, with no gravity and no Paul trap, multiplies every force by s: the
+          trap stays where it is, its depth goes as s and each frequency as √s. The Design tab sets the power from this in one step.
         </dd>
         <dt>NA and waist</dt>
         <dd>
