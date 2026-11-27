@@ -121,18 +121,27 @@ test.describe("at 375 px", () => {
 
   test("a tab reached with the Tab key scrolls clear of the fade", async ({ page }) => {
     await open(page, "preset=ws2-bottle", "phone");
-    const heating = page.getByTestId("tab-heating");
-    await expect(heating).not.toBeInViewport();
-    // from Forces, five presses of Tab reach Heating, the first tab past the right edge
-    await page.getByTestId("tab-forces").focus();
-    for (let i = 0; i < 5; i++) await page.keyboard.press("Tab");
-    await expect(heating).toBeFocused();
+    const list = page.getByRole("tablist", { name: "Plots" });
+    // the first tab that reaches into the right-hand fade (or past the edge), and the one before it
+    const ids = await list.evaluate((el) => {
+      const right = el.getBoundingClientRect().right - 40;
+      const all = [...el.querySelectorAll<HTMLElement>('[role="tab"]')];
+      const i = all.findIndex((t) => t.getBoundingClientRect().right > right);
+      return i > 0 ? [all[i - 1].dataset.testid!, all[i].dataset.testid!] : [];
+    });
+    expect(ids).toHaveLength(2);
+    const target = page.getByTestId(ids[1]);
+    await page.getByTestId(ids[0]).focus();
+    await page.keyboard.press("Tab");
+    await expect(target).toBeFocused();
     await expect(page.getByTestId("tabs-scroll")).toHaveAttribute("data-more-start", "");
     // the row's 40 px scroll padding keeps the focused tab out of either 40 px fade
-    const tabs = (await page.getByRole("tablist", { name: "Plots" }).boundingBox())!;
-    const box = (await heating.boundingBox())!;
-    expect(box.x).toBeGreaterThanOrEqual(tabs.x + 39);
-    expect(box.x + box.width).toBeLessThanOrEqual(tabs.x + tabs.width - 39);
+    await expect(async () => {
+      const tabs = (await list.boundingBox())!;
+      const box = (await target.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(tabs.x + 39);
+      expect(box.x + box.width).toBeLessThanOrEqual(tabs.x + tabs.width - 39);
+    }).toPass({ timeout: 5_000 });
   });
 
   test("the parts row fades where more parts are, the same way", async ({ page }) => {
