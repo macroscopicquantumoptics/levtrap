@@ -267,10 +267,12 @@ is 1 in vacuum.
 Numbers have three significant figures and an SI prefix ("96.8 kHz").
 Each frequency carries a short line in its axis colour; the text itself
 stays in the text colour. The depth is in k_BT, with the same in kelvin
-beside it ("386 k_BT 116 kK"). Below 520 px the four numbers share the
-width: the figures get smaller, the kelvin figure goes on its own line under
-the k_BT, and a value that still does not fit wraps inside its tile, so
-nothing runs past the window at 375 or 320 px (#103). **More** opens the numbers behind the
+beside it ("386 k_BT 116 kK"). Below 900 px the four numbers share the
+width: the kelvin figure goes on its own line under the k_BT, and a value
+that still does not fit wraps inside its tile. Below 520 px the figures get
+smaller, and smaller again below 360 px, so each frequency keeps one line.
+Nothing runs past the window from 900 px down to 320 px (#103).
+**More** opens the numbers behind the
 headline ones: position, stiffness, mass, scattered and absorbed power, gas
 damping, reheating, the photon recoil per oscillation Γ/Ω (the number papers
 quote; its explanation splits it into scattered photons, beam photons and
