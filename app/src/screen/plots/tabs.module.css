@@ -314,6 +314,12 @@
   gap: 4px;
 }
 
+.designNote {
+  margin: 4px 6px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .designTarget > input {
   margin-bottom: 9px;
   accent-color: var(--focus-ring);

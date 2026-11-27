@@ -3,19 +3,20 @@
 /**
  * Design (the inverse of a sweep): type the trap you want (its frequencies,
  * its depth), tick the inputs levtrap may change, and Find searches for the
- * values that give it, one engine solve per trial (design.ts). Apply puts the
- * values found into the setup: one undo step.
+ * values that give it, one engine solve per trial (design.ts). In a trap of
+ * light only a power scale is set in one step, not searched (#102). Apply
+ * puts the values found into the setup: one undo step.
  */
 import { useEffect, useRef, useState } from "react";
 import type { Engine } from "../../engine/client.ts";
 import { isAbortError } from "../../engine/client.ts";
-import type { Result, Setup, Vec3 } from "../../engine/types.ts";
+import type { Result, Setup } from "../../engine/types.ts";
 import { formatNumber, formatSI } from "../../lib/format.ts";
 import { toFieldText } from "../../lib/units.ts";
 import { canonical } from "../model.ts";
 import { NumberField } from "../ui/fields.tsx";
 import ui from "../ui/ui.module.css";
-import { defaultKnobs, designKnobs, mismatch, nelderMead, PENALTY, readTarget, scaleFor, TARGETS, typicalMiss, type TargetId } from "./design.ts";
+import { defaultKnobs, designKnobs, designMethod, findDesign, PENALTY, POWER_RANGE, readTarget, SCALE_STEPS, TARGETS, typicalMiss, type DesignMethod, type Found, type TargetId } from "./design.ts";
 import { Note } from "./tabs.tsx";
 import styles from "./tabs.module.css";
 
@@ -27,7 +28,9 @@ interface Search {
   /** solves so far */
   done: number;
   running: boolean;
-  best: { setup: Setup; result: Result; score: number } | null;
+  best: Found | null;
+  /** how it searches: a power scale alone is set in one step (#102) */
+  method: DesignMethod;
   error?: string;
 }
 
@@ -58,37 +61,31 @@ export function DesignTab({ setup, result, engine, onEdit }: { setup: Setup; res
   const nTargets = Object.keys(targets).length;
   const ready = nTargets > 0 && chosen.length > 0;
 
+  const method = designMethod(chosen, setup, targets).method;
+
   const find = async () => {
     ctrl.current?.abort();
     const c = new AbortController();
     ctrl.current = c;
-    const scales = chosen.map((k) => scaleFor(k, setup));
-    const build = (u: number[]) => chosen.reduce((s, k, i) => k.set(s, scales[i].back(u[i])), setup);
-    let start: Vec3 | null = result?.stable && result.equilibrium ? result.equilibrium : null;
-    let best: Search["best"] = null;
-    setSearch({ key: setupKey, done: 0, running: true, best: null });
+    setSearch({ key: setupKey, done: 0, running: true, best: null, method });
     try {
-      await nelderMead(
-        async (u) => {
-          const trial = build(u);
-          let r: Result | null = null;
+      await findDesign({
+        setup,
+        result,
+        chosen,
+        targets,
+        budget: BUDGET,
+        aborted: () => c.signal.aborted,
+        solve: async (trial, start) => {
           try {
-            // continuation: from the best trap so far, so the search follows one trap
-            r = await engine().solve(trial, [], { signal: c.signal, start });
+            return await engine().solve(trial, [], { signal: c.signal, start });
           } catch (err) {
             if (isAbortError(err)) throw err;
+            return null;
           }
-          const score = mismatch(r, targets);
-          if (r && score < (best?.score ?? Infinity)) {
-            best = { setup: trial, result: r, score };
-            if (r.stable && r.equilibrium) start = r.equilibrium;
-          }
-          setSearch((s) => s && { ...s, done: s.done + 1, best });
-          return score;
         },
-        chosen.map((k, i) => scales[i].forward(k.get(setup))),
-        { budget: BUDGET, aborted: () => c.signal.aborted },
-      );
+        onSolve: (best, solves) => setSearch((s) => s && { ...s, done: solves, best }),
+      });
     } catch (err) {
       if (!isAbortError(err)) setSearch((s) => s && { ...s, error: String(err) });
     }
@@ -100,6 +97,8 @@ export function DesignTab({ setup, result, engine, onEdit }: { setup: Setup; res
   };
 
   const found = search?.best;
+  // a power scale alone: one solve, more only if it misses
+  const most = search?.method === "scale" ? SCALE_STEPS + 1 : BUDGET;
   const miss = found && found.score < PENALTY ? typicalMiss(found.score, nTargets) : null;
 
   return (
@@ -156,9 +155,10 @@ export function DesignTab({ setup, result, engine, onEdit }: { setup: Setup; res
         )}
         {search && (
           <span className={styles.progress} role="status" data-testid="design-progress">
-            {search.running ? `Trial ${search.done} of at most ${BUDGET}` : `${search.done} trials`}
+            {search.running ? `Trial ${search.done} of at most ${most}` : `${search.done} ${search.done === 1 ? "trial" : "trials"}`}
+            {search.method === "scale" && " · power scaled in one step"}
             {miss !== null && ` · best: within ${formatNumber(100 * miss, 2, true)} %`}
-            <progress max={BUDGET} value={search.done} />
+            <progress max={most} value={search.done} />
           </span>
         )}
         {found && onEdit && !search?.running && (
@@ -173,8 +173,10 @@ export function DesignTab({ setup, result, engine, onEdit }: { setup: Setup; res
           {search?.running
             ? "Searching: each trial is one solve of the trap."
             : search
-              ? "No trap was found in this search. Try other inputs to vary, or targets closer to the trap now."
-              : "Type the trap you want and tick the inputs levtrap may change; Find searches for their values, about a second per trial in the browser. With fewer inputs than targets the best compromise is found: a tweezer's power scales every frequency, its NA the ratio along the beam to across it, and the polarisation fixes f_x : f_y."}
+              ? search.method === "scale"
+                ? "There is no trap now, and with light only a power scale cannot make one: every force scales alike. Change another input."
+                : "No trap was found in this search. Try other inputs to vary, or targets closer to the trap now."
+              : "Type the trap you want and tick the inputs levtrap may change; Find searches for their values, about a second per trial in the browser. With fewer inputs than targets the best compromise is found: a tweezer's power scales every frequency, its NA the ratio along the beam to across it, and the polarisation fixes f_x : f_y. With light only, the power is not searched: f ∝ √P and depth ∝ P give it in one step."}
         </Note>
       ) : (
         <div className={styles.tableWrap}>
@@ -195,7 +197,7 @@ export function DesignTab({ setup, result, engine, onEdit }: { setup: Setup; res
                     <th scope="row">{t.label}</th>
                     <td>{show(now(t.id))}</td>
                     <td>{show(targets[t.id] ?? null)}</td>
-                    <td>{show(readTarget(found.result, t.id))}</td>
+                    <td data-value={readTarget(found.result, t.id) ?? ""}>{show(readTarget(found.result, t.id))}</td>
                   </tr>
                 );
               })}
@@ -204,11 +206,22 @@ export function DesignTab({ setup, result, engine, onEdit }: { setup: Setup; res
                   <th scope="row">{k.label}</th>
                   <td>{fieldText(k.get(setup), k.quantity, k.unit)}</td>
                   <td>—</td>
-                  <td>{fieldText(k.get(found.setup), k.quantity, k.unit)}</td>
+                  <td data-value={k.get(found.setup)}>{fieldText(k.get(found.setup), k.quantity, k.unit)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {search?.method !== "search" && !search?.running && (
+            <p className={styles.designNote} data-testid="design-scale-note">
+              {search?.method === "scale" ? "The power was set in one step" : "The power was fitted for each trial, not searched"}: with light only, every force goes as the power, so each frequency goes as √P and
+              the depth as P.
+            </p>
+          )}
+          {found.clamped && (
+            <p className={styles.error} data-testid="design-clamped">
+              The power is at its {found.clamped === "high" ? `upper limit, ${formatSI(POWER_RANGE[1], "W", 3)} in all: the targets need more` : `lower limit, ${formatSI(POWER_RANGE[0], "W", 3)} in all: the targets need less`}.
+            </p>
+          )}
           {search?.error && <p className={styles.error}>{search.error}</p>}
         </div>
       )}
