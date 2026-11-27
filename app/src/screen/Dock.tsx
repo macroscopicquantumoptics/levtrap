@@ -11,6 +11,7 @@ import { DesignTab } from "./plots/DesignTab.tsx";
 import { unavailableTabs } from "./plots/availability.ts";
 import { ResultsStrip } from "./ResultsStrip.tsx";
 import { Icon } from "./ui/Icon.tsx";
+import { ScrollRow } from "./ui/ScrollRow.tsx";
 import ui from "./ui/ui.module.css";
 import styles from "./Dock.module.css";
 
@@ -54,28 +55,33 @@ export function Dock({ setup, answer, pending, status, tab, onTab, expanded, onT
     <section className={`${ui.island} ${styles.dock}`} aria-label="Results">
       <ResultsStrip setup={setup} answer={answer} pending={pending} status={status} expanded={expanded} onToggle={onToggle} onSelect={onSelect} />
       <div className={styles.bar}>
-        <div className={styles.tabs} role="tablist" aria-label="Plots">
-          {TABS.map((t) => {
-            const why = unavailable[t.id];
-            return (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                id={`tab-${t.id}`}
-                className={styles.tab}
-                aria-selected={tab === t.id}
-                aria-controls="drawer"
-                title={why}
-                data-unavailable={why ? "" : undefined}
-                data-testid={`tab-${t.id}`}
-                onClick={() => onTab(tab === t.id ? null : t.id)}
-              >
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* on a phone the tabs scroll: the edge with more tabs past it fades, with an arrow (#103) */}
+        <ScrollRow testId="tabs-scroll">
+          {(ref) => (
+            <div className={styles.tabs} role="tablist" aria-label="Plots" ref={ref}>
+              {TABS.map((t) => {
+                const why = unavailable[t.id];
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="tab"
+                    id={`tab-${t.id}`}
+                    className={styles.tab}
+                    aria-selected={tab === t.id}
+                    aria-controls="drawer"
+                    title={why}
+                    data-unavailable={why ? "" : undefined}
+                    data-testid={`tab-${t.id}`}
+                    onClick={() => onTab(tab === t.id ? null : t.id)}
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </ScrollRow>
         <StaleEngine status={status} />
         <EngineLine status={status} answer={answer} />
       </div>

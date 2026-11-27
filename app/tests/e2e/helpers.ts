@@ -7,6 +7,8 @@ export const local = (query = "") => `./?backend=local&api=${encodeURIComponent(
 export const VIEWS = {
   desktop: { width: 1280, height: 800 },
   phone: { width: 375, height: 760 },
+  /** the narrowest phones (#103) */
+  narrow: { width: 320, height: 760 },
 } as const;
 
 export type View = keyof typeof VIEWS;

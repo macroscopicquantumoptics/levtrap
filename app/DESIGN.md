@@ -187,7 +187,8 @@ for it).
 * **Narrow screens.** There is no room for labels, so the parts become a row
   of buttons under the results. The row stays while a part is selected,
   between the results and its settings, so the next part is one tap away
-  (#81).
+  (#81). When the parts do not fit, the row scrolls sideways like the tabs:
+  the edge with more parts past it fades, with a small arrow (#103, §7).
 
 ## 5. The inspector: what each thing shows
 
@@ -266,7 +267,10 @@ is 1 in vacuum.
 Numbers have three significant figures and an SI prefix ("96.8 kHz").
 Each frequency carries a short line in its axis colour; the text itself
 stays in the text colour. The depth is in k_BT, with the same in kelvin
-beside it ("386 k_BT 116 kK"). **More** opens the numbers behind the
+beside it ("386 k_BT 116 kK"). Below 520 px the four numbers share the
+width: the figures get smaller, the kelvin figure goes on its own line under
+the k_BT, and a value that still does not fit wraps inside its tile, so
+nothing runs past the window at 375 or 320 px (#103). **More** opens the numbers behind the
 headline ones: position, stiffness, mass, scattered and absorbed power, gas
 damping, reheating, the photon recoil per oscillation Γ/Ω (the number papers
 quote; its explanation splits it into scattered photons, beam photons and
@@ -302,6 +306,17 @@ tooltip (#81): Radiation without light or with an asphere or a mirror (any
 other beams have a pattern: counter-propagating and crossed beams, coherent or
 not, #76); Heating and Spectrum without light; Wavefront without an asphere
 (`src/screen/plots/availability.ts`). It still opens, to say the same.
+
+On a phone the eight tabs do not fit; the row scrolls sideways (#103). The
+edge with more tabs past it fades out, and a small round arrow on that edge
+scrolls on by most of the row. Both go away at the end they reached. The
+fade is a mask on the row's own pixels, so it needs no colour and looks the
+same in light and dark. The arrows are for the pointer only (hidden from
+screen readers and not in the Tab order): every tab takes focus itself, and
+a focused tab scrolls clear of the fade. The engine line takes the room the
+tabs leave and is cut short first, so on a desktop every tab shows even with
+a long engine message. `src/screen/ui/ScrollRow.tsx`, used by the tab row
+and the parts row.
 
 | Tab | What it draws |
 |---|---|
@@ -511,6 +526,7 @@ shows them in order. Names end in the view and the theme.
 | `invalid-*` | A Paul trap added to a neutral particle: the setup is invalid and the strip names the part to fix. |
 | `drawer-phone-*` | The drawer at 375 px. |
 | `ui-polish-*` | #81: the dark trap's labels staggered, a greyed tab with its reason, the Forces and Spectrum labels clear of the data, the parts row kept above a selected part at 375 px. |
+| `phone-width-*` | #103: the dark trap's strip at 375 and 320 px with the kelvin figure under the depth; the tab row faded at its start and its end, light and dark; the parts row scrolled to its end. |
 
 ## 14. What this was built without
 
