@@ -45,5 +45,5 @@ test("a power alone is set in one step: f_x 150 kHz on the tweezer is 86.9 mW (#
   expect(Math.abs(watts / 0.0869 - 1)).toBeLessThan(1e-3);
   const hz = Number(await table.locator('tr[data-target="x"] td').last().getAttribute("data-value"));
   expect(Math.abs(hz / 150e3 - 1)).toBeLessThan(1e-3);
-  await shot(page, "design-power-scale");
+  await shot(page, "design-power-scale-desktop-light");
 });
