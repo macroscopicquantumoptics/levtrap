@@ -79,8 +79,10 @@ test("a page from another build than its engine offers a reload", async ({ page 
   await expect(page.getByTestId("engine-status")).toContainText("Computed in", { timeout: 240_000 });
   await expect(page.getByTestId("engine-stale")).toContainText("levtrap was updated.");
   await expect(page.getByTestId("engine-reload")).toBeVisible();
-  expect(wheels.length).toBeGreaterThan(0);
-  expect(wheels.every((u) => /\/wheels\/[0-9a-f]{12}\/levtrap-[^/]+\.whl$/.test(u)), wheels.join(" ")).toBe(true);
+  // Pyodide's own wheels (numpy, scipy, micropip) come from its CDN: only levtrap's is ours
+  const ours = wheels.filter((u) => /\/levtrap-[^/]+\.whl$/.test(u));
+  expect(ours.length, wheels.join(" ")).toBeGreaterThan(0);
+  expect(ours.every((u) => /\/wheels\/[0-9a-f]{12}\/levtrap-[^/]+\.whl$/.test(u)), ours.join(" ")).toBe(true);
 });
 
 test("assets load from the sub-path", async ({ page }) => {
