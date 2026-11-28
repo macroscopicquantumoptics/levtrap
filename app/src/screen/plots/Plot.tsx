@@ -15,7 +15,7 @@ import { Icon } from "../ui/Icon.tsx";
 import { Menu, MenuItem } from "../ui/Menu.tsx";
 import ui from "../ui/ui.module.css";
 import { csvText, download, pngBlob, svgText } from "./export.ts";
-import { markerRows, placeLineLabels } from "./labels.ts";
+import { placeLineLabels, topLabels } from "./labels.ts";
 import styles from "./Plot.module.css";
 
 /** Series colours: the three axes, or two series that are not axes; each set validated for colour-vision deficiency in both themes. */
@@ -289,12 +289,15 @@ function Chart({ id, x, y, series, bands = [], markers = [], dots = [], fitTo, a
           { left: MARGIN.left, top: MARGIN.top, right: width - MARGIN.right, bottom: MARGIN.top + plotH },
         )
       : [];
-  // the markers' labels in rows, so close markers (two peaks) do not write over each other (#81)
-  const markerAt = markerRows(
+  // the bands' and markers' labels in rows, so close markers (two peaks, #81) or a band's label and a
+  // marker's (#109) do not write over each other
+  const top = topLabels(
+    bands.map((b) => ({ from: px(sx.t(b.from)), to: px(sx.t(b.to)), text: b.label })),
     markers.map((m) => ({ x: px(sx.t(m.x)), text: m.label })),
     MARGIN.left,
     width - MARGIN.right,
   );
+  const markerAt = top.markers;
 
   const readout = cursor === null ? null : series.map((s) => ({ s, v: at(s.points, cursor, sx, sy) }));
   const tipLeft = cursor === null ? 0 : Math.min(Math.max(px(cursor) + 12, MARGIN.left), width - 196);
@@ -368,12 +371,12 @@ function Chart({ id, x, y, series, bands = [], markers = [], dots = [], fitTo, a
         </text>
 
         <g clipPath={`url(#clip-${id})`}>
-          {bands.map((b) => {
+          {bands.map((b, i) => {
             const [a, c] = [px(sx.t(b.from)), px(sx.t(b.to))];
             return (
               <g key={`${b.from}-${b.to}`} data-testid={`plot-${id}-band`}>
                 <rect className={styles.band} x={Math.min(a, c)} y={MARGIN.top} width={Math.max(2, Math.abs(c - a))} height={plotH} />
-                <text className={styles.bandLabel} x={(a + c) / 2} y={MARGIN.top + 12} textAnchor="middle">
+                <text className={styles.bandLabel} x={top.bands[i].x} y={MARGIN.top + 11 + 14 * top.bands[i].row} textAnchor="middle" data-row={top.bands[i].row}>
                   {b.label}
                 </text>
               </g>

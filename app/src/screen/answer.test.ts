@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { EngineError } from "../engine/client.ts";
 import { DEFAULT_SETUP } from "../engine/setup.ts";
 import type { BeamField, Result } from "../engine/types.ts";
-import { answerFromError, instantAnswer, pending, shownFrequency, verdict } from "./answer.ts";
+import { answerFromError, firstSentence, instantAnswer, pending, shownFrequency, verdict } from "./answer.ts";
 import { addField, newBeam, newPaulTrap, withField, withParticle } from "./model.ts";
 import { PRESETS } from "./presets.ts";
 
@@ -144,4 +144,15 @@ test("a Paul axis outside the stability region has no frequency", () => {
   assert.equal(shownFrequency(unstable, unstable.modes[2]), unstable.modes[2].frequency);
   const optical = instantAnswer(DEFAULT_SETUP)!.result!;
   assert.equal(shownFrequency(optical, optical.modes[0]), optical.modes[0].frequency);
+});
+
+test("the first sentence of a verdict, for phones (#109)", () => {
+  assert.deepEqual(firstSentence("Stable trap. The particle rests at the focus."), ["Stable trap.", "The particle rests at the focus."]);
+  assert.deepEqual(firstSentence("Stable trap. Mathieu q = 0.32 on x and y. The particle rests 804 nm below the trap centre."), [
+    "Stable trap.",
+    "Mathieu q = 0.32 on x and y. The particle rests 804 nm below the trap centre.",
+  ]);
+  const spiral = "Stable without the curl, but at this pressure the particle spirals out: its motion along x and y grows by a factor e every 103 µs.";
+  assert.deepEqual(firstSentence(spiral), [spiral, ""]);
+  assert.deepEqual(firstSentence("No stable trap."), ["No stable trap.", ""]);
 });

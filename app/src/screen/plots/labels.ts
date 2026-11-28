@@ -10,7 +10,8 @@
  *
  * Marker labels: the vertical markers' labels sat in one row at the top, so
  * two close peaks (the Spectrum tab) wrote over each other. They now take
- * the first row in which they fit.
+ * the first row in which they fit. A shaded band's label takes a row the
+ * same way, first (#109), so it never sits on a marker's.
  *
  * All in screen px; text widths are estimated from the character count
  * (no measuring: the plot lays out in one pass).
@@ -141,21 +142,55 @@ export interface PlacedMarker {
   anchor: "start" | "end";
 }
 
+/** A shaded band's label placed: centred at x, in a row. */
+export interface PlacedBand {
+  x: number;
+  row: number;
+}
+
 /**
- * Rows for the markers' labels (11 px text, 4 px beside the marker's line):
- * each takes the first row where it does not touch a label already there.
- * A label that would run past the right edge is put on the line's left.
- * Markers are placed in the order given, so the first keeps the top row.
+ * The top rows: the shaded bands' labels (11 px text, centred on the part
+ * of the band in view) and then the markers' labels. Each label takes the
+ * first row where it does not touch one already there, so a band's label
+ * and a marker's never write over each other at any width (#109: on
+ * Heating at 600 px, "the particle spirals out" sat on "now: 1e-6 mbar").
+ * A marker's label that would run past the right edge is put on its line's
+ * left. Labels are placed in the order given, bands first, so the first
+ * keeps the top row.
  */
-export function markerRows(markers: { x: number; text: string }[], left: number, right: number, rows = 4): PlacedMarker[] {
+export function topLabels(
+  bands: { from: number; to: number; text: string }[],
+  markers: { x: number; text: string }[],
+  left: number,
+  right: number,
+  rows = 4,
+): { bands: PlacedBand[]; markers: PlacedMarker[] } {
   const taken: [number, number][][] = Array.from({ length: rows }, () => []);
-  return markers.map(({ x, text }) => {
-    const w = textWidth(text, 11);
-    const anchor: "start" | "end" = x + 4 + w > right && x - 4 - w >= left ? "end" : "start";
-    const span: [number, number] = anchor === "start" ? [x + 4, x + 4 + w] : [x - 4 - w, x - 4];
+  const take = (span: [number, number]) => {
     let row = taken.findIndex((r) => r.every(([a, b]) => span[1] + 6 < a || b + 6 < span[0]));
     if (row < 0) row = rows - 1;
     taken[row].push(span);
-    return { x: anchor === "start" ? x + 4 : x - 4, row, anchor };
+    return row;
+  };
+  const placedBands = bands.map(({ from, to, text }) => {
+    const half = textWidth(text, 11) / 2;
+    const [a, b] = [Math.max(left, Math.min(from, to)), Math.min(right, Math.max(from, to))];
+    // centred on the band in view, but inside the plot
+    const x = Math.min(Math.max((a + b) / 2, left + half + 2), right - half - 2);
+    return { x, row: take([x - half, x + half]) };
   });
+  const placedMarkers = markers.map(({ x, text }) => {
+    const w = textWidth(text, 11);
+    const anchor: "start" | "end" = x + 4 + w > right && x - 4 - w >= left ? "end" : "start";
+    const span: [number, number] = anchor === "start" ? [x + 4, x + 4 + w] : [x - 4 - w, x - 4];
+    return { x: anchor === "start" ? x + 4 : x - 4, row: take(span), anchor };
+  });
+  return { bands: placedBands, markers: placedMarkers };
+}
+
+/**
+ * Rows for the markers' labels alone (no bands): see topLabels.
+ */
+export function markerRows(markers: { x: number; text: string }[], left: number, right: number, rows = 4): PlacedMarker[] {
+  return topLabels([], markers, left, right, rows).markers;
 }
