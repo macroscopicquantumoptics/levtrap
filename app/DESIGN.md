@@ -192,8 +192,8 @@ for it).
   The top bar keeps its three islands: below 720 px the setup's name and
   the word "Show" go; below 380 px the islands no longer keep the middle
   one centred, and the gaps and the wordmark get smaller. At 320 px with a
-  touch screen's 38 px buttons, the theme button ran 13 px past the window;
-  now every control is inside it (#109).
+  touch screen's 38 px buttons, the theme button ran 13 px past the window
+  (its island, 17 px); now every control is inside it (#109).
 
 ## 5. The inspector: what each thing shows
 
@@ -278,11 +278,12 @@ width: the kelvin figure goes on its own line under the k_BT, and a value
 that still does not fit wraps inside its tile. Below 520 px the figures get
 smaller, and smaller again below 360 px, so each frequency keeps one line.
 Nothing runs past the window from 900 px down to 320 px (#103).
+
 Below 520 px the verdict shows its first sentence only ("Stable trap.", or
 the whole spiral sentence); a "Details" link unfolds the rest: the
 pressure, the cause, where the particle rests and the other notes. The
-spiral verdict took 317 px of a 320 × 760 phone (42 %); folded it takes
-95 px (#109). A verdict with a link (the ticket, the part to fix) stays
+spiral verdict took 300 px of a 320 × 760 phone (39 %); folded it takes
+95 px (13 %), with a mouse or a touch screen alike (#109). A verdict with a link (the ticket, the part to fix) stays
 unfolded. The desktop shows every sentence, as before.
 
 An explanation opens beside its number (`src/screen/place.ts`): upwards
@@ -292,7 +293,10 @@ with Heating open at 1280 × 800, "Motion with the curl" started at −232 px
 and now opens downwards, 384–792 px (#109). Below 520 px it is a sheet
 along the bottom of the window. A formula wider than its box breaks into
 lines (`\begin{gathered}`), so none scrolls sideways; on the narrowest
-phones the formulas are a little smaller.
+phones the formulas are a little smaller. An e2e test typesets every
+formula on the sheet in the explanation's box, desktop and phone, so a new
+one that is too wide fails.
+
 **More** opens the numbers behind the
 headline ones: position, stiffness, mass, scattered and absorbed power, gas
 damping, reheating, the photon recoil per oscillation Γ/Ω (the number papers
@@ -367,7 +371,9 @@ own; lines drawn on top of each other share one. Markers' labels (the
 spectrum's peaks) take rows, so close markers do not write over each other
 (#81, `src/screen/plots/labels.ts`). A shaded band's label (Heating: "the
 particle spirals out") takes a row the same way, first, so it never sits
-on a marker's label at any width (#109).
+on a marker's label at any width (#109). A band zoomed out of view has no
+label and takes no row. The direct labels keep clear of these rows (#109:
+on Spectrum below 600 px, a peak's label sat on "along y").
 Series take the axis colours, or `--series-a` and `--series-b` for two
 series that are not axes; both sets pass the colour-vision checks in each
 theme. A dashed line is always a second version of the same quantity (a
@@ -557,7 +563,7 @@ shows them in order. Names end in the view and the theme.
 | `drawer-phone-*` | The drawer at 375 px. |
 | `ui-polish-*` | #81: the dark trap's labels staggered, a greyed tab with its reason, the Forces and Spectrum labels clear of the data, the parts row kept above a selected part at 375 px. |
 | `phone-width-*` | #103: the dark trap's strip at 375 and 320 px with the kelvin figure under the depth; the tab row faded at its start and its end, light and dark; the parts row scrolled to its end. |
-| `layout-*` | #109: "Motion with the curl" and the stiffness explained inside the window with Heating open; Heating's labels apart at 600 px; the top bar at 320 px, with a mouse and with a touch screen; the dark trap's verdict on a phone, folded and unfolded; light and dark. |
+| `layout-*` | #109: "Motion with the curl" and the stiffness explained inside the window with Heating open; Heating's labels apart in a 600 px window (`small`); the top bar at 320 px, with a mouse and with a touch screen; the dark trap's verdict on a phone, folded and unfolded; light and dark. |
 
 ## 14. What this was built without
 

@@ -1,12 +1,16 @@
 /**
  * #109: layout follow-ups to #101 and #103, on the WS2 dark trap and the other presets.
  * 1. An explanation stays in the window, wherever its number is (a plot tab open, under More).
- * 2. No formula scrolls sideways in its explanation.
- * 3. On Heating, the shaded band's label and the markers' labels never overlap (400–1280 px).
+ * 2. No formula scrolls sideways in its explanation, including the ones no preset shows.
+ * 3. On Heating, the shaded band's label and the markers' labels never overlap (400–1280 px);
+ *    a band zoomed out of view has no label. On Spectrum the direct labels clear the markers'.
  * 4. At 320 px the top bar fits, with a touch screen's larger buttons too.
- * 5. On a phone the verdict shows its first sentence; "Details" unfolds the rest.
+ * 5. On a phone the verdict shows its first sentence; "Details" unfolds the rest. A verdict
+ *    with a link stays unfolded.
  */
+import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
+import { FORMULAS } from "../../src/screen/formulas.ts";
 import { expectNoSidewaysScroll, open, settled, shot, VIEWS, type Scheme, type View } from "./helpers";
 
 const PRESETS = ["tweezer", "counter", "paul-linear", "paul-ring", "ws2-bottle", "ws2-counter-bottle"];
@@ -97,6 +101,36 @@ test.describe("1, 2: explanations", () => {
     });
   }
 
+  for (const [view, size] of [
+    ["desktop", VIEWS.desktop],
+    ["narrow", VIEWS.narrow],
+  ] as [View, { width: number; height: number }][]) {
+    test.describe(`at ${size.width}×${size.height}`, () => {
+      test.use({ viewport: size });
+
+      test("every formula on the sheet fits its explanation's box, also those no preset shows", async ({ page }) => {
+        await open(page, "preset=tweezer", view);
+        await page.getByTestId("freq-x").click();
+        const formula = page.getByTestId("explain").getByTestId("formula");
+        await expect(formula).toBeVisible();
+        // typeset each formula in the real box, with the page's KaTeX fonts and sizes
+        await page.addScriptTag({ path: fileURLToPath(import.meta.resolve("katex/dist/katex.min.js")) });
+        const bad = await formula.evaluate(async (el, all) => {
+          const katex = (window as unknown as { katex: { renderToString(tex: string, o: object): string } }).katex;
+          const tex = el.firstElementChild as HTMLElement;
+          const out: string[] = [];
+          for (const [id, t] of Object.entries(all)) {
+            tex.innerHTML = katex.renderToString(t, { throwOnError: false, displayMode: true, output: "htmlAndMathml" });
+            await document.fonts.ready;
+            if (el.scrollWidth > el.clientWidth + 1) out.push(`${id}: ${el.scrollWidth} px in a ${el.clientWidth} px box`);
+          }
+          return out;
+        }, Object.fromEntries(Object.entries(FORMULAS).map(([id, f]) => [id, f.tex])));
+        expect(bad, bad.join("\n")).toEqual([]);
+      });
+    });
+  }
+
   test("at 1280×800 with nothing open, a headline number still opens upwards", async ({ page }) => {
     await open(page, "preset=ws2-bottle");
     await page.getByTestId("freq-x").click();
@@ -135,10 +169,61 @@ test.describe("3: Heating's labels", () => {
     }
   });
 
+  test("zoomed to the right of the threshold, the band out of view has no label", async ({ page }) => {
+    await open(page, "preset=ws2-bottle");
+    await heating(page);
+    const chart = page.getByTestId("plot-heating-chart");
+    const band = page.getByTestId("plot-heating-band");
+    await expect(band.locator("text")).toHaveText("the particle spirals out");
+    // drag from just right of the threshold's line to near the right edge
+    const line = page.getByTestId("plot-heating-marker").filter({ hasText: "spirals out below" }).locator("line");
+    const [b, l] = [(await chart.boundingBox())!, (await line.boundingBox())!];
+    const y = b.y + b.height / 2;
+    await page.mouse.move(l.x + 20, y);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width - 40, y, { steps: 5 });
+    await page.mouse.up();
+    await expect(page.getByTestId("plot-heating-fit")).toBeVisible();
+    // the band is still drawn (clipped away), but its label is gone with it
+    await expect(band).toHaveCount(1);
+    await expect(band.locator("text")).toHaveCount(0);
+    await page.getByTestId("plot-heating-fit").click();
+    await expect(band.locator("text")).toHaveText("the particle spirals out");
+  });
+
+  test("on Spectrum the direct labels clear the markers' labels, from 400 to 1280 px", async ({ page }) => {
+    test.setTimeout(600_000);
+    for (const preset of ["tweezer", "counter", "ws2-bottle"]) {
+      await open(page, `preset=${preset}`);
+      await settled(page);
+      await page.getByTestId("tab-spectrum").click();
+      await expect(page.getByTestId("drawer")).toHaveAttribute("data-tab", "spectrum");
+      const chart = page.getByTestId("plot-spectrum-chart");
+      for (let width = 400; width <= 1280; width += 20) {
+        await page.setViewportSize({ width, height: 800 });
+        await expect(async () => {
+          const hits = await chart.evaluate((el) => {
+            const boxes = [...el.querySelectorAll('[data-testid="plot-spectrum-marker"] text, [data-testid="plot-spectrum-label"]')].map((t) => ({
+              text: t.textContent,
+              b: t.getBoundingClientRect(),
+            }));
+            const out: string[] = [];
+            for (let i = 0; i < boxes.length; i++)
+              for (let j = i + 1; j < boxes.length; j++) {
+                const [a, b] = [boxes[i].b, boxes[j].b];
+                if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) out.push(`"${boxes[i].text}" on "${boxes[j].text}"`);
+              }
+            return out;
+          });
+          expect(hits, `${preset} at ${width} px: ${hits.join("; ")}`).toEqual([]);
+        }).toPass({ timeout: 10_000 });
+      }
+    }
+  });
+
   for (const scheme of ["light", "dark"] as Scheme[]) {
     test(`at 600 px the shading's label clears "now: 1e-6 mbar" (${scheme})`, async ({ page }) => {
-      await open(page, "preset=ws2-bottle", "desktop", scheme);
-      await page.setViewportSize({ width: 600, height: 800 });
+      await open(page, "preset=ws2-bottle", "small", scheme);
       await heating(page);
       const band = page.getByTestId("plot-heating-band").locator("text");
       const now = page.getByTestId("plot-heating-marker").filter({ hasText: "now: 1e-6 mbar" }).locator("text");
@@ -147,7 +232,7 @@ test.describe("3: Heating's labels", () => {
         const apart = a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
         expect(apart).toBe(true);
       }).toPass({ timeout: 10_000 });
-      await page.getByTestId("plot-heating-chart").screenshot({ path: `${process.env.SCREENSHOT_DIR ?? "test-results/screenshots"}/layout-heating-labels-600-${scheme}.png` });
+      await shot(page, `layout-heating-labels-small-${scheme}`);
     });
   }
 });
@@ -173,7 +258,7 @@ test.describe("4: the top bar at 320 px", () => {
           // none covers another
           for (let i = 1; i < boxes.length; i++) expect(boxes[i].left, `${boxes[i].name}`).toBeGreaterThanOrEqual(boxes[i - 1].right - 0.5);
           await expectNoSidewaysScroll(page);
-          await shot(page, `layout-topbar-narrow${touch ? "-touch" : ""}-${scheme}`);
+          await shot(page, `layout-topbar-${touch ? "touch" : "mouse"}-narrow-${scheme}`);
 
           // the theme button and Help are reachable
           await page.getByTestId("theme-toggle").click();
@@ -203,7 +288,7 @@ test.describe("5: the verdict on a phone", () => {
           await expect(hint).toBeHidden();
           await expect(verdict.getByText("The particle rests 237 nm downstream of the focus.")).toBeHidden();
           const folded = (await verdict.boundingBox())!.height;
-          // was 317 px (42 %) at 320 px
+          // was 300 px (39 %) at 320 × 760, with a mouse or a touch screen
           expect(folded).toBeLessThanOrEqual(0.2 * size.height);
           await shot(page, `layout-verdict-${view}-${scheme}`);
 
@@ -220,6 +305,17 @@ test.describe("5: the verdict on a phone", () => {
           await expect(hint).toBeHidden();
         });
       }
+
+      test("a verdict with a link is not folded: the link stays in sight", async ({ page }) => {
+        await open(page, "preset=tweezer", view);
+        await page.getByTestId("add-field").click();
+        await page.getByTestId("add-paul-linear").click();
+        await settled(page);
+        const verdict = page.getByTestId("verdict");
+        await expect(verdict).toContainText("a Paul trap needs a charged particle");
+        await expect(verdict.getByRole("button", { name: "Show the particle" })).toBeInViewport();
+        await expect(page.getByTestId("verdict-details")).toHaveCount(0);
+      });
 
       test("a stable trap shows \"Stable trap.\" and folds where the particle rests", async ({ page }) => {
         await open(page, "preset=tweezer", view);

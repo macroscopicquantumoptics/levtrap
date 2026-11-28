@@ -11,7 +11,9 @@
  * Marker labels: the vertical markers' labels sat in one row at the top, so
  * two close peaks (the Spectrum tab) wrote over each other. They now take
  * the first row in which they fit. A shaded band's label takes a row the
- * same way, first (#109), so it never sits on a marker's.
+ * same way, first (#109), so it never sits on a marker's. The direct
+ * labels keep clear of these top rows too (#109: on Spectrum at 400–600 px
+ * "y: 285 kHz, T_eff 576 K" sat on "along y").
  *
  * All in screen px; text widths are estimated from the character count
  * (no measuring: the plot lays out in one pass).
@@ -46,7 +48,8 @@ const LABEL_H = 12;
 /** Lines closer than this everywhere (px) are drawn on top of each other. */
 const SAME_LINE = 1.5;
 
-interface Box {
+/** A label's box on screen. */
+export interface Box {
   x0: number;
   x1: number;
   y0: number;
@@ -96,10 +99,10 @@ function sameLine(a: Pt[], b: Pt[]): boolean {
  * share a label ("along x, along y"). Each label tries spots along its line
  * (from the right, where the eye ends), above and below it, and keeps the
  * one with the most clearance from every line, never overlapping a label
- * already placed; with no free spot the label is left out (the legend still
- * names the line).
+ * already placed or a box in `avoid` (the top rows' labels); with no free
+ * spot the label is left out (the legend still names the line).
  */
-export function placeLineLabels(lines: LineLabel[], area: Area): PlacedLabel[] {
+export function placeLineLabels(lines: LineLabel[], area: Area, avoid: Box[] = []): PlacedLabel[] {
   // merge lines drawn on top of each other
   const groups: LineLabel[] = [];
   for (const l of lines) {
@@ -121,7 +124,7 @@ export function placeLineLabels(lines: LineLabel[], area: Area): PlacedLabel[] {
         const label = { text: g.text, x: Math.min(Math.max(x, area.left + half), area.right - half), y: y + dy };
         const b = boxOf(label);
         if (b.y0 < area.top || b.y1 > area.bottom) continue;
-        if (!placed.every((p) => apart(boxOf(p), b))) continue;
+        if (!placed.every((p) => apart(boxOf(p), b)) || !avoid.every((a) => apart(a, b))) continue;
         let clear = Infinity;
         for (const p of every) clear = Math.min(clear, distance(b, p));
         // clearance counts up to 10 px; beyond that, nearer its own line and further right is better
@@ -135,17 +138,27 @@ export function placeLineLabels(lines: LineLabel[], area: Area): PlacedLabel[] {
   return placed;
 }
 
-/** A marker's label placed: start (or end) anchored beside its line, in a row. */
+/** A marker's label placed: start (or end) anchored beside its line, in a row; `span` is its extent in x. */
 export interface PlacedMarker {
   x: number;
   row: number;
   anchor: "start" | "end";
+  span: [number, number];
 }
 
-/** A shaded band's label placed: centred at x, in a row. */
+/** A shaded band's label placed: centred at x, in a row; null when the band is out of view. */
 export interface PlacedBand {
   x: number;
   row: number;
+  span: [number, number];
+}
+
+/** The baseline of a top row's 11 px text, below the plot's top edge. */
+export const rowBaseline = (top: number, row: number) => top + 11 + 14 * row;
+
+/** The boxes of the top rows' labels, for the direct labels to keep clear of. */
+export function topBoxes(placed: { bands: (PlacedBand | null)[]; markers: PlacedMarker[] }, top: number): Box[] {
+  return [...placed.bands, ...placed.markers].flatMap((p) => (p ? [{ x0: p.span[0], x1: p.span[1], y0: rowBaseline(top, p.row) - 11, y1: rowBaseline(top, p.row) + 3 }] : []));
 }
 
 /**
@@ -156,7 +169,8 @@ export interface PlacedBand {
  * Heating at 600 px, "the particle spirals out" sat on "now: 1e-6 mbar").
  * A marker's label that would run past the right edge is put on its line's
  * left. Labels are placed in the order given, bands first, so the first
- * keeps the top row.
+ * keeps the top row. A band wholly out of view (zoomed past it) gets no
+ * label and takes no row.
  */
 export function topLabels(
   bands: { from: number; to: number; text: string }[],
@@ -164,7 +178,7 @@ export function topLabels(
   left: number,
   right: number,
   rows = 4,
-): { bands: PlacedBand[]; markers: PlacedMarker[] } {
+): { bands: (PlacedBand | null)[]; markers: PlacedMarker[] } {
   const taken: [number, number][][] = Array.from({ length: rows }, () => []);
   const take = (span: [number, number]) => {
     let row = taken.findIndex((r) => r.every(([a, b]) => span[1] + 6 < a || b + 6 < span[0]));
@@ -175,15 +189,18 @@ export function topLabels(
   const placedBands = bands.map(({ from, to, text }) => {
     const half = textWidth(text, 11) / 2;
     const [a, b] = [Math.max(left, Math.min(from, to)), Math.min(right, Math.max(from, to))];
+    // out of view: no label, no row
+    if (b <= a) return null;
     // centred on the band in view, but inside the plot
     const x = Math.min(Math.max((a + b) / 2, left + half + 2), right - half - 2);
-    return { x, row: take([x - half, x + half]) };
+    const span: [number, number] = [x - half, x + half];
+    return { x, row: take(span), span };
   });
   const placedMarkers = markers.map(({ x, text }) => {
     const w = textWidth(text, 11);
     const anchor: "start" | "end" = x + 4 + w > right && x - 4 - w >= left ? "end" : "start";
     const span: [number, number] = anchor === "start" ? [x + 4, x + 4 + w] : [x - 4 - w, x - 4];
-    return { x: anchor === "start" ? x + 4 : x - 4, row: take(span), anchor };
+    return { x: anchor === "start" ? x + 4 : x - 4, row: take(span), anchor, span };
   });
   return { bands: placedBands, markers: placedMarkers };
 }

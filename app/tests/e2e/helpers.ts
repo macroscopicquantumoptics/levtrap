@@ -9,6 +9,8 @@ export const VIEWS = {
   phone: { width: 375, height: 760 },
   /** the narrowest phones (#103) */
   narrow: { width: 320, height: 760 },
+  /** a small desktop window, where Heating's labels used to overlap (#109) */
+  small: { width: 600, height: 800 },
 } as const;
 
 export type View = keyof typeof VIEWS;

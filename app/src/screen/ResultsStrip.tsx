@@ -130,7 +130,7 @@ export function ResultsStrip({ setup, answer, pending, status, expanded, onToggl
  * The verdict as sentences: the headline, the cause and what to change (the
  * hint), a link (the ticket, or the part to fix), and the other notes. On a
  * phone only the first sentence shows; "Details" unfolds the rest (#109: the
- * spiral verdict took 42 % of a 320 px phone). A verdict with a link keeps
+ * spiral verdict took 300 px, 39 %, of a 320 × 760 phone; folded, 95 px). A verdict with a link keeps
  * it in sight, unfolded.
  */
 function Verdict({ v, link }: { v: VerdictText; link: ReactNode }) {
