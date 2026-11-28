@@ -15,7 +15,7 @@ import { Icon } from "../ui/Icon.tsx";
 import { Menu, MenuItem } from "../ui/Menu.tsx";
 import ui from "../ui/ui.module.css";
 import { csvText, download, pngBlob, svgText } from "./export.ts";
-import { markerRows, placeLineLabels } from "./labels.ts";
+import { placeLineLabels, rowBaseline, topBoxes, topLabels } from "./labels.ts";
 import styles from "./Plot.module.css";
 
 /** Series colours: the three axes, or two series that are not axes; each set validated for colour-vision deficiency in both themes. */
@@ -274,7 +274,16 @@ function Chart({ id, x, y, series, bands = [], markers = [], dots = [], fitTo, a
     return d;
   };
 
-  // a direct label on each line, placed off every line (#81); lines drawn on top of each other share one
+  // the bands' and markers' labels in rows, so close markers (two peaks, #81) or a band's label and a
+  // marker's (#109) do not write over each other
+  const top = topLabels(
+    bands.map((b) => ({ from: px(sx.t(b.from)), to: px(sx.t(b.to)), text: b.label })),
+    markers.map((m) => ({ x: px(sx.t(m.x)), text: m.label })),
+    MARGIN.left,
+    width - MARGIN.right,
+  );
+  // a direct label on each line, placed off every line (#81) and the top rows' labels (#109); lines drawn on top
+  // of each other share one
   const labels =
     series.length > 1 && series.length <= 4
       ? placeLineLabels(
@@ -287,14 +296,10 @@ function Chart({ id, x, y, series, bands = [], markers = [], dots = [], fitTo, a
                 .map(([qx, qy]) => [px(sx.t(qx)), py(sy.t(qy))] as [number, number]),
             })),
           { left: MARGIN.left, top: MARGIN.top, right: width - MARGIN.right, bottom: MARGIN.top + plotH },
+          topBoxes(top, MARGIN.top),
         )
       : [];
-  // the markers' labels in rows, so close markers (two peaks) do not write over each other (#81)
-  const markerAt = markerRows(
-    markers.map((m) => ({ x: px(sx.t(m.x)), text: m.label })),
-    MARGIN.left,
-    width - MARGIN.right,
-  );
+  const markerAt = top.markers;
 
   const readout = cursor === null ? null : series.map((s) => ({ s, v: at(s.points, cursor, sx, sy) }));
   const tipLeft = cursor === null ? 0 : Math.min(Math.max(px(cursor) + 12, MARGIN.left), width - 196);
@@ -368,21 +373,25 @@ function Chart({ id, x, y, series, bands = [], markers = [], dots = [], fitTo, a
         </text>
 
         <g clipPath={`url(#clip-${id})`}>
-          {bands.map((b) => {
+          {bands.map((b, i) => {
             const [a, c] = [px(sx.t(b.from)), px(sx.t(b.to))];
+            // no label for a band zoomed out of view
+            const label = top.bands[i];
             return (
               <g key={`${b.from}-${b.to}`} data-testid={`plot-${id}-band`}>
                 <rect className={styles.band} x={Math.min(a, c)} y={MARGIN.top} width={Math.max(2, Math.abs(c - a))} height={plotH} />
-                <text className={styles.bandLabel} x={(a + c) / 2} y={MARGIN.top + 12} textAnchor="middle">
-                  {b.label}
-                </text>
+                {label && (
+                  <text className={styles.bandLabel} x={label.x} y={rowBaseline(MARGIN.top, label.row)} textAnchor="middle" data-row={label.row}>
+                    {b.label}
+                  </text>
+                )}
               </g>
             );
           })}
           {markers.map((m, i) => (
             <g key={`${m.label}-${m.x}`} data-testid={`plot-${id}-marker`}>
               <line className={styles.markerLine} x1={px(sx.t(m.x))} x2={px(sx.t(m.x))} y1={MARGIN.top} y2={MARGIN.top + plotH} />
-              <text className={styles.markerLabel} x={markerAt[i].x} y={MARGIN.top + 11 + 14 * markerAt[i].row} textAnchor={markerAt[i].anchor} data-row={markerAt[i].row}>
+              <text className={styles.markerLabel} x={markerAt[i].x} y={rowBaseline(MARGIN.top, markerAt[i].row)} textAnchor={markerAt[i].anchor} data-row={markerAt[i].row}>
                 {m.label}
               </text>
             </g>

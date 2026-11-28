@@ -113,6 +113,17 @@ export interface Verdict {
   more: string[];
 }
 
+/**
+ * The first sentence of a text, and the rest ("" when there is none). A
+ * sentence ends at ".", "!" or "?" followed by a space and a capital, so
+ * "0.32" and "1e-6 mbar" do not end one. On a phone the verdict shows the
+ * first sentence and folds the rest away (#109).
+ */
+export function firstSentence(text: string): [string, string] {
+  const m = /^(.+?[.!?])\s+(?=[A-Z])/su.exec(text);
+  return m ? [m[1], text.slice(m[0].length)] : [text, ""];
+}
+
 const listAxes = (axes: string[]) => (axes.length > 1 ? `${axes.slice(0, -1).join(", ")} and ${axes[axes.length - 1]}` : axes[0]);
 
 /**

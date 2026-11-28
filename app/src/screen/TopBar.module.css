@@ -163,3 +163,26 @@
     width: auto;
   }
 }
+
+/* the narrowest phones (320 px, #109): with a touch screen's 38 px buttons the right island ran
+   17 px past the window (the theme button itself, 13 px). The three islands no longer keep the middle one centred (that needs the
+   two sides equally wide); they share the row, with smaller gaps and a smaller wordmark */
+@media (max-width: 380px) {
+  .bar {
+    left: 6px;
+    right: 6px;
+    grid-template-columns: auto auto auto;
+    justify-content: space-between;
+    gap: 3px;
+  }
+
+  .island {
+    gap: 0;
+    padding: 2px;
+  }
+
+  .wordmark {
+    margin: 0 3px 0 0;
+    font-size: 0.95rem;
+  }
+}

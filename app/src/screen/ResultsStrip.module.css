@@ -191,6 +191,25 @@
   color: var(--text-muted);
 }
 
+/* everything after the first sentence: folded away on a phone, behind "Details" (#109) */
+.rest {
+  display: inline;
+}
+
+.details {
+  display: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--focus-ring);
+  font: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .link {
   padding: 0;
   border: 0;
@@ -302,24 +321,21 @@
 
 /* ---- the explanation of one number ------------------------------------------------------ */
 
+/* Fixed in the window, so no scrolling box clips it. Explain.tsx places it beside its number
+   (place.ts): upwards when it fits there, else on the side with more room, and no taller than
+   that room, so it never starts above the window (#109). A long explanation (#78: seven inputs)
+   scrolls inside. */
 .explain {
-  position: absolute;
+  position: fixed;
   z-index: 40;
-  bottom: calc(100% + 10px);
-  left: 0;
-  width: 348px;
-  /* a long explanation (#78: seven inputs) scrolls rather than running off the top */
+  width: min(348px, calc(100vw - 16px));
   max-height: min(70dvh, 560px);
   overflow-y: auto;
   padding: 12px 14px 12px;
   text-align: left;
-}
-
-/* a number in the right half of the window opens its explanation leftwards, inside the window */
-.pair[data-open-end] > .explain,
-.cell[data-open-end] > .explain {
-  left: auto;
-  right: 0;
+  /* its place and height are set the moment it opens: nothing to animate (the reduced-motion
+     rule in globals.css would otherwise ease them in from the defaults) */
+  transition-property: none;
 }
 
 .explainHead {
@@ -478,8 +494,17 @@
     padding: 6px 6px 5px;
   }
 
+  /* a phone shows the verdict's first sentence; "Details" unfolds the rest (#109) */
+  .verdict:not([data-unfolded]) .rest {
+    display: none;
+  }
+
+  .details {
+    display: inline;
+  }
+
+  /* on a phone, a sheet along the bottom of the window */
   .explain {
-    position: fixed;
     left: 8px;
     right: 8px;
     bottom: 8px;
@@ -497,5 +522,19 @@
 
   .number {
     padding: 6px 4px 5px;
+  }
+
+  /* the explanation's sheet is 304 px wide here: a little less padding and smaller formulas,
+     so the widest (the motion with the curl) fits without scrolling sideways (#109) */
+  .explain {
+    padding: 12px 10px;
+  }
+
+  .formula {
+    padding: 2px 6px;
+  }
+
+  .tex :global(.katex) {
+    font-size: 0.92em;
   }
 }

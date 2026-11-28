@@ -7,9 +7,10 @@
  */
 import "katex/dist/katex.min.css";
 import katex from "katex";
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import type { Explanation } from "./explain.ts";
 import { FORMULAS, type Formula } from "./formulas.ts";
+import { placePopover } from "./place.ts";
 import { Icon } from "./ui/Icon.tsx";
 import ui from "./ui/ui.module.css";
 import styles from "./ResultsStrip.module.css";
@@ -22,14 +23,61 @@ function Tex({ tex, display = false, label }: { tex: string; display?: boolean; 
 
 export interface ExplainProps {
   explanation: Explanation;
+  /** the number it explains: it opens beside it */
+  anchor: HTMLElement | null;
   onClose(): void;
 }
 
-export default function Explain({ explanation: e, onClose }: ExplainProps) {
+/** Phones show the explanation as a sheet along the window's bottom (CSS), not beside its number. */
+const SHEET = "(max-width: 520px)";
+
+interface Placed {
+  style: CSSProperties;
+  side: "up" | "down";
+}
+
+/**
+ * Where the explanation goes: beside its number, on the side with room for
+ * it, and no taller than that room (#109). Placed before it is painted, and
+ * again when the window is resized or anything scrolls.
+ */
+function usePlacement(anchor: HTMLElement | null): [RefObject<HTMLDivElement | null>, Placed | undefined] {
+  const ref = useRef<HTMLDivElement>(null);
+  const [placed, setPlaced] = useState<Placed | undefined>();
+  useLayoutEffect(() => {
+    const place = () => {
+      const el = ref.current;
+      if (!el || !anchor || window.matchMedia(SHEET).matches) return setPlaced(undefined);
+      // the height with no cap: the content's, which scrolls inside the box, plus the border
+      const natural = el.scrollHeight + el.offsetHeight - el.clientHeight;
+      const p = placePopover(anchor.getBoundingClientRect(), el.offsetWidth, natural, { width: window.innerWidth, height: window.innerHeight });
+      setPlaced({ style: { left: p.left, top: p.top ?? "auto", bottom: p.bottom ?? "auto", maxHeight: p.maxHeight }, side: p.side });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [anchor]);
+  return [ref, placed];
+}
+
+export default function Explain({ explanation: e, anchor, onClose }: ExplainProps) {
   const [copied, setCopied] = useState(false);
   const formula: Formula = FORMULAS[e.formula];
+  const [ref, placed] = usePlacement(anchor);
   return (
-    <div className={`${ui.island} ${styles.explain}`} role="dialog" aria-label={e.title} data-testid="explain">
+    <div
+      ref={ref}
+      className={`${ui.island} ${styles.explain}`}
+      style={placed?.style}
+      data-side={placed?.side}
+      role="dialog"
+      aria-label={e.title}
+      data-testid="explain"
+    >
       <header className={styles.explainHead}>
         <div>
           <p className={styles.explainTitle}>{e.title}</p>

@@ -42,11 +42,11 @@ export const FORMULAS = {
     text: "F(r₀) = Σ F_j(r₀) = 0",
   },
   stiffness: {
-    tex: tex`K_{ij} = -\left.\frac{\partial F_i}{\partial x_j}\right|_{\mathbf{r}_0}, \qquad k_n = \operatorname{eig}\,\tfrac{1}{2}\left(K + K^{\mathsf{T}}\right), \qquad a_{ij} = \tfrac{1}{2}\left(K_{ij} - K_{ji}\right)`,
+    tex: tex`\begin{gathered} K_{ij} = -\left.\frac{\partial F_i}{\partial x_j}\right|_{\mathbf{r}_0}, \\ k_n = \operatorname{eig}\,\tfrac{1}{2}\left(K + K^{\mathsf{T}}\right), \qquad a_{ij} = \tfrac{1}{2}\left(K_{ij} - K_{ji}\right) \end{gathered}`,
     text: "k = eigenvalues of −∂F/∂r at the equilibrium (symmetrised); a = the antisymmetric part, the curl, per block",
   },
   dynamics: {
-    tex: tex`\begin{gathered} m\ddot{\mathbf{r}} = -K\mathbf{r} - m\gamma\dot{\mathbf{r}}: \quad \lambda = \operatorname{eig} \begin{pmatrix} 0 & I \\ -K/m & -\gamma I \end{pmatrix}, \quad \sigma_n = \max \operatorname{Re}\lambda \\ \gamma^{*} = \max_{\mu} \frac{|\operatorname{Im}\mu|}{\sqrt{\operatorname{Re}\mu}}, \quad \mu = \operatorname{eig}\,K/m, \qquad \gamma(p^{*}) = \gamma^{*} \end{gathered}`,
+    tex: tex`\begin{gathered} m\ddot{\mathbf{r}} = -K\mathbf{r} - m\gamma\dot{\mathbf{r}}: \; \lambda = \operatorname{eig} \begin{pmatrix} 0 & I \\ -K/m & -\gamma I \end{pmatrix}, \\ \sigma_n = \max \operatorname{Re}\lambda, \qquad \mu = \operatorname{eig}\,K/m, \\ \gamma^{*} = \max_{\mu} \frac{|\operatorname{Im}\mu|}{\sqrt{\operatorname{Re}\mu}}, \qquad \gamma(p^{*}) = \gamma^{*} \end{gathered}`,
     text: "σ = the largest Re λ, λ the eigenvalues of [[0, I], [−K/m, −γ I]] with the full K (curl included); the motion grows when σ > 0, that is when γ is below γ* = max |Im μ| / √(Re μ), μ the eigenvalues of K/m; p* is the pressure where the gas damping γ(p) reaches γ*",
     source: "linear stability of a non-conservative trap (levtrap.solver.dynamics); circular-polarisation orbits: Svak et al., Nat. Commun. 9, 5453 (2018)",
   },
@@ -59,7 +59,7 @@ export const FORMULAS = {
     text: "P_sca = ∮ S_sca · dA (the scattered field's Poynting flux)",
   },
   "multipole-power": {
-    tex: tex`P_\mathrm{sca} = \sum_{n} \left( P^{\mathrm{E}}_{n} + P^{\mathrm{M}}_{n} \right), \qquad P^{\mathrm{E}}_{n} = 4 \sum_{m} |q_{nm}|^2, \quad P^{\mathrm{M}}_{n} = 4 \sum_{m} |p_{nm}|^2`,
+    tex: tex`\begin{gathered} P_\mathrm{sca} = \sum_{n} \left( P^{\mathrm{E}}_{n} + P^{\mathrm{M}}_{n} \right), \\ P^{\mathrm{E}}_{n} = 4 \sum_{m} |q_{nm}|^2, \quad P^{\mathrm{M}}_{n} = 4 \sum_{m} |p_{nm}|^2 \end{gathered}`,
     text: "P_sca = Σ (P_E,n + P_M,n): each multipole's outgoing wave carries its own power, with no cross terms",
     source: "the scattered beam's coefficients, q on the electric (N) waves and p on the magnetic (M) waves, in OTT's convention (levtrap.derived.multipole_power)",
   },
@@ -101,7 +101,7 @@ export const FORMULAS = {
     text: "the pressure p where gas heating γ(p) k_B T / (ħ Ω) equals recoil heating",
   },
   "lens-focus-shift": {
-    tex: tex`\Delta\mathbf{r} = \mathbf{P}^{*}_{\text{as set}} - \mathbf{P}^{*}_{\text{aligned}}, \qquad \mathbf{P}^{*} = \arg\min_{\mathbf{P}}\, \operatorname{Var}_{I}\, W(\mathbf{u}; \mathbf{P})`,
+    tex: tex`\begin{gathered} \Delta\mathbf{r} = \mathbf{P}^{*}_{\text{as set}} - \mathbf{P}^{*}_{\text{aligned}}, \\ \mathbf{P}^{*} = \arg\min_{\mathbf{P}}\, \operatorname{Var}_{I}\, W(\mathbf{u}; \mathbf{P}) \end{gathered}`,
     text: "Δr = P*(as set) − P*(aligned), P* the point that minimises the intensity-weighted variance of the wavefront error W",
     source: "ray trace of the Thorlabs Zemax prescription (levtrap.lens)",
   },

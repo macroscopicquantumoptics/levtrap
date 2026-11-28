@@ -4,7 +4,7 @@ import { lazy, Suspense, useCallback, useState, type ReactNode } from "react";
 import type { EngineStatus } from "../engine/client.ts";
 import type { Setup } from "../engine/types.ts";
 import { formatNumber, formatSI, siParts } from "../lib/format.ts";
-import { issueUrl, shownFrequency, verdict, type Answer } from "./answer.ts";
+import { firstSentence, issueUrl, shownFrequency, verdict, type Answer, type Verdict as VerdictText } from "./answer.ts";
 import { explainDepth, explainFrequency, secondaryNumbers, type Explanation } from "./explain.ts";
 import { useDismiss } from "./hooks.ts";
 import { partsOf, type PartId } from "./model.ts";
@@ -77,40 +77,20 @@ export function ResultsStrip({ setup, answer, pending, status, expanded, onToggl
         />
       </div>
 
-      <div className={styles.verdict} data-tone={v.tone} data-testid="verdict" role="status">
-        <span className={styles.mark} aria-hidden="true" />
-        <p className={styles.sentences}>
-          <span className={styles.headline}>{v.text}</span>
-          {v.hint && (
-            <span className={styles.hint} data-testid="verdict-hint">
-              {" "}
-              {v.hint}
-            </span>
-          )}
-          {notice?.kind === "pending" && notice.ticket && (
-            <>
-              {" "}
-              <a className={styles.link} href={issueUrl(notice.ticket)} target="_blank" rel="noreferrer">
-                Issue #{notice.ticket}
-              </a>
-            </>
-          )}
-          {notice?.kind === "invalid" && notice.part && (
-            <>
-              {" "}
-              <button type="button" className={styles.link} onClick={() => onSelect(notice.part!)}>
-                Show the {partsOf(setup).find((p) => p.id === notice.part)?.name.toLowerCase()}
-              </button>
-            </>
-          )}
-          {v.more.map((sentence) => (
-            <span key={sentence} className={styles.more}>
-              {" "}
-              {sentence}
-            </span>
-          ))}
-        </p>
-      </div>
+      <Verdict
+        v={v}
+        link={
+          notice?.kind === "pending" && notice.ticket ? (
+            <a className={styles.link} href={issueUrl(notice.ticket)} target="_blank" rel="noreferrer">
+              Issue #{notice.ticket}
+            </a>
+          ) : notice?.kind === "invalid" && notice.part ? (
+            <button type="button" className={styles.link} onClick={() => onSelect(notice.part!)}>
+              Show the {partsOf(setup).find((p) => p.id === notice.part)?.name.toLowerCase()}
+            </button>
+          ) : null
+        }
+      />
 
       <div className={styles.side}>
         {pending && (
@@ -146,6 +126,62 @@ export function ResultsStrip({ setup, answer, pending, status, expanded, onToggl
   );
 }
 
+/**
+ * The verdict as sentences: the headline, the cause and what to change (the
+ * hint), a link (the ticket, or the part to fix), and the other notes. On a
+ * phone only the first sentence shows; "Details" unfolds the rest (#109: the
+ * spiral verdict took 300 px, 39 %, of a 320 × 760 phone; folded, 95 px). A verdict with a link keeps
+ * it in sight, unfolded.
+ */
+function Verdict({ v, link }: { v: VerdictText; link: ReactNode }) {
+  const [unfolded, setUnfolded] = useState(false);
+  const [first, after] = firstSentence(v.text);
+  const rest = (
+    <>
+      {after && (
+        <span className={styles.headline}>
+          {" "}
+          {after}
+        </span>
+      )}
+      {v.hint && (
+        <span className={styles.hint} data-testid="verdict-hint">
+          {" "}
+          {v.hint}
+        </span>
+      )}
+      {link && <> {link}</>}
+      {v.more.map((sentence) => (
+        <span key={sentence} className={styles.more}>
+          {" "}
+          {sentence}
+        </span>
+      ))}
+    </>
+  );
+  const folds = !link && Boolean(after || v.hint || v.more.length);
+  return (
+    <div className={styles.verdict} data-tone={v.tone} data-unfolded={unfolded || undefined} data-testid="verdict" role="status">
+      <span className={styles.mark} aria-hidden="true" />
+      <p className={styles.sentences}>
+        <span className={styles.headline}>{first}</span>
+        {folds ? (
+          <>
+            <span className={styles.rest} id="verdict-rest" data-testid="verdict-rest">
+              {rest}
+            </span>{" "}
+            <button type="button" className={styles.details} aria-expanded={unfolded} aria-controls="verdict-rest" data-testid="verdict-details" onClick={() => setUnfolded((u) => !u)}>
+              {unfolded ? "Less" : "Details"}
+            </button>
+          </>
+        ) : (
+          rest
+        )}
+      </p>
+    </div>
+  );
+}
+
 interface FigureProps {
   id: string;
   label: ReactNode;
@@ -165,7 +201,7 @@ function Figure({ id, label, value, unit, also, open, onOpen, explain }: FigureP
   const close = useCallback(() => onOpen(false), [onOpen]);
   useDismiss(node, open, close);
   return (
-    <div className={styles.cell} ref={setNode} data-open-end={opensLeftwards(node, open)}>
+    <div className={styles.cell} ref={setNode}>
       <button
         type="button"
         className={styles.number}
@@ -189,21 +225,16 @@ function Figure({ id, label, value, unit, also, open, onOpen, explain }: FigureP
           )}
         </span>
       </button>
-      {open && explain && <Popover explain={explain} onClose={close} />}
+      {open && explain && <Popover explain={explain} anchor={node} onClose={close} />}
     </div>
   );
 }
 
-/** An explanation (348 px) that would run past the window's right edge opens leftwards instead. */
-function opensLeftwards(node: HTMLElement | null, open: boolean): "" | undefined {
-  if (!open || !node || typeof window === "undefined") return undefined;
-  return node.getBoundingClientRect().left + 360 > window.innerWidth ? "" : undefined;
-}
-
-function Popover({ explain, onClose }: { explain: () => Explanation; onClose(): void }) {
+/** The explanation, beside its number (the anchor); place.ts says where it opens. */
+function Popover({ explain, anchor, onClose }: { explain: () => Explanation; anchor: HTMLElement | null; onClose(): void }) {
   return (
     <Suspense fallback={null}>
-      <Explain explanation={explain()} onClose={onClose} />
+      <Explain explanation={explain()} anchor={anchor} onClose={onClose} />
     </Suspense>
   );
 }
@@ -223,7 +254,7 @@ function Pair({ id, label, value, explain, open, onOpen }: PairProps) {
   const close = useCallback(() => onOpen(false), [onOpen]);
   useDismiss(node, open, close);
   return (
-    <div className={styles.pair} ref={setNode} data-open-end={opensLeftwards(node, open)}>
+    <div className={styles.pair} ref={setNode}>
       <dt>{label}</dt>
       <dd>
         <button
@@ -238,7 +269,7 @@ function Pair({ id, label, value, explain, open, onOpen }: PairProps) {
           {value}
         </button>
       </dd>
-      {open && <Popover explain={explain} onClose={close} />}
+      {open && <Popover explain={explain} anchor={node} onClose={close} />}
     </div>
   );
 }
